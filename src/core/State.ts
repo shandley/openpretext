@@ -1,6 +1,6 @@
 /**
  * Application state management with undo/redo support.
- * 
+ *
  * The state tracks:
  * - Loaded contact map data
  * - Current contig ordering and orientations
@@ -8,6 +8,8 @@
  * - Curation history
  * - UI state (mode, camera, visibility toggles)
  */
+
+import type { PretextHeader } from '../formats/PretextParser';
 
 export interface ContigInfo {
   name: string;
@@ -43,6 +45,10 @@ export interface MapData {
    * This is reconstructed from the per-tile decoded data.
    */
   contactMap: Float32Array | null;
+  /** Raw decompressed BC4 tile data for on-demand detail decoding. */
+  rawTiles: Uint8Array[] | null;
+  /** Parsed pretext header for tile decoding parameters. */
+  parsedHeader: PretextHeader | null;
   // Extension track data (graph name -> Int32Array of per-pixel values)
   extensions: Map<string, Int32Array>;
 }

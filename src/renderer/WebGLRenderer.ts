@@ -118,21 +118,80 @@ void main() {
 }
 `;
 
+// Tile vertex shader: maps a unit quad to a tile's region in map space,
+// then applies the same camera transform as the overview.
+const TILE_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 a_position;
+
+uniform vec2 u_camera;
+uniform float u_zoom;
+uniform vec2 u_resolution;
+uniform vec2 u_tileOffset; // tile origin in map space (0-1)
+uniform vec2 u_tileScale;  // tile size in map space (1/tilesPerDim)
+
+out vec2 v_texcoord;
+
+void main() {
+  // Map unit quad [0,1] to tile's region in map space
+  vec2 mapPos = u_tileOffset + a_position * u_tileScale;
+
+  // Apply camera transform (same as overview shader)
+  vec2 pos = (mapPos - u_camera) * u_zoom;
+
+  float aspect = u_resolution.x / u_resolution.y;
+  if (aspect > 1.0) {
+    pos.x /= aspect;
+  } else {
+    pos.y *= aspect;
+  }
+
+  gl_Position = vec4(pos * 2.0, 0.0, 1.0);
+  v_texcoord = a_position;
+}
+`;
+
+// Tile fragment shader: samples tile texture, applies gamma + color map.
+// No grid or highlight — those come from the overview layer underneath.
+const TILE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 v_texcoord;
+
+uniform sampler2D u_tileTexture;
+uniform sampler2D u_colorMap;
+uniform float u_gamma;
+
+out vec4 fragColor;
+
+void main() {
+  float intensity = texture(u_tileTexture, v_texcoord).r;
+  float mapped = pow(clamp(intensity, 0.0, 1.0), u_gamma);
+  fragColor = texture(u_colorMap, vec2(mapped, 0.5));
+}
+`;
+
 export class WebGLRenderer {
   private gl: WebGL2RenderingContext;
   private canvas: HTMLCanvasElement;
   private program: WebGLProgram | null = null;
-  
+
   // Textures
   private contactMapTexture: WebGLTexture | null = null;
   private colorMapTexture: WebGLTexture | null = null;
-  
+
   // Geometry
   private vao: WebGLVertexArrayObject | null = null;
-  
+
   // Uniforms
   private uniforms: Record<string, WebGLUniformLocation | null> = {};
-  
+
+  // Tile detail program
+  private tileProgram: WebGLProgram | null = null;
+  private tileVao: WebGLVertexArrayObject | null = null;
+  private tileUniforms: Record<string, WebGLUniformLocation | null> = {};
+
   // State
   private textureSize: number = 0;
   private needsRender: boolean = true;
@@ -194,7 +253,10 @@ export class WebGLRenderer {
     
     // Create default color map texture
     this.setColorMap('red-white');
-    
+
+    // Initialize tile detail program
+    this.initTileProgram();
+
     // Set up blending
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -411,11 +473,120 @@ export class WebGLRenderer {
     return { x: mapX, y: mapY };
   }
 
+  // ─── Tile Detail Rendering ─────────────────────────────────
+
+  /**
+   * Expose the GL context so TileManager can create textures.
+   */
+  getGL(): WebGL2RenderingContext {
+    return this.gl;
+  }
+
+  private initTileProgram(): void {
+    const gl = this.gl;
+
+    const vs = this.compileShader(gl.VERTEX_SHADER, TILE_VERTEX_SHADER);
+    const fs = this.compileShader(gl.FRAGMENT_SHADER, TILE_FRAGMENT_SHADER);
+    if (!vs || !fs) return;
+
+    this.tileProgram = gl.createProgram()!;
+    gl.attachShader(this.tileProgram, vs);
+    gl.attachShader(this.tileProgram, fs);
+    gl.linkProgram(this.tileProgram);
+
+    if (!gl.getProgramParameter(this.tileProgram, gl.LINK_STATUS)) {
+      console.error('Tile program link error:', gl.getProgramInfoLog(this.tileProgram));
+      return;
+    }
+
+    const tileUniformNames = [
+      'u_camera', 'u_zoom', 'u_resolution',
+      'u_tileOffset', 'u_tileScale',
+      'u_tileTexture', 'u_colorMap', 'u_gamma',
+    ];
+    for (const name of tileUniformNames) {
+      this.tileUniforms[name] = gl.getUniformLocation(this.tileProgram, name);
+    }
+
+    // Create tile VAO (same unit quad geometry as the overview)
+    const vertices = new Float32Array([
+      0, 0,
+      1, 0,
+      0, 1,
+      1, 1,
+    ]);
+
+    this.tileVao = gl.createVertexArray()!;
+    gl.bindVertexArray(this.tileVao);
+
+    const buffer = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+    const posLoc = gl.getAttribLocation(this.tileProgram, 'a_position');
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+    gl.bindVertexArray(null);
+  }
+
+  /**
+   * Render a single detail tile on top of the overview.
+   *
+   * @param texture     The tile's GL texture (R8 format).
+   * @param col         Tile column in the grid.
+   * @param row         Tile row in the grid.
+   * @param tilesPerDim Number of tiles per map dimension.
+   * @param camera      Current camera state.
+   * @param gamma       Gamma correction value.
+   */
+  renderTile(
+    texture: WebGLTexture,
+    col: number,
+    row: number,
+    tilesPerDim: number,
+    camera: { x: number; y: number; zoom: number },
+    gamma: number,
+  ): void {
+    const gl = this.gl;
+    if (!this.tileProgram || !this.tileVao) return;
+
+    gl.useProgram(this.tileProgram);
+
+    // Camera and resolution uniforms
+    gl.uniform2f(this.tileUniforms['u_camera']!, camera.x, camera.y);
+    gl.uniform1f(this.tileUniforms['u_zoom']!, camera.zoom);
+    gl.uniform2f(this.tileUniforms['u_resolution']!, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.uniform1f(this.tileUniforms['u_gamma']!, gamma);
+
+    // Tile position in map space
+    const tileSize = 1.0 / tilesPerDim;
+    gl.uniform2f(this.tileUniforms['u_tileOffset']!, col * tileSize, row * tileSize);
+    gl.uniform2f(this.tileUniforms['u_tileScale']!, tileSize, tileSize);
+
+    // Bind tile texture to unit 0
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(this.tileUniforms['u_tileTexture']!, 0);
+
+    // Bind color map to unit 1
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
+    gl.uniform1i(this.tileUniforms['u_colorMap']!, 1);
+
+    // Draw
+    gl.bindVertexArray(this.tileVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+  }
+
   destroy(): void {
     const gl = this.gl;
     if (this.contactMapTexture) gl.deleteTexture(this.contactMapTexture);
     if (this.colorMapTexture) gl.deleteTexture(this.colorMapTexture);
     if (this.program) gl.deleteProgram(this.program);
     if (this.vao) gl.deleteVertexArray(this.vao);
+    if (this.tileProgram) gl.deleteProgram(this.tileProgram);
+    if (this.tileVao) gl.deleteVertexArray(this.tileVao);
   }
 }

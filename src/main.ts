@@ -10,9 +10,11 @@ import { LabelRenderer } from './renderer/LabelRenderer';
 import { Minimap } from './renderer/Minimap';
 import { type ColorMapName } from './renderer/ColorMaps';
 import { generateSyntheticMap } from './formats/SyntheticData';
-import { parsePretextFile, isPretextFile, tileLinearIndex } from './formats/PretextParser';
+import { parsePretextFile, isPretextFile, tileLinearIndex, type PretextHeader } from './formats/PretextParser';
 import { events } from './core/EventBus';
 import { state, type InteractionMode } from './core/State';
+import { TileManager, tileKeyToString, type TileKey } from './renderer/TileManager';
+import { decodeTileBatch } from './renderer/TileDecoder';
 import { CurationEngine } from './curation/CurationEngine';
 import { SelectionManager } from './curation/SelectionManager';
 import { DragReorder, renderDragIndicator } from './curation/DragReorder';
@@ -48,6 +50,10 @@ class OpenPretextApp {
   private currentMode: InteractionMode = 'navigate';
   private hoveredContigIndex: number = -1;
   private mouseMapPos: { x: number; y: number } = { x: 0, y: 0 };
+
+  // Tile streaming state
+  private tileManager: TileManager | null = null;
+  private cancelTileDecode: (() => void) | null = null;
 
   constructor() {
     this.init();
@@ -228,6 +234,11 @@ class OpenPretextApp {
         // Map contig boundaries to normalized positions in the full map
         this.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
 
+        // Dispose previous tile manager and cancel in-flight decodes
+        if (this.cancelTileDecode) { this.cancelTileDecode(); this.cancelTileDecode = null; }
+        if (this.tileManager) { this.tileManager.dispose(); }
+        this.tileManager = new TileManager(this.renderer.getGL());
+
         this.updateLoading('Finalizing...', 98);
         state.update({
           map: {
@@ -242,6 +253,8 @@ class OpenPretextApp {
               inverted: false, scaffoldId: null,
             })),
             contactMap,
+            rawTiles: parsed.tiles,
+            parsedHeader: h,
             extensions: new Map(parsed.extensions.map(e => [e.name, e.data])),
           },
           contigOrder: parsed.contigs.map((_, i) => i),
@@ -269,6 +282,10 @@ class OpenPretextApp {
     this.renderer.uploadContactMap(data, size);
     this.contigBoundaries = contigs.map(c => c.end / size);
 
+    // Clean up tile streaming state for demo data
+    if (this.cancelTileDecode) { this.cancelTileDecode(); this.cancelTileDecode = null; }
+    if (this.tileManager) { this.tileManager.dispose(); this.tileManager = null; }
+
     state.update({
       map: {
         filename: 'demo',
@@ -283,6 +300,8 @@ class OpenPretextApp {
           inverted: false, scaffoldId: null,
         })),
         contactMap: data,
+        rawTiles: null,
+        parsedHeader: null,
         extensions: new Map(),
       },
       contigOrder: contigs.map((_, i) => i),
@@ -722,6 +741,17 @@ class OpenPretextApp {
         highlightEnd,
       });
 
+      // Render detail tiles on top of the overview
+      if (this.tileManager && s.map?.parsedHeader && cam.zoom > 1.5) {
+        const tilesPerDim = s.map.parsedHeader.numberOfTextures1D;
+        for (const key of this.tileManager.visibleKeys) {
+          const tile = this.tileManager.getTile(key);
+          if (tile && tile.state === 'loaded' && tile.texture) {
+            this.renderer.renderTile(tile.texture, key.col, key.row, tilesPerDim, cam, s.gamma);
+          }
+        }
+      }
+
       const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
       const w = mapCanvas.clientWidth;
       const h = mapCanvas.clientHeight;
@@ -797,6 +827,63 @@ class OpenPretextApp {
 
   private onCameraChange(cam: CameraState): void {
     events.emit('camera:changed', cam);
+    this.updateDetailTiles(cam);
+  }
+
+  /**
+   * Check which detail tiles are needed for the current camera and
+   * start decoding any missing ones.
+   */
+  private updateDetailTiles(cam: CameraState): void {
+    const s = state.get();
+    if (!s.map || !s.map.rawTiles || !s.map.parsedHeader || !this.tileManager) return;
+
+    // Only load detail tiles when zoomed in past the overview
+    if (cam.zoom <= 1.5) return;
+
+    const canvas = document.getElementById('map-canvas') as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const header = s.map.parsedHeader;
+    const rawTiles = s.map.rawTiles;
+
+    const visibleKeys = this.tileManager.updateVisibleTiles(
+      cam,
+      canvas.clientWidth,
+      canvas.clientHeight,
+      header.numberOfTextures1D,
+      header.mipMapLevels,
+    );
+
+    // Find keys that need decoding
+    const needDecode: TileKey[] = [];
+    for (const key of visibleKeys) {
+      if (!this.tileManager.hasTile(key)) {
+        this.tileManager.markPending(key);
+        needDecode.push(key);
+      }
+    }
+
+    if (needDecode.length === 0) return;
+
+    // Cancel any in-flight batch decode
+    if (this.cancelTileDecode) {
+      this.cancelTileDecode();
+    }
+
+    this.cancelTileDecode = decodeTileBatch(
+      needDecode,
+      rawTiles,
+      header,
+      (key, data) => {
+        if (this.tileManager) {
+          this.tileManager.loadTile(key, data);
+        }
+      },
+      () => {
+        this.cancelTileDecode = null;
+      },
+    );
   }
 
   // ─── Mode Management ──────────────────────────────────────
