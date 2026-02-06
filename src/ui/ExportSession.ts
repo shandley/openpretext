@@ -14,6 +14,7 @@ import { downloadSnapshot } from '../export/SnapshotExporter';
 import { exportSession, importSession, downloadSession } from '../io/SessionManager';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import { syncColormapDropdown, syncGammaSlider } from './ColorMapControls';
+import { rebuildContigBoundaries } from './EventWiring';
 
 export function exportAGP(ctx: AppContext): void {
   const s = state.get();
@@ -116,7 +117,7 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
       ctx.waypointManager.addWaypoint(wp.mapX, wp.mapY, wp.label);
     }
 
-    ctx.rebuildContigBoundaries();
+    rebuildContigBoundaries(ctx);
     ctx.updateSidebarContigList();
     ctx.updateSidebarScaffoldList();
     ctx.showToast(`Session restored (${session.operationLog.length} operations)`);

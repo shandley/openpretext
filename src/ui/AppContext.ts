@@ -20,22 +20,22 @@ import type { ColorMapName } from '../renderer/ColorMaps';
 import type { InteractionMode } from '../core/State';
 
 export interface AppContext {
-  // Renderers
-  renderer: WebGLRenderer;
-  labelRenderer: LabelRenderer;
-  trackRenderer: TrackRenderer;
-  scaffoldOverlay: ScaffoldOverlay;
-  waypointOverlay: WaypointOverlay;
-  minimap: Minimap;
-  camera: Camera;
+  // Renderers (readonly after init)
+  readonly renderer: WebGLRenderer;
+  readonly labelRenderer: LabelRenderer;
+  readonly trackRenderer: TrackRenderer;
+  readonly scaffoldOverlay: ScaffoldOverlay;
+  readonly waypointOverlay: WaypointOverlay;
+  readonly minimap: Minimap;
+  camera: Camera; // mutable: reassigned during two-phase init in main.ts
 
-  // Managers
-  dragReorder: DragReorder;
-  scaffoldManager: ScaffoldManager;
-  waypointManager: WaypointManager;
-  metricsTracker: MetricsTracker;
+  // Managers (readonly after init)
+  readonly dragReorder: DragReorder;
+  readonly scaffoldManager: ScaffoldManager;
+  readonly waypointManager: WaypointManager;
+  readonly metricsTracker: MetricsTracker;
 
-  // Tile streaming
+  // Tile streaming (reassigned during file loading)
   tileManager: TileManager | null;
   cancelTileDecode: (() => void) | null;
 
@@ -52,14 +52,12 @@ export interface AppContext {
   comparisonSnapshot: number[] | null;
   comparisonVisible: boolean;
 
-  // Cross-module callbacks (wired during init)
-  showToast: (message: string, duration?: number) => void;
-  refreshAfterCuration: () => void;
-  updateSidebarContigList: () => void;
-  updateSidebarScaffoldList: () => void;
-  updateStatsPanel: () => void;
-  updateTrackConfigPanel: () => void;
-  rebuildContigBoundaries: () => void;
-  setMode: (mode: InteractionMode) => void;
-  formatBp: (bp: number) => string;
+  // Cross-module callbacks (readonly after init)
+  readonly showToast: (message: string, duration?: number) => void;
+  readonly refreshAfterCuration: () => void;
+  readonly updateSidebarContigList: () => void;
+  readonly updateSidebarScaffoldList: () => void;
+  readonly updateStatsPanel: () => void;
+  readonly updateTrackConfigPanel: () => void;
+  readonly setMode: (mode: InteractionMode) => void;
 }

@@ -18,30 +18,36 @@ import { ScaffoldManager } from './curation/ScaffoldManager';
 import { WaypointManager } from './curation/WaypointManager';
 import { CurationEngine } from './curation/CurationEngine';
 import { MetricsTracker } from './curation/QualityMetrics';
-import { contigExclusion } from './curation/ContigExclusion';
-import { events } from './core/EventBus';
-import { state } from './core/State';
 
 import type { AppContext } from './ui/AppContext';
-import { showToast } from './ui/ToastNotifications';
-import { setupShortcutsModal } from './ui/ShortcutsModal';
-import { formatBp, updateSidebarContigList, updateSidebarScaffoldList, setupContigSearch } from './ui/Sidebar';
-import { updateStatsPanel } from './ui/StatsPanel';
-import { updateTrackConfigPanel } from './ui/TrackConfig';
-import { setMode } from './ui/ModeManager';
-import { setupMouseTracking, setupDragReorder } from './ui/MouseTracking';
-import { setupClickInteractions } from './ui/ClickInteractions';
-import { setupFastaUpload, setupTrackUpload } from './ui/ExportSession';
-import { setupFileDrop, setupFileInput } from './ui/FileLoading';
-import { startRenderLoop, onCameraChange } from './ui/RenderLoop';
-import { setupScriptConsole } from './ui/ScriptConsole';
-import { setupCommandPalette } from './ui/CommandPalette';
-import { setupKeyboardShortcuts } from './ui/KeyboardShortcuts';
-import { setupToolbar } from './ui/Toolbar';
+import {
+  showToast,
+  setupShortcutsModal,
+  updateSidebarContigList,
+  updateSidebarScaffoldList,
+  setupContigSearch,
+  updateStatsPanel,
+  updateTrackConfigPanel,
+  setMode,
+  setupMouseTracking,
+  setupDragReorder,
+  setupClickInteractions,
+  setupFastaUpload,
+  setupTrackUpload,
+  setupFileDrop,
+  setupFileInput,
+  startRenderLoop,
+  onCameraChange,
+  setupScriptConsole,
+  setupCommandPalette,
+  setupKeyboardShortcuts,
+  setupToolbar,
+  boot,
+  setupEventListeners,
+  refreshAfterCuration,
+} from './ui';
 
 class OpenPretextApp {
-  private ctx!: AppContext;
-
   constructor() {
     this.init();
   }
@@ -100,17 +106,13 @@ class OpenPretextApp {
 
       // Cross-module callbacks
       showToast,
-      refreshAfterCuration: () => this.refreshAfterCuration(),
+      refreshAfterCuration: () => refreshAfterCuration(ctx),
       updateSidebarContigList: () => updateSidebarContigList(ctx),
       updateSidebarScaffoldList: () => updateSidebarScaffoldList(ctx),
       updateStatsPanel: () => updateStatsPanel(ctx),
       updateTrackConfigPanel: () => updateTrackConfigPanel(ctx),
-      rebuildContigBoundaries: () => this.rebuildContigBoundaries(),
       setMode: (mode) => setMode(ctx, mode),
-      formatBp,
     };
-
-    this.ctx = ctx;
 
     minimap.setNavigateCallback((mapX, mapY) => {
       ctx.camera.animateTo({ x: mapX, y: mapY }, 200);
@@ -127,7 +129,7 @@ class OpenPretextApp {
     setupCommandPalette(ctx);
     setupMouseTracking(ctx, canvas);
     setupClickInteractions(ctx, canvas);
-    this.setupEventListeners();
+    setupEventListeners(ctx);
     setupScriptConsole(ctx);
     setupShortcutsModal();
     setupContigSearch(ctx);
@@ -137,94 +139,8 @@ class OpenPretextApp {
 
     console.log('OpenPretext initialized');
   }
-
-  // ─── Event Listeners ─────────────────────────────────────
-
-  private setupEventListeners(): void {
-    const ctx = this.ctx;
-
-    events.on('file:loaded', () => {
-      ctx.updateSidebarContigList();
-      // Take initial metrics snapshot
-      const s = state.get();
-      if (s.map) {
-        ctx.metricsTracker.clear();
-        ctx.metricsTracker.snapshot(s.map.contigs, s.contigOrder, 0);
-        // Store initial order for comparison mode
-        ctx.comparisonSnapshot = [...s.contigOrder];
-        ctx.comparisonVisible = false;
-        contigExclusion.clearAll();
-      }
-      ctx.updateStatsPanel();
-    });
-
-    events.on('curation:cut', () => this.refreshAfterCuration());
-    events.on('curation:join', () => this.refreshAfterCuration());
-    events.on('curation:invert', () => this.refreshAfterCuration());
-    events.on('curation:move', () => this.refreshAfterCuration());
-    events.on('curation:undo', () => this.refreshAfterCuration());
-    events.on('curation:redo', () => this.refreshAfterCuration());
-  }
-
-  private refreshAfterCuration(): void {
-    const ctx = this.ctx;
-    this.rebuildContigBoundaries();
-    ctx.updateSidebarContigList();
-    const s = state.get();
-    document.getElementById('status-contigs')!.textContent = `${s.contigOrder.length} contigs`;
-    // Snapshot quality metrics
-    if (s.map) {
-      ctx.metricsTracker.snapshot(s.map.contigs, s.contigOrder, s.undoStack.length);
-    }
-    ctx.updateStatsPanel();
-  }
-
-  private rebuildContigBoundaries(): void {
-    const ctx = this.ctx;
-    const s = state.get();
-    if (!s.map) return;
-
-    const totalPixels = s.map.textureSize;
-    let accumulated = 0;
-    ctx.contigBoundaries = [];
-
-    for (const contigId of s.contigOrder) {
-      const contig = s.map.contigs[contigId];
-      accumulated += (contig.pixelEnd - contig.pixelStart);
-      ctx.contigBoundaries.push(accumulated / totalPixels);
-    }
-  }
 }
 
 // ─── Boot ─────────────────────────────────────────────────
 
-// Global error handler — show user-friendly messages instead of silent failures
-window.addEventListener('error', (e) => {
-  console.error('Unhandled error:', e.error);
-  const toast = document.getElementById('toast-container');
-  if (toast) {
-    const el = document.createElement('div');
-    el.className = 'toast';
-    el.textContent = `Error: ${e.message || 'An unexpected error occurred'}`;
-    toast.appendChild(el);
-    requestAnimationFrame(() => el.classList.add('visible'));
-    setTimeout(() => { el.classList.remove('visible'); setTimeout(() => el.remove(), 300); }, 4000);
-  }
-});
-
-window.addEventListener('unhandledrejection', (e) => {
-  console.error('Unhandled promise rejection:', e.reason);
-  const toast = document.getElementById('toast-container');
-  if (toast) {
-    const el = document.createElement('div');
-    el.className = 'toast';
-    el.textContent = `Error: ${e.reason?.message || 'An unexpected error occurred'}`;
-    toast.appendChild(el);
-    requestAnimationFrame(() => el.classList.add('visible'));
-    setTimeout(() => { el.classList.remove('visible'); setTimeout(() => el.remove(), 300); }, 4000);
-  }
-});
-
-document.addEventListener('DOMContentLoaded', () => {
-  new OpenPretextApp();
-});
+boot(() => new OpenPretextApp());

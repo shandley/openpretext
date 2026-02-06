@@ -6,6 +6,7 @@
 
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
+import { formatBp } from './Sidebar';
 
 let tooltipVisible = false;
 
@@ -27,7 +28,7 @@ export function updateTooltip(ctx: AppContext, clientX: number, clientY: number)
   }
 
   // Build tooltip content
-  const lengthStr = ctx.formatBp(contig.length);
+  const lengthStr = formatBp(contig.length);
   const pixelSpan = contig.pixelEnd - contig.pixelStart;
   const orderStr = `${ctx.hoveredContigIndex + 1} / ${s.contigOrder.length}`;
   const orientStr = contig.inverted ? 'Inverted' : 'Forward';
