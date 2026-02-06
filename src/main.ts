@@ -27,6 +27,7 @@ import { downloadSnapshot } from './export/SnapshotExporter';
 import { exportSession, importSession, downloadSession, type SessionData } from './io/SessionManager';
 import { parseScript } from './scripting/ScriptParser';
 import { executeScript, type ScriptContext, type ScriptResult } from './scripting/ScriptExecutor';
+import { operationsToScript } from './scripting/ScriptReplay';
 
 class OpenPretextApp {
   private renderer!: WebGLRenderer;
@@ -98,6 +99,8 @@ class OpenPretextApp {
     this.setupClickInteractions(canvas);
     this.setupEventListeners();
     this.setupScriptConsole();
+    this.setupShortcutsModal();
+    this.setupContigSearch();
     this.startRenderLoop();
 
     console.log('OpenPretext initialized');
@@ -592,10 +595,14 @@ class OpenPretextApp {
       return;
     }
 
+    const searchInput = document.getElementById('contig-search') as HTMLInputElement;
+    const filter = (searchInput?.value ?? '').toLowerCase().trim();
+
     const selected = s.selectedContigs;
     const html = s.contigOrder.map((contigId, orderIdx) => {
       const contig = s.map!.contigs[contigId];
       if (!contig) return '';
+      if (filter && !contig.name.toLowerCase().includes(filter)) return '';
       const isSelected = selected.has(orderIdx);
       const lengthStr = this.formatBp(contig.length);
       const invertedBadge = contig.inverted ? '<span class="contig-badge inverted">INV</span>' : '';
@@ -1184,6 +1191,10 @@ class OpenPretextApp {
           this.toggleScriptConsole();
           break;
 
+        case '?':
+          this.toggleShortcutsModal();
+          break;
+
         case ']':
         case '.': {
           // Next waypoint
@@ -1314,6 +1325,8 @@ class OpenPretextApp {
     { name: 'Save session', shortcut: '', action: () => this.saveSession() },
     { name: 'Load session', shortcut: '', action: () => document.getElementById('session-file-input')?.click() },
     { name: 'Script console', shortcut: '`', action: () => this.toggleScriptConsole() },
+    { name: 'Keyboard shortcuts', shortcut: '?', action: () => this.toggleShortcutsModal() },
+    { name: 'Generate script from log', action: () => { document.getElementById('btn-generate-from-log')?.click(); this.toggleScriptConsole(); } },
   ];
 
   private selectedCommandIndex = 0;
@@ -1394,6 +1407,30 @@ class OpenPretextApp {
       if (output) output.innerHTML = '<span class="script-output-info">Output cleared.</span>';
     });
 
+    // Generate script from operation log
+    document.getElementById('btn-generate-from-log')?.addEventListener('click', () => {
+      const s = state.get();
+      if (s.undoStack.length === 0) {
+        const output = document.getElementById('script-output');
+        if (output) output.innerHTML = '<span class="script-output-info">No operations in log. Perform some curation operations first.</span>';
+        return;
+      }
+      const contigs = s.map?.contigs ?? [];
+      const scaffoldNames = new Map<number, string>();
+      for (const sc of this.scaffoldManager.getAllScaffolds()) {
+        scaffoldNames.set(sc.id, sc.name);
+      }
+      const script = operationsToScript(s.undoStack, contigs, {
+        includeTimestamps: true,
+        includeHeader: true,
+        scaffoldNames,
+      });
+      const scriptInput = document.getElementById('script-input') as HTMLTextAreaElement;
+      if (scriptInput) scriptInput.value = script;
+      const output = document.getElementById('script-output');
+      if (output) output.innerHTML = `<span class="script-output-info">Generated ${s.undoStack.length} operation(s) as script. Edit and re-run as needed.</span>`;
+    });
+
     // Ctrl+Enter to run script
     const input = document.getElementById('script-input') as HTMLTextAreaElement;
     input?.addEventListener('keydown', (e) => {
@@ -1467,6 +1504,43 @@ class OpenPretextApp {
     }
 
     outputEl.innerHTML = html || '<span class="script-output-info">No commands to execute.</span>';
+  }
+
+  // ─── Keyboard Shortcuts Modal ─────────────────────────────
+
+  private toggleShortcutsModal(): void {
+    const modal = document.getElementById('shortcuts-modal');
+    if (modal) modal.classList.toggle('visible');
+  }
+
+  private setupShortcutsModal(): void {
+    const modal = document.getElementById('shortcuts-modal');
+    if (!modal) return;
+    // Click backdrop to close
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.remove('visible');
+    });
+    // Esc to close
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('visible')) {
+        modal.classList.remove('visible');
+        e.stopPropagation();
+      }
+    });
+  }
+
+  // ─── Contig Search ──────────────────────────────────────
+
+  private setupContigSearch(): void {
+    const searchInput = document.getElementById('contig-search') as HTMLInputElement;
+    if (!searchInput) return;
+    searchInput.addEventListener('input', () => {
+      this.updateSidebarContigList();
+    });
+    // Prevent keyboard shortcuts from firing while typing in search
+    searchInput.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+    });
   }
 }
 

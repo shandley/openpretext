@@ -720,6 +720,99 @@
     .script-output-error { color: #e94560; }
     .script-output-info { color: var(--text-secondary); }
 
+    /* Keyboard shortcuts help modal */
+    #shortcuts-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+    }
+    #shortcuts-modal.visible { display: flex; }
+    .shortcuts-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .shortcuts-card h2 {
+      margin: 0 0 16px;
+      font-size: 16px;
+      color: var(--text-primary);
+    }
+    .shortcuts-section {
+      margin-bottom: 16px;
+    }
+    .shortcuts-section h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      margin: 0 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .shortcut-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 13px;
+    }
+    .shortcut-row .key {
+      display: inline-flex;
+      gap: 4px;
+    }
+    .shortcut-row kbd {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'SF Mono', monospace;
+      font-size: 11px;
+      color: var(--text-primary);
+      min-width: 20px;
+      text-align: center;
+    }
+    .shortcut-row .desc {
+      color: var(--text-secondary);
+    }
+    .shortcuts-close {
+      margin-top: 12px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    /* Contig search */
+    #contig-search {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      padding: 6px 8px;
+      font-size: 12px;
+      outline: none;
+      margin-bottom: 6px;
+    }
+    #contig-search:focus {
+      border-color: var(--accent);
+    }
+    #contig-search::placeholder {
+      color: var(--text-secondary);
+      opacity: 0.5;
+    }
+
     /* High-DPI display adjustments */
     @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
       .toolbar-btn {
@@ -789,6 +882,7 @@
       <div id="sidebar">
         <div class="sidebar-section">
           <h3>Contigs</h3>
+          <input type="text" id="contig-search" placeholder="Search contigs...">
           <div id="contig-list"></div>
         </div>
         <div class="sidebar-section">
@@ -835,6 +929,7 @@
       <div class="script-header">
         <span>Script Console</span>
         <div style="display:flex;gap:6px;align-items:center;">
+          <button id="btn-generate-from-log" style="background:var(--bg-surface);">From Log</button>
           <button id="btn-run-script">Run (Ctrl+Enter)</button>
           <button id="btn-clear-script" style="background:var(--bg-surface);">Clear</button>
           <button class="btn-close-console" id="btn-close-console">&times;</button>
@@ -843,6 +938,53 @@
       <div class="script-body">
         <textarea id="script-input" placeholder="# Enter curation commands...&#10;# Examples:&#10;#   invert chr1&#10;#   move chr3 to 1&#10;#   scaffold create Chr1_scaffold&#10;#   zoom chr5&#10;#   echo Hello world"></textarea>
         <div id="script-output"><span class="script-output-info">Output will appear here...</span></div>
+      </div>
+    </div>
+
+    <!-- Keyboard shortcuts modal -->
+    <div id="shortcuts-modal">
+      <div class="shortcuts-card">
+        <h2>Keyboard Shortcuts</h2>
+        <div class="shortcuts-section">
+          <h3>Navigation</h3>
+          <div class="shortcut-row"><span class="desc">Pan</span><span class="key"><kbd>Drag</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Zoom</span><span class="key"><kbd>Scroll</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Jump to diagonal</span><span class="key"><kbd>J</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Reset view</span><span class="key"><kbd>Home</kbd></span></div>
+        </div>
+        <div class="shortcuts-section">
+          <h3>Modes</h3>
+          <div class="shortcut-row"><span class="desc">Navigate mode</span><span class="key"><kbd>N</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Edit mode</span><span class="key"><kbd>E</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Scaffold mode</span><span class="key"><kbd>S</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Waypoint mode</span><span class="key"><kbd>W</kbd></span></div>
+        </div>
+        <div class="shortcuts-section">
+          <h3>Curation</h3>
+          <div class="shortcut-row"><span class="desc">Undo</span><span class="key"><kbd>&#8984;</kbd><kbd>Z</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Redo</span><span class="key"><kbd>&#8984;</kbd><kbd>&#8679;</kbd><kbd>Z</kbd></span></div>
+        </div>
+        <div class="shortcuts-section">
+          <h3>Waypoints</h3>
+          <div class="shortcut-row"><span class="desc">Next waypoint</span><span class="key"><kbd>]</kbd> or <kbd>.</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Previous waypoint</span><span class="key"><kbd>[</kbd> or <kbd>,</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Clear all waypoints</span><span class="key"><kbd>Delete</kbd></span></div>
+        </div>
+        <div class="shortcuts-section">
+          <h3>Panels &amp; Overlays</h3>
+          <div class="shortcut-row"><span class="desc">Command palette</span><span class="key"><kbd>&#8984;</kbd><kbd>K</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Toggle map</span><span class="key"><kbd>M</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Toggle grid</span><span class="key"><kbd>L</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Toggle tracks</span><span class="key"><kbd>X</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Toggle info sidebar</span><span class="key"><kbd>I</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Script console</span><span class="key"><kbd>`</kbd></span></div>
+        </div>
+        <div class="shortcuts-section">
+          <h3>File</h3>
+          <div class="shortcut-row"><span class="desc">Open file</span><span class="key"><kbd>&#8984;</kbd><kbd>O</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Screenshot</span><span class="key"><kbd>&#8984;</kbd><kbd>S</kbd></span></div>
+        </div>
+        <div class="shortcuts-close">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</div>
       </div>
     </div>
 

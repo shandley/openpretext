@@ -60,11 +60,13 @@
 - [x] Script parser (18 command types, quoted strings, contig refs)
 - [x] Script executor (dependency-injected, testable)
 - [x] Script console UI (split input/output, Ctrl+Enter run)
-- [ ] Script replay from log
+- [x] Script replay from log (operation-to-DSL converter, "From Log" button)
 
 ## Priority 7 — Polish
 
 - [x] Responsive layout (900px/600px breakpoints)
 - [x] Touch/trackpad gesture support (pinch-zoom, single-finger pan)
 - [x] Error handling and user feedback (global handlers, toast UI)
-- [ ] Performance optimization for large genomes
+- [x] Performance: tile-based LOD rendering system (TileManager with LRU cache)
+- [x] Keyboard shortcuts help modal (? key)
+- [x] Contig search/filter in sidebar
