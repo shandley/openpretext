@@ -105,9 +105,18 @@ function createInitialState(): AppState {
   };
 }
 
+interface SelectorEntry<T = unknown> {
+  selector: (state: AppState) => T;
+  callback: (newVal: T, oldVal: T) => void;
+  lastValue: T;
+}
+
 class StateManager {
   private state: AppState;
   private listeners: Set<(state: AppState) => void> = new Set();
+  private selectors: Map<number, SelectorEntry> = new Map();
+  private nextSelectorId = 0;
+  private batchContext: { batchId: string; metadata?: Record<string, any> } | null = null;
 
   constructor() {
     this.state = createInitialState();
@@ -123,13 +132,90 @@ class StateManager {
   }
 
   /**
+   * Update a single contig's properties immutably.
+   * Clones the contigs array with the specified changes applied.
+   */
+  updateContig(contigId: number, changes: Partial<ContigInfo>): void {
+    const map = this.state.map;
+    if (!map) return;
+    const newContigs = [...map.contigs];
+    newContigs[contigId] = { ...newContigs[contigId], ...changes };
+    this.state = {
+      ...this.state,
+      map: { ...map, contigs: newContigs },
+    };
+    this.notify();
+  }
+
+  /**
+   * Update multiple contigs in a single clone (for batch efficiency).
+   */
+  updateContigs(updates: Array<{ id: number; changes: Partial<ContigInfo> }>): void {
+    const map = this.state.map;
+    if (!map) return;
+    const newContigs = [...map.contigs];
+    for (const { id, changes } of updates) {
+      newContigs[id] = { ...newContigs[id], ...changes };
+    }
+    this.state = {
+      ...this.state,
+      map: { ...map, contigs: newContigs },
+    };
+    this.notify();
+  }
+
+  /**
+   * Append new contigs to the contigs array immutably.
+   * Returns the starting index of the first new contig.
+   */
+  appendContigs(...newContigs: ContigInfo[]): number {
+    const map = this.state.map;
+    if (!map) return -1;
+    const startIndex = map.contigs.length;
+    const cloned = [...map.contigs, ...newContigs];
+    this.state = {
+      ...this.state,
+      map: { ...map, contigs: cloned },
+    };
+    this.notify();
+    return startIndex;
+  }
+
+  /**
    * Push a curation operation onto the undo stack.
    * Clears the redo stack (you can't redo after a new operation).
+   * Auto-merges batch context if active.
    */
   pushOperation(op: CurationOperation): void {
-    this.state.undoStack.push(op);
-    this.state.redoStack = [];
+    let finalOp = op;
+    if (this.batchContext) {
+      finalOp = {
+        ...op,
+        batchId: this.batchContext.batchId,
+        data: { ...op.data, ...this.batchContext.metadata },
+      };
+    }
+    this.state = {
+      ...this.state,
+      undoStack: [...this.state.undoStack, finalOp],
+      redoStack: [],
+    };
     this.notify();
+  }
+
+  /**
+   * Set batch context so that subsequent pushOperation calls
+   * auto-merge batchId and metadata into new operations.
+   */
+  setBatchContext(batchId: string, metadata?: Record<string, any>): void {
+    this.batchContext = { batchId, metadata };
+  }
+
+  /**
+   * Clear the batch context.
+   */
+  clearBatchContext(): void {
+    this.batchContext = null;
   }
 
   subscribe(listener: (state: AppState) => void): () => void {
@@ -137,14 +223,46 @@ class StateManager {
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * Subscribe to a derived value from state. The callback fires only
+   * when the selector's return value changes (compared via Object.is).
+   * Returns an unsubscribe function.
+   */
+  select<T>(selector: (state: AppState) => T, callback: (newVal: T, oldVal: T) => void): () => void {
+    const id = this.nextSelectorId++;
+    const entry: SelectorEntry<T> = {
+      selector,
+      callback,
+      lastValue: selector(this.state),
+    };
+    this.selectors.set(id, entry as SelectorEntry);
+    return () => { this.selectors.delete(id); };
+  }
+
   private notify(): void {
     this.listeners.forEach(l => l(this.state));
+    for (const entry of this.selectors.values()) {
+      const newVal = entry.selector(this.state);
+      if (!Object.is(newVal, entry.lastValue)) {
+        const oldVal = entry.lastValue;
+        entry.lastValue = newVal;
+        entry.callback(newVal, oldVal);
+      }
+    }
   }
 
   reset(): void {
     this.state = createInitialState();
+    this.batchContext = null;
     this.notify();
   }
 }
+
+// Common selectors for use with state.select()
+export const selectContigOrder = (s: AppState) => s.contigOrder;
+export const selectGamma = (s: AppState) => s.gamma;
+export const selectShowGrid = (s: AppState) => s.showGrid;
+export const selectMode = (s: AppState) => s.mode;
+export const selectSelectedContigs = (s: AppState) => s.selectedContigs;
 
 export const state = new StateManager();

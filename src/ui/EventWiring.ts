@@ -9,6 +9,7 @@ import type { AppContext } from './AppContext';
 import { events } from '../core/EventBus';
 import { state } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
+import { getContigBoundaries } from '../core/DerivedState';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -61,14 +62,5 @@ export function refreshAfterCuration(ctx: AppContext): void {
 export function rebuildContigBoundaries(ctx: AppContext): void {
   const s = state.get();
   if (!s.map) return;
-
-  const totalPixels = s.map.textureSize;
-  let accumulated = 0;
-  ctx.contigBoundaries = [];
-
-  for (const contigId of s.contigOrder) {
-    const contig = s.map.contigs[contigId];
-    accumulated += (contig.pixelEnd - contig.pixelStart);
-    ctx.contigBoundaries.push(accumulated / totalPixels);
-  }
+  ctx.contigBoundaries = getContigBoundaries();
 }

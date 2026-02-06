@@ -139,14 +139,13 @@ describe('ScaffoldManager', () => {
       const id = mgr.createScaffold();
       mgr.paintContigs([0, 1], id);
 
-      const s = state.get();
-      expect(s.map!.contigs[0].scaffoldId).toBe(id);
-      expect(s.map!.contigs[1].scaffoldId).toBe(id);
+      expect(state.get().map!.contigs[0].scaffoldId).toBe(id);
+      expect(state.get().map!.contigs[1].scaffoldId).toBe(id);
 
       mgr.deleteScaffold(id);
 
-      expect(s.map!.contigs[0].scaffoldId).toBeNull();
-      expect(s.map!.contigs[1].scaffoldId).toBeNull();
+      expect(state.get().map!.contigs[0].scaffoldId).toBeNull();
+      expect(state.get().map!.contigs[1].scaffoldId).toBeNull();
     });
 
     it('should clear active scaffold if deleted scaffold was active', () => {
@@ -434,15 +433,14 @@ describe('ScaffoldManager', () => {
       const id = mgr.createScaffold();
       mgr.paintContigs([0, 1], id);
 
-      const s = state.get();
-      expect(s.map!.contigs[0].scaffoldId).toBe(id);
-      expect(s.map!.contigs[1].scaffoldId).toBe(id);
+      expect(state.get().map!.contigs[0].scaffoldId).toBe(id);
+      expect(state.get().map!.contigs[1].scaffoldId).toBe(id);
 
-      const op = s.undoStack[s.undoStack.length - 1];
+      const op = state.get().undoStack[state.get().undoStack.length - 1];
       mgr.undoPaint(op);
 
-      expect(s.map!.contigs[0].scaffoldId).toBeNull();
-      expect(s.map!.contigs[1].scaffoldId).toBeNull();
+      expect(state.get().map!.contigs[0].scaffoldId).toBeNull();
+      expect(state.get().map!.contigs[1].scaffoldId).toBeNull();
     });
 
     it('should restore mixed previous assignments', () => {
@@ -453,13 +451,12 @@ describe('ScaffoldManager', () => {
       mgr.paintContigs([0], id1);
       mgr.paintContigs([0, 1], id2);
 
-      const s = state.get();
-      const op = s.undoStack[s.undoStack.length - 1];
+      const op = state.get().undoStack[state.get().undoStack.length - 1];
       mgr.undoPaint(op);
 
       // contig 0 should revert to id1, contig 1 should revert to null
-      expect(s.map!.contigs[0].scaffoldId).toBe(id1);
-      expect(s.map!.contigs[1].scaffoldId).toBeNull();
+      expect(state.get().map!.contigs[0].scaffoldId).toBe(id1);
+      expect(state.get().map!.contigs[1].scaffoldId).toBeNull();
     });
   });
 
@@ -469,17 +466,16 @@ describe('ScaffoldManager', () => {
       const id = mgr.createScaffold();
       mgr.paintContigs([0, 1], id);
 
-      const s = state.get();
-      const op = s.undoStack[s.undoStack.length - 1];
+      const op = state.get().undoStack[state.get().undoStack.length - 1];
 
       // Simulate undo
       mgr.undoPaint(op);
-      expect(s.map!.contigs[0].scaffoldId).toBeNull();
+      expect(state.get().map!.contigs[0].scaffoldId).toBeNull();
 
       // Reapply
       mgr.reapplyPaint(op);
-      expect(s.map!.contigs[0].scaffoldId).toBe(id);
-      expect(s.map!.contigs[1].scaffoldId).toBe(id);
+      expect(state.get().map!.contigs[0].scaffoldId).toBe(id);
+      expect(state.get().map!.contigs[1].scaffoldId).toBe(id);
     });
   });
 

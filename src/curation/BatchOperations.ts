@@ -284,7 +284,8 @@ export function autoCutContigs(params?: Partial<AutoCutParams>): BatchResult {
   }
 
   const batchId = 'autocut-' + Date.now();
-  const undoStackBefore = s.undoStack.length;
+  const resolvedParams = { ...{ cutThreshold: 0.20, windowSize: 8, minFragmentSize: 16 }, ...params };
+  state.setBatchContext(batchId, { algorithm: 'autocut', algorithmParams: resolvedParams });
 
   const result = autoCut(
     map.contactMap,
@@ -334,15 +335,7 @@ export function autoCutContigs(params?: Partial<AutoCutParams>): BatchResult {
     }
   }
 
-  // Tag new operations with batchId and algorithm info
-  const currentState = state.get();
-  const newOps = currentState.undoStack.slice(undoStackBefore);
-  const resolvedParams = { ...{ cutThreshold: 0.20, windowSize: 8, minFragmentSize: 16 }, ...params };
-  for (const op of newOps) {
-    op.batchId = batchId;
-    op.data.algorithm = 'autocut';
-    op.data.algorithmParams = resolvedParams;
-  }
+  state.clearBatchContext();
 
   return {
     operationsPerformed: cutCount,
@@ -374,7 +367,8 @@ export function autoSortContigs(params?: Partial<AutoSortParams>): BatchResult {
   }
 
   const batchId = 'autosort-' + Date.now();
-  const undoStackBefore = s.undoStack.length;
+  const resolvedParams = { ...{ maxDiagonalDistance: 50, signalCutoff: 0.05, hardThreshold: 0.2 }, ...params };
+  state.setBatchContext(batchId, { algorithm: 'autosort', algorithmParams: resolvedParams });
 
   const result = autoSort(
     map.contactMap,
@@ -433,15 +427,7 @@ export function autoSortContigs(params?: Partial<AutoSortParams>): BatchResult {
     }
   }
 
-  // Tag new operations with batchId and algorithm info
-  const currentState = state.get();
-  const newOps = currentState.undoStack.slice(undoStackBefore);
-  const resolvedParams = { ...{ maxDiagonalDistance: 50, signalCutoff: 0.05, hardThreshold: 0.2 }, ...params };
-  for (const op of newOps) {
-    op.batchId = batchId;
-    op.data.algorithm = 'autosort';
-    op.data.algorithmParams = resolvedParams;
-  }
+  state.clearBatchContext();
 
   return {
     operationsPerformed: opCount,

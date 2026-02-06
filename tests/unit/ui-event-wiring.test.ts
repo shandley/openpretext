@@ -18,7 +18,16 @@ vi.mock('../../src/core/State', () => ({
       undoStack: [],
     })),
     update: vi.fn(),
+    select: vi.fn(() => () => {}),
+    updateContig: vi.fn(),
+    updateContigs: vi.fn(),
+    appendContigs: vi.fn(),
   },
+  selectContigOrder: (s: any) => s.contigOrder,
+  selectGamma: (s: any) => s.gamma,
+  selectShowGrid: (s: any) => s.showGrid,
+  selectMode: (s: any) => s.mode,
+  selectSelectedContigs: (s: any) => s.selectedContigs,
 }));
 
 vi.mock('../../src/curation/ContigExclusion', () => ({
@@ -26,6 +35,27 @@ vi.mock('../../src/curation/ContigExclusion', () => ({
     clearAll: vi.fn(),
   },
 }));
+
+vi.mock('../../src/core/DerivedState', async () => {
+  const stateModule = await vi.importMock<typeof import('../../src/core/State')>('../../src/core/State');
+  return {
+    getContigBoundaries: vi.fn(() => {
+      const s = stateModule.state.get();
+      if (!s.map) return [];
+      const totalPixels = s.map.textureSize;
+      let accumulated = 0;
+      const result: number[] = [];
+      for (const contigId of s.contigOrder) {
+        const contig = s.map.contigs[contigId];
+        accumulated += (contig.pixelEnd - contig.pixelStart);
+        result.push(accumulated / totalPixels);
+      }
+      return result;
+    }),
+    getContigNames: vi.fn(() => []),
+    getContigScaffoldIds: vi.fn(() => []),
+  };
+});
 
 import {
   setupEventListeners,

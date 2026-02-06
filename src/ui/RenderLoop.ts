@@ -10,6 +10,7 @@ import { renderDragIndicator } from '../curation/DragReorder';
 import { decodeTileBatch } from '../renderer/TileDecoder';
 import { renderComparisonOverlay } from './ComparisonMode';
 import type { TileKey } from '../renderer/TileManager';
+import { getContigNames, getContigScaffoldIds } from '../core/DerivedState';
 
 export function startRenderLoop(ctx: AppContext): void {
   const renderFrame = () => {
@@ -55,7 +56,7 @@ export function startRenderLoop(ctx: AppContext): void {
     const h = mapCanvas.clientHeight;
 
     if (ctx.labelRenderer && s.map) {
-      const contigNames = s.contigOrder.map(id => s.map!.contigs[id]?.name ?? '');
+      const contigNames = getContigNames();
       ctx.labelRenderer.render({
         contigBoundaries: ctx.contigBoundaries,
         contigNames,
@@ -95,7 +96,7 @@ export function startRenderLoop(ctx: AppContext): void {
 
     // Scaffold overlay
     if (ctx.scaffoldOverlay && s.map) {
-      const contigScaffoldIds = s.contigOrder.map(id => s.map!.contigs[id]?.scaffoldId ?? null);
+      const contigScaffoldIds = getContigScaffoldIds();
       const scaffoldMap = new Map(
         ctx.scaffoldManager.getAllScaffolds().map(sc => [sc.id, sc])
       );

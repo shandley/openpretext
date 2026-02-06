@@ -82,12 +82,18 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     }
 
     // Apply contig states (inversions, scaffolds)
+    const contigUpdates: Array<{ id: number; changes: Partial<import('../core/State').ContigInfo> }> = [];
     for (const [contigIdStr, override] of Object.entries(session.contigStates)) {
       const contigId = Number(contigIdStr);
       if (contigId >= 0 && contigId < s.map.contigs.length) {
-        s.map.contigs[contigId].inverted = override.inverted;
-        s.map.contigs[contigId].scaffoldId = override.scaffoldId;
+        contigUpdates.push({
+          id: contigId,
+          changes: { inverted: override.inverted, scaffoldId: override.scaffoldId },
+        });
       }
+    }
+    if (contigUpdates.length > 0) {
+      state.updateContigs(contigUpdates);
     }
 
     // Restore scaffolds

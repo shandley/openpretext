@@ -11,6 +11,7 @@ vi.mock('../../src/core/State', () => ({
       contigOrder: [],
     })),
     update: vi.fn(),
+    updateContigs: vi.fn(),
   },
 }));
 
@@ -438,10 +439,11 @@ describe('ExportSession', () => {
 
       await loadSession(ctx, file);
 
-      expect(contigs[0].inverted).toBe(true);
-      expect(contigs[0].scaffoldId).toBe(2);
-      expect(contigs[1].inverted).toBe(false);
-      expect(contigs[1].scaffoldId).toBeNull();
+      // Verify updateContigs was called with correct changes
+      expect(state.updateContigs).toHaveBeenCalledWith([
+        { id: 0, changes: { inverted: true, scaffoldId: 2 } },
+        { id: 1, changes: { inverted: false, scaffoldId: null } },
+      ]);
     });
 
     it('should skip contig state overrides for out-of-range indices', async () => {
@@ -461,8 +463,8 @@ describe('ExportSession', () => {
 
       await loadSession(ctx, file);
 
-      // Contig 0 should remain unchanged since 99 is out of range
-      expect(contigs[0].inverted).toBe(false);
+      // updateContigs should not have been called since index 99 is out of range
+      expect(state.updateContigs).not.toHaveBeenCalled();
     });
 
     it('should restore scaffolds by calling createScaffold for new ones', async () => {

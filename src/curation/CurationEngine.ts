@@ -117,10 +117,10 @@ export function cut(contigOrderIndex: number, pixelOffset: number): void {
     rightContig.name = `${contig.name}_L`;
   }
 
-  // Assign new indices in the contigs array
+  // Assign new indices in the contigs array (immutable append)
   const leftId = map.contigs.length;
   const rightId = map.contigs.length + 1;
-  map.contigs.push(leftContig, rightContig);
+  state.appendContigs(leftContig, rightContig);
 
   // Replace the original contig in the order
   const newOrder = [...s.contigOrder];
@@ -200,7 +200,7 @@ export function join(contigOrderIndex: number): void {
   };
 
   const mergedId = map.contigs.length;
-  map.contigs.push(merged);
+  state.appendContigs(merged);
 
   // Replace the pair in the order
   const newOrder = [...s.contigOrder];
@@ -254,12 +254,13 @@ export function invert(contigOrderIndex: number): void {
   const contig = map.contigs[contigId];
 
   const previousInverted = contig.inverted;
-  contig.inverted = !contig.inverted;
+  const newInverted = !contig.inverted;
+  state.updateContig(contigId, { inverted: newInverted });
 
   const op: CurationOperation = {
     type: 'invert',
     timestamp: Date.now(),
-    description: `Inverted contig "${contig.name}" (now ${contig.inverted ? 'inverted' : 'normal'})`,
+    description: `Inverted contig "${contig.name}" (now ${newInverted ? 'inverted' : 'normal'})`,
     data: {
       contigOrderIndex,
       contigId,
@@ -280,7 +281,7 @@ export function undoInvert(op: CurationOperation): void {
   if (!map) return;
 
   const contigId = op.data.contigId as number;
-  map.contigs[contigId].inverted = op.data.previousInverted as boolean;
+  state.updateContig(contigId, { inverted: op.data.previousInverted as boolean });
   events.emit('render:request', {});
 }
 
@@ -510,7 +511,7 @@ function reapplyInvert(op: CurationOperation): void {
   const contig = map.contigs[contigId];
 
   // Toggle again (undone = back to previous, redo = toggle again)
-  contig.inverted = !contig.inverted;
+  state.updateContig(contigId, { inverted: !contig.inverted });
 
   const newOp: CurationOperation = {
     ...op,

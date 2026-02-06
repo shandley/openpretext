@@ -79,10 +79,14 @@ export class ScaffoldManager {
     // Unassign contigs that reference this scaffold
     const s = state.get();
     if (s.map) {
-      for (const contig of s.map.contigs) {
-        if (contig.scaffoldId === id) {
-          contig.scaffoldId = null;
+      const updates: Array<{ id: number; changes: Partial<import('../core/State').ContigInfo> }> = [];
+      for (let i = 0; i < s.map.contigs.length; i++) {
+        if (s.map.contigs[i].scaffoldId === id) {
+          updates.push({ id: i, changes: { scaffoldId: null } });
         }
+      }
+      if (updates.length > 0) {
+        state.updateContigs(updates);
       }
     }
 
@@ -154,11 +158,15 @@ export class ScaffoldManager {
 
     // Record previous assignments for undo
     const previousAssignments: Record<number, number | null> = {};
+    const updates: Array<{ id: number; changes: Partial<import('../core/State').ContigInfo> }> = [];
     for (const orderIdx of contigIndices) {
       if (orderIdx < 0 || orderIdx >= s.contigOrder.length) continue;
       const contigId = s.contigOrder[orderIdx];
       previousAssignments[contigId] = s.map.contigs[contigId].scaffoldId;
-      s.map.contigs[contigId].scaffoldId = scaffoldId;
+      updates.push({ id: contigId, changes: { scaffoldId } });
+    }
+    if (updates.length > 0) {
+      state.updateContigs(updates);
     }
 
     const op: CurationOperation = {
@@ -207,11 +215,15 @@ export class ScaffoldManager {
     if (!s.map) return;
 
     const prev = op.data.previousAssignments as Record<number, number | null>;
+    const updates: Array<{ id: number; changes: Partial<import('../core/State').ContigInfo> }> = [];
     for (const [contigIdStr, prevScaffoldId] of Object.entries(prev)) {
       const contigId = Number(contigIdStr);
       if (contigId >= 0 && contigId < s.map.contigs.length) {
-        s.map.contigs[contigId].scaffoldId = prevScaffoldId;
+        updates.push({ id: contigId, changes: { scaffoldId: prevScaffoldId } });
       }
+    }
+    if (updates.length > 0) {
+      state.updateContigs(updates);
     }
 
     events.emit('render:request', {});
@@ -227,10 +239,14 @@ export class ScaffoldManager {
     const scaffoldId = op.data.scaffoldId as number | null;
     const contigIndices = op.data.contigIndices as number[];
 
+    const updates: Array<{ id: number; changes: Partial<import('../core/State').ContigInfo> }> = [];
     for (const orderIdx of contigIndices) {
       if (orderIdx < 0 || orderIdx >= s.contigOrder.length) continue;
       const contigId = s.contigOrder[orderIdx];
-      s.map.contigs[contigId].scaffoldId = scaffoldId;
+      updates.push({ id: contigId, changes: { scaffoldId } });
+    }
+    if (updates.length > 0) {
+      state.updateContigs(updates);
     }
 
     const newOp: CurationOperation = {
