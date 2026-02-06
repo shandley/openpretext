@@ -1,0 +1,26 @@
+{
+  "name": "openpretext",
+  "version": "0.1.0",
+  "description": "Modern web-based Hi-C contact map viewer and genome curation tool",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:visual": "playwright test",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "pako": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/pako": "^2.0.3",
+    "typescript": "^5.4.0",
+    "vite": "^5.4.0",
+    "vitest": "^2.0.0",
+    "@playwright/test": "^1.45.0"
+  },
+  "license": "MIT"
+}

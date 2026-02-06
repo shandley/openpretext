@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenPretext — Hi-C Contact Map Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-surface: #0f3460;
+      --text-primary: #e8e8e8;
+      --text-secondary: #a0a0b0;
+      --accent: #e94560;
+      --accent-hover: #ff6b81;
+      --border: #2a2a4a;
+      --toolbar-height: 44px;
+      --statusbar-height: 28px;
+      --sidebar-width: 260px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* Toolbar */
+    #toolbar {
+      height: var(--toolbar-height);
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+      z-index: 100;
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .toolbar-separator {
+      width: 1px;
+      height: 24px;
+      background: var(--border);
+      margin: 0 8px;
+    }
+
+    .toolbar-btn {
+      background: none;
+      border: 1px solid transparent;
+      color: var(--text-primary);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+
+    .toolbar-btn:hover {
+      background: var(--bg-surface);
+      border-color: var(--border);
+    }
+
+    .toolbar-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .toolbar-btn kbd {
+      font-size: 10px;
+      opacity: 0.6;
+      margin-left: 4px;
+    }
+
+    .toolbar-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--accent);
+      margin-right: 12px;
+    }
+
+    /* Main content area */
+    #content {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Canvas */
+    #map-canvas {
+      flex: 1;
+      display: block;
+      cursor: grab;
+    }
+
+    #map-canvas:active {
+      cursor: grabbing;
+    }
+
+    /* Sidebar */
+    #sidebar {
+      width: var(--sidebar-width);
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      display: none;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    #sidebar.visible {
+      display: flex;
+    }
+
+    .sidebar-section {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-section h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    /* Status bar */
+    #statusbar {
+      height: var(--statusbar-height);
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      gap: 16px;
+      z-index: 100;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Command palette */
+    #command-palette {
+      display: none;
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 500px;
+      max-width: 90vw;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+      z-index: 1000;
+      overflow: hidden;
+    }
+
+    #command-palette.visible {
+      display: block;
+    }
+
+    #command-palette input {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg-primary);
+      border: none;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-primary);
+      font-size: 15px;
+      outline: none;
+    }
+
+    #command-palette .results {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    #command-palette .result-item {
+      padding: 8px 16px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #command-palette .result-item:hover,
+    #command-palette .result-item.selected {
+      background: var(--bg-surface);
+    }
+
+    #command-palette .result-item kbd {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Drop overlay */
+    #drop-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(233, 69, 96, 0.1);
+      border: 3px dashed var(--accent);
+      z-index: 500;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      color: var(--accent);
+    }
+
+    #drop-overlay.visible {
+      display: flex;
+    }
+
+    /* Welcome screen */
+    #welcome {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: var(--text-secondary);
+      gap: 16px;
+    }
+
+    #welcome h1 {
+      font-size: 36px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    #welcome p {
+      font-size: 16px;
+      max-width: 400px;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    #welcome .open-btn {
+      margin-top: 12px;
+      padding: 10px 24px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #welcome .open-btn:hover {
+      background: var(--accent-hover);
+    }
+
+    #welcome .shortcuts {
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    #welcome .shortcuts kbd {
+      background: var(--bg-surface);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Toolbar -->
+    <div id="toolbar">
+      <span class="toolbar-title">OpenPretext</span>
+      <div class="toolbar-group">
+        <button class="toolbar-btn" id="btn-open">Open <kbd>⌘O</kbd></button>
+        <button class="toolbar-btn" id="btn-save-agp">Export AGP</button>
+        <button class="toolbar-btn" id="btn-screenshot">Screenshot <kbd>⌘S</kbd></button>
+      </div>
+      <div class="toolbar-separator"></div>
+      <div class="toolbar-group">
+        <button class="toolbar-btn" id="btn-mode-navigate" data-mode="navigate">Navigate</button>
+        <button class="toolbar-btn" id="btn-mode-edit" data-mode="edit">Edit <kbd>E</kbd></button>
+        <button class="toolbar-btn" id="btn-mode-scaffold" data-mode="scaffold">Scaffold <kbd>S</kbd></button>
+        <button class="toolbar-btn" id="btn-mode-waypoint" data-mode="waypoint">Waypoint <kbd>W</kbd></button>
+      </div>
+      <div class="toolbar-separator"></div>
+      <div class="toolbar-group">
+        <button class="toolbar-btn" id="btn-undo">Undo <kbd>⌘Z</kbd></button>
+        <button class="toolbar-btn" id="btn-redo">Redo <kbd>⌘⇧Z</kbd></button>
+      </div>
+      <div style="flex:1"></div>
+      <div class="toolbar-group">
+        <button class="toolbar-btn" id="btn-grid">Grid <kbd>L</kbd></button>
+        <button class="toolbar-btn" id="btn-tracks">Tracks <kbd>X</kbd></button>
+        <button class="toolbar-btn" id="btn-sidebar">Info <kbd>I</kbd></button>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div id="content">
+      <canvas id="map-canvas"></canvas>
+      <div id="sidebar">
+        <div class="sidebar-section">
+          <h3>Contigs</h3>
+          <div id="contig-list"></div>
+        </div>
+        <div class="sidebar-section">
+          <h3>Scaffolds</h3>
+          <div id="scaffold-list"></div>
+        </div>
+      </div>
+
+      <!-- Welcome screen (shown when no file loaded) -->
+      <div id="welcome">
+        <h1>OpenPretext</h1>
+        <p>Modern Hi-C contact map viewer for genome assembly curation. Drop a .pretext file or click Open to begin.</p>
+        <button class="open-btn" id="btn-welcome-open">Open .pretext file</button>
+        <button class="open-btn" id="btn-demo" style="background: var(--bg-surface);">Load Demo Data</button>
+        <div class="shortcuts">
+          <kbd>⌘K</kbd> Command palette &nbsp;
+          <kbd>E</kbd> Edit mode &nbsp;
+          <kbd>L</kbd> Toggle grid
+        </div>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div id="statusbar">
+      <span class="status-item" id="status-file">No file loaded</span>
+      <span class="status-item" id="status-position">—</span>
+      <span class="status-item" id="status-zoom">100%</span>
+      <span class="status-item" id="status-mode">Navigate</span>
+      <span style="flex:1"></span>
+      <span class="status-item" id="status-contigs">—</span>
+    </div>
+
+    <!-- Command palette -->
+    <div id="command-palette">
+      <input type="text" placeholder="Type a command..." id="command-input">
+      <div class="results" id="command-results"></div>
+    </div>
+
+    <!-- Drop overlay -->
+    <div id="drop-overlay">Drop .pretext file to open</div>
+  </div>
+
+  <!-- File input (hidden) -->
+  <input type="file" id="file-input" accept=".pretext" style="display:none">
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
