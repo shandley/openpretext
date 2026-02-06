@@ -36,7 +36,7 @@ import { executeScript, type ScriptContext, type ScriptResult } from './scriptin
 import { operationsToScript } from './scripting/ScriptReplay';
 import { calculateMetrics, MetricsTracker, type AssemblyMetrics } from './curation/QualityMetrics';
 import { contigExclusion } from './curation/ContigExclusion';
-import { selectByPattern, selectBySize, batchCutBySize, batchJoinSelected, batchInvertSelected, sortByLength } from './curation/BatchOperations';
+import { selectByPattern, selectBySize, batchCutBySize, batchJoinSelected, batchInvertSelected, sortByLength, autoSortContigs, autoCutContigs } from './curation/BatchOperations';
 
 class OpenPretextApp {
   private renderer!: WebGLRenderer;
@@ -1410,6 +1410,34 @@ class OpenPretextApp {
     this.showToast(result.description);
   }
 
+  private runAutoSort(): void {
+    const s = state.get();
+    if (!s.map?.contactMap) {
+      this.showToast('No contact map loaded');
+      return;
+    }
+    this.showToast('Auto sorting...');
+    setTimeout(() => {
+      const result = autoSortContigs();
+      this.refreshAfterCuration();
+      this.showToast(result.description);
+    }, 50);
+  }
+
+  private runAutoCut(): void {
+    const s = state.get();
+    if (!s.map?.contactMap) {
+      this.showToast('No contact map loaded');
+      return;
+    }
+    this.showToast('Auto cutting...');
+    setTimeout(() => {
+      const result = autoCutContigs();
+      this.refreshAfterCuration();
+      this.showToast(result.description);
+    }, 50);
+  }
+
   // ─── Stats Panel ──────────────────────────────────────────
 
   private updateStatsPanel(): void {
@@ -1983,6 +2011,8 @@ class OpenPretextApp {
     { name: 'Batch: join selected', shortcut: '', action: () => this.runBatchJoin() },
     { name: 'Batch: invert selected', shortcut: '', action: () => this.runBatchInvert() },
     { name: 'Sort contigs by length', shortcut: '', action: () => this.runSortByLength() },
+    { name: 'Auto sort: Union Find', shortcut: '', action: () => this.runAutoSort() },
+    { name: 'Auto cut: detect breakpoints', shortcut: '', action: () => this.runAutoCut() },
   ];
 
   private selectedCommandIndex = 0;
