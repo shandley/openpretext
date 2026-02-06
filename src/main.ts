@@ -19,19 +19,25 @@ import { DragReorder, renderDragIndicator } from './curation/DragReorder';
 import { ScaffoldManager } from './curation/ScaffoldManager';
 import { TrackRenderer } from './renderer/TrackRenderer';
 import { ScaffoldOverlay } from './renderer/ScaffoldOverlay';
+import { WaypointOverlay } from './renderer/WaypointOverlay';
+import { WaypointManager } from './curation/WaypointManager';
 import { generateDemoTracks } from './formats/SyntheticTracks';
 import { downloadAGP } from './export/AGPWriter';
 import { downloadSnapshot } from './export/SnapshotExporter';
+import { exportSession, importSession, downloadSession, type SessionData } from './io/SessionManager';
 
 class OpenPretextApp {
   private renderer!: WebGLRenderer;
   private labelRenderer!: LabelRenderer;
   private trackRenderer!: TrackRenderer;
   private scaffoldOverlay!: ScaffoldOverlay;
+  private waypointOverlay!: WaypointOverlay;
   private minimap!: Minimap;
   private camera!: Camera;
   private dragReorder = new DragReorder();
   private scaffoldManager = new ScaffoldManager();
+  private waypointManager = new WaypointManager();
+  private currentWaypointId: number | null = null;
   private tracksVisible = false;
   private animFrameId: number = 0;
   private currentColorMap: ColorMapName = 'red-white';
@@ -63,6 +69,11 @@ class OpenPretextApp {
     const scaffoldCanvas = document.getElementById('scaffold-canvas') as HTMLCanvasElement;
     if (scaffoldCanvas) {
       this.scaffoldOverlay = new ScaffoldOverlay(scaffoldCanvas);
+    }
+
+    const waypointCanvas = document.getElementById('waypoint-canvas') as HTMLCanvasElement;
+    if (waypointCanvas) {
+      this.waypointOverlay = new WaypointOverlay(waypointCanvas);
     }
 
     CurationEngine.setScaffoldManager(this.scaffoldManager);
@@ -152,25 +163,32 @@ class OpenPretextApp {
   private async loadPretextFile(file: File): Promise<void> {
     const statusEl = document.getElementById('status-file')!;
     statusEl.textContent = `Loading ${file.name}...`;
+    this.showLoading(`Loading ${file.name}`, 'Reading file...');
 
     try {
+      this.updateLoading('Reading file into memory...', 10);
       const buffer = await file.arrayBuffer();
 
       if (isPretextFile(buffer)) {
+        this.updateLoading('Parsing header and metadata...', 20);
         const parsed = await parsePretextFile(buffer);
         const h = parsed.header;
         const mapSize = h.numberOfPixels1D;
+
+        this.updateLoading('Assembling contact map...', 50);
 
         // Assemble the full contact map from decoded tiles (mipmap level 0).
         const contactMap = new Float32Array(mapSize * mapSize);
         const N = h.numberOfTextures1D;
         const tRes = h.textureResolution;
+        const totalTiles = (N * (N + 1)) / 2;
+        let tilesDone = 0;
 
         for (let tx = 0; tx < N; tx++) {
           for (let ty = tx; ty < N; ty++) {
             const linIdx = (((2 * N - tx - 1) * tx) >> 1) + ty;
             const tileData = parsed.tilesDecoded[linIdx]?.[0];
-            if (!tileData) continue;
+            if (!tileData) { tilesDone++; continue; }
 
             for (let py = 0; py < tRes; py++) {
               for (let px = 0; px < tRes; px++) {
@@ -183,12 +201,23 @@ class OpenPretextApp {
                 }
               }
             }
+
+            tilesDone++;
+            if (tilesDone % Math.max(1, Math.floor(totalTiles / 20)) === 0) {
+              this.updateLoading(
+                `Assembling tiles... (${tilesDone}/${totalTiles})`,
+                50 + Math.round((tilesDone / totalTiles) * 40),
+              );
+            }
           }
         }
 
+        this.updateLoading('Uploading to GPU...', 92);
         this.renderer.uploadContactMap(contactMap, mapSize);
         this.minimap.updateThumbnail(contactMap, mapSize);
         this.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
+
+        this.updateLoading('Finalizing...', 98);
         state.update({
           map: {
             filename: file.name,
@@ -209,14 +238,18 @@ class OpenPretextApp {
         statusEl.textContent = file.name;
         document.getElementById('status-contigs')!.textContent = `${parsed.contigs.length} contigs`;
         events.emit('file:loaded', { filename: file.name, contigs: parsed.contigs.length, textureSize: mapSize });
+        this.showToast(`Loaded ${file.name} — ${parsed.contigs.length} contigs, ${mapSize}px`);
       } else {
         statusEl.textContent = 'Invalid file format';
+        this.showToast('Invalid file — not a .pretext file');
       }
     } catch (err) {
       console.error('Error loading file:', err);
       statusEl.textContent = 'Error loading file';
+      this.showToast(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
 
+    this.hideLoading();
     document.getElementById('welcome')!.style.display = 'none';
   }
 
@@ -299,11 +332,13 @@ class OpenPretextApp {
       }
 
       this.updateCursor(canvas);
+      this.updateTooltip(e.clientX, e.clientY);
     });
 
     canvas.addEventListener('mouseleave', () => {
       this.hoveredContigIndex = -1;
       document.getElementById('status-position')!.textContent = '\u2014';
+      this.hideTooltip();
     });
   }
 
@@ -324,6 +359,111 @@ class OpenPretextApp {
       default:
         canvas.style.cursor = 'default';
     }
+  }
+
+  // ─── Tooltip ─────────────────────────────────────────────
+
+  private tooltipVisible = false;
+
+  private updateTooltip(clientX: number, clientY: number): void {
+    const tooltip = document.getElementById('tooltip');
+    if (!tooltip) return;
+
+    const s = state.get();
+    if (!s.map || this.hoveredContigIndex < 0) {
+      this.hideTooltip();
+      return;
+    }
+
+    const contigId = s.contigOrder[this.hoveredContigIndex];
+    const contig = s.map.contigs[contigId];
+    if (!contig) {
+      this.hideTooltip();
+      return;
+    }
+
+    // Build tooltip content
+    const lengthStr = this.formatBp(contig.length);
+    const pixelSpan = contig.pixelEnd - contig.pixelStart;
+    const orderStr = `${this.hoveredContigIndex + 1} / ${s.contigOrder.length}`;
+    const orientStr = contig.inverted ? 'Inverted' : 'Forward';
+    const scaffoldInfo = contig.scaffoldId !== null
+      ? this.scaffoldManager.getScaffold(contig.scaffoldId)
+      : null;
+
+    let html = `<div class="tooltip-name">${contig.name}</div>`;
+    html += `<div class="tooltip-row"><span class="label">Length</span><span class="value">${lengthStr}</span></div>`;
+    html += `<div class="tooltip-row"><span class="label">Pixels</span><span class="value">${pixelSpan} px</span></div>`;
+    html += `<div class="tooltip-row"><span class="label">Order</span><span class="value">${orderStr}</span></div>`;
+    html += `<div class="tooltip-row"><span class="label">Orient.</span><span class="value">${orientStr}</span></div>`;
+    if (scaffoldInfo) {
+      html += `<div class="tooltip-row"><span class="label">Scaffold</span><span class="value"><span class="tooltip-badge" style="background:${scaffoldInfo.color};color:#fff;">${scaffoldInfo.name}</span></span></div>`;
+    }
+
+    // Show position in map space
+    const mx = this.mouseMapPos.x;
+    const my = this.mouseMapPos.y;
+    html += `<div class="tooltip-row" style="margin-top:4px;font-size:10px;opacity:0.6"><span>Map pos</span><span>${mx.toFixed(3)}, ${my.toFixed(3)}</span></div>`;
+
+    tooltip.innerHTML = html;
+
+    // Position tooltip near cursor (offset to avoid overlapping)
+    const offsetX = 16;
+    const offsetY = 16;
+    let left = clientX + offsetX;
+    let top = clientY + offsetY;
+
+    // Keep within viewport
+    const tooltipW = tooltip.offsetWidth || 200;
+    const tooltipH = tooltip.offsetHeight || 100;
+    if (left + tooltipW > window.innerWidth - 10) {
+      left = clientX - tooltipW - 8;
+    }
+    if (top + tooltipH > window.innerHeight - 10) {
+      top = clientY - tooltipH - 8;
+    }
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+    tooltip.classList.add('visible');
+    this.tooltipVisible = true;
+  }
+
+  private hideTooltip(): void {
+    if (!this.tooltipVisible) return;
+    const tooltip = document.getElementById('tooltip');
+    if (tooltip) tooltip.classList.remove('visible');
+    this.tooltipVisible = false;
+  }
+
+  // ─── Loading Progress ──────────────────────────────────
+
+  private showLoading(title: string, detail: string = ''): void {
+    const overlay = document.getElementById('loading-overlay');
+    const titleEl = document.getElementById('loading-title');
+    const detailEl = document.getElementById('loading-detail');
+    const barEl = document.getElementById('loading-bar');
+    const percentEl = document.getElementById('loading-percent');
+    if (overlay) overlay.classList.add('visible');
+    if (titleEl) titleEl.textContent = title;
+    if (detailEl) detailEl.textContent = detail;
+    if (barEl) barEl.style.width = '0%';
+    if (percentEl) percentEl.textContent = '0%';
+  }
+
+  private updateLoading(detail: string, progress: number): void {
+    const detailEl = document.getElementById('loading-detail');
+    const barEl = document.getElementById('loading-bar');
+    const percentEl = document.getElementById('loading-percent');
+    const pct = Math.round(Math.min(100, Math.max(0, progress)));
+    if (detailEl) detailEl.textContent = detail;
+    if (barEl) barEl.style.width = `${pct}%`;
+    if (percentEl) percentEl.textContent = `${pct}%`;
+  }
+
+  private hideLoading(): void {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.remove('visible');
   }
 
   // ─── Click Interactions ──────────────────────────────────
@@ -380,6 +520,33 @@ class OpenPretextApp {
         }
         this.updateSidebarContigList();
         this.updateSidebarScaffoldList();
+      }
+
+      // Waypoint mode: click to place waypoint, shift+click to remove nearest
+      if (this.currentMode === 'waypoint') {
+        const mapX = this.mouseMapPos.x;
+        const mapY = this.mouseMapPos.y;
+        if (mapX >= 0 && mapX <= 1 && mapY >= 0 && mapY <= 1) {
+          if (e.shiftKey) {
+            // Remove nearest waypoint
+            const all = this.waypointManager.getAllWaypoints();
+            if (all.length > 0) {
+              let nearest = all[0];
+              let minDist = Infinity;
+              for (const wp of all) {
+                const d = Math.hypot(wp.mapX - mapX, wp.mapY - mapY);
+                if (d < minDist) { minDist = d; nearest = wp; }
+              }
+              this.waypointManager.removeWaypoint(nearest.id);
+              if (this.currentWaypointId === nearest.id) this.currentWaypointId = null;
+              this.showToast(`Removed waypoint: ${nearest.label}`);
+            }
+          } else {
+            const wp = this.waypointManager.addWaypoint(mapX, mapY);
+            this.currentWaypointId = wp.id;
+            this.showToast(`Placed: ${wp.label}`);
+          }
+        }
       }
     });
   }
@@ -591,6 +758,17 @@ class OpenPretextApp {
         });
       }
 
+      // Waypoint overlay
+      if (this.waypointOverlay) {
+        this.waypointOverlay.render({
+          camera: cam,
+          canvasWidth: w,
+          canvasHeight: h,
+          waypoints: this.waypointManager.getAllWaypoints(),
+          currentWaypointId: this.currentWaypointId,
+        });
+      }
+
       // Minimap
       this.minimap.render(cam);
 
@@ -710,6 +888,90 @@ class OpenPretextApp {
     }
   }
 
+  private saveSession(): void {
+    const s = state.get();
+    if (!s.map) {
+      this.showToast('No data to save');
+      return;
+    }
+    try {
+      const sessionData = exportSession(s, this.scaffoldManager, this.waypointManager);
+      downloadSession(sessionData);
+      this.showToast('Session saved');
+    } catch (err) {
+      console.error('Session save error:', err);
+      this.showToast('Save failed');
+    }
+  }
+
+  private async loadSession(file: File): Promise<void> {
+    try {
+      const text = await file.text();
+      const session = importSession(text);
+
+      // Apply session state to the app
+      const s = state.get();
+      if (!s.map) {
+        this.showToast('Load a .pretext file first, then restore the session');
+        return;
+      }
+
+      // Verify filename match
+      if (session.filename !== s.map.filename && session.filename !== 'demo') {
+        this.showToast(`Warning: session was for "${session.filename}", current file is "${s.map.filename}"`);
+      }
+
+      // Apply contig order
+      if (session.contigOrder.length > 0) {
+        state.update({ contigOrder: session.contigOrder });
+      }
+
+      // Apply contig states (inversions, scaffolds)
+      for (const [contigIdStr, override] of Object.entries(session.contigStates)) {
+        const contigId = Number(contigIdStr);
+        if (contigId >= 0 && contigId < s.map.contigs.length) {
+          s.map.contigs[contigId].inverted = override.inverted;
+          s.map.contigs[contigId].scaffoldId = override.scaffoldId;
+        }
+      }
+
+      // Restore scaffolds
+      for (const sc of session.scaffolds) {
+        if (!this.scaffoldManager.getScaffold(sc.id)) {
+          this.scaffoldManager.createScaffold(sc.name);
+        }
+      }
+
+      // Restore camera
+      this.camera.animateTo(session.camera, 300);
+
+      // Restore settings
+      state.update({
+        gamma: session.settings.gamma,
+        showGrid: session.settings.showGrid,
+        colorMapName: session.settings.colorMapName,
+      });
+      this.currentColorMap = session.settings.colorMapName as any;
+      this.renderer.setColorMap(this.currentColorMap);
+      this.syncColormapDropdown(this.currentColorMap);
+      this.syncGammaSlider(session.settings.gamma);
+
+      // Restore waypoints
+      this.waypointManager.clearAll();
+      for (const wp of session.waypoints) {
+        this.waypointManager.addWaypoint(wp.mapX, wp.mapY, wp.label);
+      }
+
+      this.rebuildContigBoundaries();
+      this.updateSidebarContigList();
+      this.updateSidebarScaffoldList();
+      this.showToast(`Session restored (${session.operationLog.length} operations)`);
+    } catch (err) {
+      console.error('Session load error:', err);
+      this.showToast(`Load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
   // ─── UI Setup ─────────────────────────────────────────────
 
   private setupToolbar(): void {
@@ -729,6 +991,12 @@ class OpenPretextApp {
 
     document.getElementById('btn-screenshot')?.addEventListener('click', () => {
       this.takeScreenshot();
+    });
+    document.getElementById('btn-save-session')?.addEventListener('click', () => {
+      this.saveSession();
+    });
+    document.getElementById('btn-load-session')?.addEventListener('click', () => {
+      document.getElementById('session-file-input')?.click();
     });
 
     document.querySelectorAll('[data-mode]').forEach(btn => {
@@ -895,6 +1163,11 @@ class OpenPretextApp {
             SelectionManager.clearSelection();
             this.updateSidebarContigList();
           }
+          if (this.currentMode === 'waypoint') {
+            this.waypointManager.clearAll();
+            this.currentWaypointId = null;
+            this.showToast('All waypoints cleared');
+          }
           break;
 
         case 'g':
@@ -903,6 +1176,31 @@ class OpenPretextApp {
             this.exportAGP();
           }
           break;
+
+        case ']':
+        case '.': {
+          // Next waypoint
+          const cam = this.camera.getState();
+          const nextWp = this.waypointManager.getNextWaypoint(cam.x, cam.y);
+          if (nextWp) {
+            this.currentWaypointId = nextWp.id;
+            this.camera.animateTo({ x: nextWp.mapX, y: nextWp.mapY }, 250);
+            this.showToast(`Waypoint: ${nextWp.label}`);
+          }
+          break;
+        }
+        case '[':
+        case ',': {
+          // Previous waypoint
+          const cam = this.camera.getState();
+          const prevWp = this.waypointManager.getPrevWaypoint(cam.x, cam.y);
+          if (prevWp) {
+            this.currentWaypointId = prevWp.id;
+            this.camera.animateTo({ x: prevWp.mapX, y: prevWp.mapY }, 250);
+            this.showToast(`Waypoint: ${prevWp.label}`);
+          }
+          break;
+        }
       }
     });
   }
@@ -933,6 +1231,13 @@ class OpenPretextApp {
       const file = input.files?.[0];
       if (file) await this.loadPretextFile(file);
       input.value = '';
+    });
+
+    const sessionInput = document.getElementById('session-file-input') as HTMLInputElement;
+    sessionInput?.addEventListener('change', async () => {
+      const file = sessionInput.files?.[0];
+      if (file) await this.loadSession(file);
+      sessionInput.value = '';
     });
   }
 
@@ -996,6 +1301,9 @@ class OpenPretextApp {
     { name: 'Clear selection', shortcut: 'Esc', action: () => { SelectionManager.clearSelection(); this.updateSidebarContigList(); } },
     { name: 'Toggle tracks', shortcut: 'X', action: () => { this.tracksVisible = !this.tracksVisible; this.showToast(`Tracks: ${this.tracksVisible ? 'visible' : 'hidden'}`); } },
     { name: 'New scaffold', shortcut: 'N', action: () => { const id = this.scaffoldManager.createScaffold(); this.scaffoldManager.setActiveScaffoldId(id); this.updateSidebarScaffoldList(); } },
+    { name: 'Next waypoint', shortcut: '] or .', action: () => { const cam = this.camera.getState(); const wp = this.waypointManager.getNextWaypoint(cam.x, cam.y); if (wp) { this.currentWaypointId = wp.id; this.camera.animateTo({ x: wp.mapX, y: wp.mapY }, 250); } } },
+    { name: 'Previous waypoint', shortcut: '[ or ,', action: () => { const cam = this.camera.getState(); const wp = this.waypointManager.getPrevWaypoint(cam.x, cam.y); if (wp) { this.currentWaypointId = wp.id; this.camera.animateTo({ x: wp.mapX, y: wp.mapY }, 250); } } },
+    { name: 'Clear all waypoints', shortcut: 'Del', action: () => { this.waypointManager.clearAll(); this.currentWaypointId = null; this.showToast('All waypoints cleared'); } },
   ];
 
   private selectedCommandIndex = 0;

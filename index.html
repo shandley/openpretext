@@ -176,7 +176,8 @@
 
     #scaffold-canvas,
     #track-canvas,
-    #label-canvas {
+    #label-canvas,
+    #waypoint-canvas {
       position: absolute;
       inset: 0;
       width: 100%;
@@ -450,6 +451,114 @@
       opacity: 1;
       transform: translateY(0);
     }
+
+    /* Tooltip */
+    #tooltip {
+      display: none;
+      position: fixed;
+      pointer-events: none;
+      z-index: 600;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      max-width: 280px;
+      white-space: nowrap;
+    }
+
+    #tooltip.visible {
+      display: block;
+    }
+
+    .tooltip-name {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+
+    .tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--text-secondary);
+    }
+
+    .tooltip-row .label { color: var(--text-secondary); }
+    .tooltip-row .value { color: var(--text-primary); }
+
+    .tooltip-badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: 6px;
+    }
+
+    /* Loading progress overlay */
+    #loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 900;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    #loading-overlay.visible {
+      display: flex;
+    }
+
+    .loading-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px 32px;
+      text-align: center;
+      min-width: 320px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    .loading-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .loading-detail {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+
+    .loading-bar-track {
+      width: 100%;
+      height: 6px;
+      background: var(--bg-primary);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .loading-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 0.15s ease;
+    }
+
+    .loading-percent {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
   </style>
 </head>
 <body>
@@ -460,6 +569,8 @@
       <div class="toolbar-group">
         <button class="toolbar-btn" id="btn-open">Open <kbd>⌘O</kbd></button>
         <button class="toolbar-btn" id="btn-save-agp">Export AGP</button>
+        <button class="toolbar-btn" id="btn-save-session">Save Session</button>
+        <button class="toolbar-btn" id="btn-load-session">Load Session</button>
         <button class="toolbar-btn" id="btn-screenshot">Screenshot <kbd>⌘S</kbd></button>
       </div>
       <div class="toolbar-separator"></div>
@@ -505,6 +616,7 @@
         <canvas id="scaffold-canvas"></canvas>
         <canvas id="track-canvas"></canvas>
         <canvas id="label-canvas"></canvas>
+        <canvas id="waypoint-canvas"></canvas>
       </div>
       <div id="sidebar">
         <div class="sidebar-section">
@@ -550,12 +662,28 @@
     <!-- Drop overlay -->
     <div id="drop-overlay">Drop .pretext file to open</div>
 
+    <!-- Tooltip -->
+    <div id="tooltip"></div>
+
+    <!-- Loading progress overlay -->
+    <div id="loading-overlay">
+      <div class="loading-card">
+        <div class="loading-title" id="loading-title">Loading...</div>
+        <div class="loading-detail" id="loading-detail">Preparing file</div>
+        <div class="loading-bar-track">
+          <div class="loading-bar-fill" id="loading-bar"></div>
+        </div>
+        <div class="loading-percent" id="loading-percent">0%</div>
+      </div>
+    </div>
+
     <!-- Toast notifications -->
     <div id="toast-container"></div>
   </div>
 
   <!-- File input (hidden) -->
   <input type="file" id="file-input" accept=".pretext" style="display:none">
+  <input type="file" id="session-file-input" accept=".json" style="display:none">
 
   <script type="module" src="/src/main.ts"></script>
 </body>

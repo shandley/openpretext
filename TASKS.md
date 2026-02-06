@@ -19,8 +19,8 @@
 - [x] Move operation with undo/redo
 - [x] Join operation with undo/redo
 - [x] Undo/redo stack (CurationEngine)
-- [ ] Contig drag reorder (visual drag in edit mode)
-- [ ] Scaffold painting mode
+- [x] Contig drag reorder (visual drag in edit mode)
+- [x] Scaffold painting mode
 - [ ] Waypoint mode
 
 ## Priority 3 — I/O
@@ -28,15 +28,15 @@
 - [x] AGP 2.1 export
 - [x] Curation log (JSON operation history)
 - [x] PNG screenshot export
-- [ ] State save/load
+- [ ] State save/load (session persistence as JSON)
 
 ## Priority 4 — Annotation Tracks
 
-- [ ] Track renderer base system
-- [ ] Coverage track
-- [ ] Telomere track
-- [ ] Gap track
-- [ ] Repeat density track
+- [x] Track renderer base system (line, heatmap, marker types)
+- [x] Coverage track (synthetic)
+- [x] Telomere track (synthetic)
+- [x] Gap track (synthetic)
+- [x] GC content track (synthetic)
 - [x] Extension data parser from .pretext files
 
 ## Priority 5 — UI/UX
@@ -47,11 +47,12 @@
 - [x] Toast notifications
 - [x] Contig labels on map edges (LabelRenderer)
 - [x] Hover highlighting
-- [ ] Scaffold list sidebar (functional)
+- [x] Scaffold list sidebar (functional)
+- [x] Color map picker UI (dropdown)
+- [x] Gamma adjustment slider
+- [x] Minimap / overview
 - [ ] Tooltip with detailed contig info
-- [ ] Color map picker UI (dropdown, not just cycling)
-- [ ] Gamma adjustment slider
-- [ ] Minimap / overview
+- [ ] Loading progress indicator
 
 ## Priority 6 — Scripting
 
@@ -64,6 +65,5 @@
 
 - [ ] Responsive layout
 - [ ] Touch/trackpad gesture support
-- [ ] Loading progress indicator
 - [ ] Error handling and user feedback
 - [ ] Performance optimization for large genomes
