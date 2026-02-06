@@ -23,6 +23,9 @@ export class Camera {
   minZoom: number = 0.5;
   maxZoom: number = 200.0;
 
+  // When true, left-click does NOT pan (used by edit/scaffold modes)
+  leftClickBlocked: boolean = false;
+
   // Drag state
   private isDragging: boolean = false;
   private dragStartX: number = 0;
@@ -51,6 +54,8 @@ export class Camera {
 
     // Mouse drag for panning
     canvas.addEventListener('mousedown', (e) => {
+      // In non-navigate modes, left-click is for interactions, not panning
+      if (e.button === 0 && this.leftClickBlocked) return;
       if (e.button === 0 || e.button === 2) { // left or right click
         this.isDragging = true;
         this.dragStartX = e.clientX;

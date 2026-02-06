@@ -10,6 +10,21 @@
 
 import { state, ContigInfo, CurationOperation } from '../core/State';
 import { events } from '../core/EventBus';
+import type { ScaffoldManager } from './ScaffoldManager';
+
+/**
+ * Optional ScaffoldManager reference for scaffold_paint undo/redo.
+ * Registered via setScaffoldManager() after the manager is created.
+ */
+let scaffoldManager: ScaffoldManager | null = null;
+
+/**
+ * Register the ScaffoldManager so CurationEngine can delegate
+ * scaffold_paint undo/redo to it.
+ */
+export function setScaffoldManager(mgr: ScaffoldManager): void {
+  scaffoldManager = mgr;
+}
 
 /**
  * Validates that the map is loaded and returns it, or throws.
@@ -342,7 +357,11 @@ const undoHandlers: Record<CurationOperation['type'], (op: CurationOperation) =>
   join: undoJoin,
   invert: undoInvert,
   move: undoMove,
-  scaffold_paint: () => {}, // placeholder for future implementation
+  scaffold_paint: (op) => {
+    if (scaffoldManager) {
+      scaffoldManager.undoPaint(op);
+    }
+  },
 };
 
 /**
@@ -399,6 +418,11 @@ export function redo(): boolean {
       break;
     case 'move':
       reapplyMove(op);
+      break;
+    case 'scaffold_paint':
+      if (scaffoldManager) {
+        scaffoldManager.reapplyPaint(op);
+      }
       break;
     default:
       break;
@@ -513,4 +537,5 @@ export const CurationEngine = {
   move,
   undo,
   redo,
+  setScaffoldManager,
 };

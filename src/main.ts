@@ -7,6 +7,7 @@
 import { WebGLRenderer } from './renderer/WebGLRenderer';
 import { Camera, type CameraState } from './renderer/Camera';
 import { LabelRenderer } from './renderer/LabelRenderer';
+import { Minimap } from './renderer/Minimap';
 import { type ColorMapName } from './renderer/ColorMaps';
 import { generateSyntheticMap } from './formats/SyntheticData';
 import { parsePretextFile, isPretextFile } from './formats/PretextParser';
@@ -14,13 +15,24 @@ import { events } from './core/EventBus';
 import { state, type InteractionMode } from './core/State';
 import { CurationEngine } from './curation/CurationEngine';
 import { SelectionManager } from './curation/SelectionManager';
+import { DragReorder, renderDragIndicator } from './curation/DragReorder';
+import { ScaffoldManager } from './curation/ScaffoldManager';
+import { TrackRenderer } from './renderer/TrackRenderer';
+import { ScaffoldOverlay } from './renderer/ScaffoldOverlay';
+import { generateDemoTracks } from './formats/SyntheticTracks';
 import { downloadAGP } from './export/AGPWriter';
 import { downloadSnapshot } from './export/SnapshotExporter';
 
 class OpenPretextApp {
   private renderer!: WebGLRenderer;
   private labelRenderer!: LabelRenderer;
+  private trackRenderer!: TrackRenderer;
+  private scaffoldOverlay!: ScaffoldOverlay;
+  private minimap!: Minimap;
   private camera!: Camera;
+  private dragReorder = new DragReorder();
+  private scaffoldManager = new ScaffoldManager();
+  private tracksVisible = false;
   private animFrameId: number = 0;
   private currentColorMap: ColorMapName = 'red-white';
   private contigBoundaries: number[] = [];
@@ -43,8 +55,27 @@ class OpenPretextApp {
       this.labelRenderer = new LabelRenderer(labelCanvas);
     }
 
+    const trackCanvas = document.getElementById('track-canvas') as HTMLCanvasElement;
+    if (trackCanvas) {
+      this.trackRenderer = new TrackRenderer(trackCanvas);
+    }
+
+    const scaffoldCanvas = document.getElementById('scaffold-canvas') as HTMLCanvasElement;
+    if (scaffoldCanvas) {
+      this.scaffoldOverlay = new ScaffoldOverlay(scaffoldCanvas);
+    }
+
+    CurationEngine.setScaffoldManager(this.scaffoldManager);
+
+    const container = document.getElementById('canvas-container')!;
+    this.minimap = new Minimap(container, { size: 160, margin: 12, position: 'bottom-right' });
+    this.minimap.setNavigateCallback((mapX, mapY) => {
+      this.camera.animateTo({ x: mapX, y: mapY }, 200);
+    });
+
     this.camera = new Camera(canvas, (cam) => this.onCameraChange(cam));
 
+    this.setupDragReorder(canvas);
     this.setupToolbar();
     this.setupKeyboardShortcuts();
     this.setupFileDrop();
@@ -91,6 +122,31 @@ class OpenPretextApp {
     }
   }
 
+  // ─── Drag Reorder ──────────────────────────────────────────
+
+  private setupDragReorder(canvas: HTMLCanvasElement): void {
+    this.dragReorder.setup({
+      getContigAtPosition: (mapX: number) => {
+        let prevBoundary = 0;
+        for (let i = 0; i < this.contigBoundaries.length; i++) {
+          if (mapX >= prevBoundary && mapX < this.contigBoundaries[i]) return i;
+          prevBoundary = this.contigBoundaries[i];
+        }
+        return -1;
+      },
+      onDragUpdate: () => {
+        canvas.style.cursor = 'grabbing';
+      },
+      onDragEnd: (moved: boolean) => {
+        this.updateCursor(canvas);
+        if (moved) {
+          this.refreshAfterCuration();
+          this.showToast('Contig moved');
+        }
+      },
+    });
+  }
+
   // ─── File Loading ─────────────────────────────────────────
 
   private async loadPretextFile(file: File): Promise<void> {
@@ -131,6 +187,7 @@ class OpenPretextApp {
         }
 
         this.renderer.uploadContactMap(contactMap, mapSize);
+        this.minimap.updateThumbnail(contactMap, mapSize);
         this.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
         state.update({
           map: {
@@ -187,6 +244,18 @@ class OpenPretextApp {
       contigOrder: contigs.map((_, i) => i),
     });
 
+    // Generate minimap thumbnail
+    this.minimap.updateThumbnail(data, size);
+
+    // Generate synthetic annotation tracks
+    if (this.trackRenderer) {
+      const boundaries = contigs.map(c => c.end);
+      const demoTracks = generateDemoTracks(size, boundaries);
+      for (const track of demoTracks) {
+        this.trackRenderer.addTrack(track);
+      }
+    }
+
     document.getElementById('status-file')!.textContent = 'Demo data';
     document.getElementById('status-contigs')!.textContent = `${contigs.length} contigs`;
     document.getElementById('welcome')!.style.display = 'none';
@@ -200,6 +269,11 @@ class OpenPretextApp {
     canvas.addEventListener('mousemove', (e) => {
       const cam = this.camera.getState();
       this.mouseMapPos = this.renderer.canvasToMap(e.offsetX, e.offsetY, cam);
+
+      // Handle drag reorder in edit mode
+      if (this.currentMode === 'edit' && this.dragReorder.onMouseMove(e.clientX, e.clientY, this.mouseMapPos.x, this.contigBoundaries)) {
+        return; // Dragging, skip normal hover
+      }
 
       const mx = this.mouseMapPos.x;
       this.hoveredContigIndex = -1;
@@ -259,9 +333,20 @@ class OpenPretextApp {
 
     canvas.addEventListener('mousedown', (e) => {
       mouseDownPos = { x: e.clientX, y: e.clientY };
+
+      // Try to initiate drag reorder in edit mode
+      if (this.currentMode === 'edit' && this.hoveredContigIndex >= 0) {
+        this.dragReorder.onMouseDown(e.clientX, e.clientY, this.hoveredContigIndex);
+      }
     });
 
     canvas.addEventListener('mouseup', (e) => {
+      // Handle drag end
+      if (this.dragReorder.isActive()) {
+        this.dragReorder.onMouseUp();
+        return;
+      }
+
       const dx = Math.abs(e.clientX - mouseDownPos.x);
       const dy = Math.abs(e.clientY - mouseDownPos.y);
       if (dx > 5 || dy > 5) return;
@@ -276,6 +361,25 @@ class OpenPretextApp {
         }
         this.updateSidebarContigList();
         this.showToast(`Selected: ${this.getContigNameAt(this.hoveredContigIndex)}`);
+      }
+
+      // Scaffold painting mode
+      if (this.currentMode === 'scaffold' && this.hoveredContigIndex >= 0) {
+        if (e.shiftKey) {
+          this.scaffoldManager.paintContigs([this.hoveredContigIndex], null);
+          this.showToast(`Unpainted: ${this.getContigNameAt(this.hoveredContigIndex)}`);
+        } else {
+          const activeId = this.scaffoldManager.getActiveScaffoldId();
+          if (activeId !== null) {
+            this.scaffoldManager.paintContigs([this.hoveredContigIndex], activeId);
+            const sc = this.scaffoldManager.getScaffold(activeId);
+            this.showToast(`Painted: ${this.getContigNameAt(this.hoveredContigIndex)} → ${sc?.name ?? ''}`);
+          } else {
+            this.showToast('No active scaffold. Press N to create one.');
+          }
+        }
+        this.updateSidebarContigList();
+        this.updateSidebarScaffoldList();
       }
     });
   }
@@ -362,6 +466,43 @@ class OpenPretextApp {
     });
   }
 
+  private updateSidebarScaffoldList(): void {
+    const listEl = document.getElementById('scaffold-list');
+    if (!listEl) return;
+
+    const scaffolds = this.scaffoldManager.getAllScaffolds();
+    const activeId = this.scaffoldManager.getActiveScaffoldId();
+
+    if (scaffolds.length === 0) {
+      listEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No scaffolds. Press N in scaffold mode to create one.</div>';
+      return;
+    }
+
+    const html = scaffolds.map(sc => {
+      const isActive = sc.id === activeId;
+      const count = this.scaffoldManager.getContigsInScaffold(sc.id).length;
+      return `<div class="contig-item ${isActive ? 'selected' : ''}" data-scaffold-id="${sc.id}">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${sc.color};margin-right:6px;flex-shrink:0;"></span>
+        <span class="contig-name">${sc.name}</span>
+        <span class="contig-meta">${count} contigs</span>
+      </div>`;
+    }).join('');
+
+    listEl.innerHTML = html;
+
+    listEl.querySelectorAll('.contig-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = parseInt((el as HTMLElement).dataset.scaffoldId ?? '-1', 10);
+        if (id >= 0) {
+          this.scaffoldManager.setActiveScaffoldId(id);
+          this.updateSidebarScaffoldList();
+          const sc = this.scaffoldManager.getScaffold(id);
+          this.showToast(`Active scaffold: ${sc?.name ?? ''}`);
+        }
+      });
+    });
+  }
+
   private formatBp(bp: number): string {
     if (bp >= 1_000_000_000) return `${(bp / 1_000_000_000).toFixed(1)} Gb`;
     if (bp >= 1_000_000) return `${(bp / 1_000_000).toFixed(1)} Mb`;
@@ -399,23 +540,65 @@ class OpenPretextApp {
         highlightEnd,
       });
 
+      const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
+      const w = mapCanvas.clientWidth;
+      const h = mapCanvas.clientHeight;
+
       if (this.labelRenderer && s.map) {
-        const canvas = document.getElementById('map-canvas') as HTMLCanvasElement;
         const contigNames = s.contigOrder.map(id => s.map!.contigs[id]?.name ?? '');
         this.labelRenderer.render({
           contigBoundaries: this.contigBoundaries,
           contigNames,
           camera: cam,
           hoveredIndex: this.hoveredContigIndex,
-          canvasWidth: canvas.clientWidth,
-          canvasHeight: canvas.clientHeight,
+          canvasWidth: w,
+          canvasHeight: h,
+        });
+
+        // Draw drag indicator on the label canvas if dragging
+        if (this.dragReorder.isActive()) {
+          const labelCanvas = document.getElementById('label-canvas') as HTMLCanvasElement;
+          const ctx = labelCanvas.getContext('2d');
+          if (ctx) {
+            renderDragIndicator(ctx, this.dragReorder.getDragState(), this.contigBoundaries, cam, w, h);
+          }
+        }
+      }
+
+      // Scaffold overlay
+      if (this.scaffoldOverlay && s.map) {
+        const contigScaffoldIds = s.contigOrder.map(id => s.map!.contigs[id]?.scaffoldId ?? null);
+        const scaffoldMap = new Map(
+          this.scaffoldManager.getAllScaffolds().map(sc => [sc.id, sc])
+        );
+        this.scaffoldOverlay.render({
+          contigBoundaries: this.contigBoundaries,
+          contigScaffoldIds,
+          scaffolds: scaffoldMap,
+          camera: cam,
+          canvasWidth: w,
+          canvasHeight: h,
         });
       }
+
+      // Track rendering
+      if (this.trackRenderer && this.tracksVisible && s.map) {
+        this.trackRenderer.render({
+          camera: cam,
+          canvasWidth: w,
+          canvasHeight: h,
+          textureSize: s.map.textureSize,
+        });
+      }
+
+      // Minimap
+      this.minimap.render(cam);
 
       document.getElementById('status-zoom')!.textContent = `${Math.round(cam.zoom * 100)}%`;
 
       this.animFrameId = requestAnimationFrame(renderFrame);
     };
+    this.startRenderLoop = () => { renderFrame(); };
     renderFrame();
   }
 
@@ -429,6 +612,9 @@ class OpenPretextApp {
     const previous = this.currentMode;
     this.currentMode = mode;
     state.update({ mode });
+
+    // Block camera left-click panning in non-navigate modes
+    this.camera.leftClickBlocked = mode !== 'navigate';
 
     if (previous === 'edit' && mode !== 'edit') {
       SelectionManager.clearSelection();
@@ -453,7 +639,20 @@ class OpenPretextApp {
     this.currentColorMap = maps[(idx + 1) % maps.length];
     this.renderer.setColorMap(this.currentColorMap);
     this.showToast(`Color map: ${this.currentColorMap}`);
+    this.syncColormapDropdown(this.currentColorMap);
     events.emit('colormap:changed', { name: this.currentColorMap });
+  }
+
+  private syncGammaSlider(gamma: number): void {
+    const slider = document.getElementById('gamma-slider') as HTMLInputElement;
+    const label = document.getElementById('gamma-value');
+    if (slider) slider.value = String(gamma);
+    if (label) label.textContent = gamma.toFixed(2);
+  }
+
+  private syncColormapDropdown(name: ColorMapName): void {
+    const select = document.getElementById('colormap-select') as HTMLSelectElement;
+    if (select) select.value = name;
   }
 
   // ─── Curation Operations ────────────────────────────────
@@ -542,9 +741,34 @@ class OpenPretextApp {
       const s = state.get();
       state.update({ showGrid: !s.showGrid });
     });
+    document.getElementById('btn-minimap')?.addEventListener('click', () => {
+      this.minimap.toggle();
+    });
+    document.getElementById('btn-tracks')?.addEventListener('click', () => {
+      this.tracksVisible = !this.tracksVisible;
+      this.showToast(`Tracks: ${this.tracksVisible ? 'visible' : 'hidden'}`);
+    });
     document.getElementById('btn-sidebar')?.addEventListener('click', () => {
       document.getElementById('sidebar')?.classList.toggle('visible');
       this.updateSidebarContigList();
+    });
+
+    // Color map dropdown
+    const colormapSelect = document.getElementById('colormap-select') as HTMLSelectElement;
+    colormapSelect?.addEventListener('change', () => {
+      this.currentColorMap = colormapSelect.value as ColorMapName;
+      this.renderer.setColorMap(this.currentColorMap);
+      this.showToast(`Color map: ${this.currentColorMap}`);
+      events.emit('colormap:changed', { name: this.currentColorMap });
+    });
+
+    // Gamma slider
+    const gammaSlider = document.getElementById('gamma-slider') as HTMLInputElement;
+    const gammaValue = document.getElementById('gamma-value')!;
+    gammaSlider?.addEventListener('input', () => {
+      const gamma = parseFloat(gammaSlider.value);
+      state.update({ gamma });
+      gammaValue.textContent = gamma.toFixed(2);
     });
 
     document.getElementById('btn-undo')?.addEventListener('click', () => {
@@ -587,11 +811,21 @@ class OpenPretextApp {
         case 'arrowup': this.cycleColorMap(); break;
         case 'arrowdown': this.cycleColorMap(); break;
 
-        case 'arrowleft':
-          state.update({ gamma: Math.max(0.1, state.get().gamma - 0.05) });
+        case 'arrowleft': {
+          const newGamma = Math.max(0.1, state.get().gamma - 0.05);
+          state.update({ gamma: newGamma });
+          this.syncGammaSlider(newGamma);
           break;
-        case 'arrowright':
-          state.update({ gamma: Math.min(2.0, state.get().gamma + 0.05) });
+        }
+        case 'arrowright': {
+          const newGamma = Math.min(2.0, state.get().gamma + 0.05);
+          state.update({ gamma: newGamma });
+          this.syncGammaSlider(newGamma);
+          break;
+        }
+
+        case 'm':
+          this.minimap.toggle();
           break;
 
         case 'k':
@@ -624,6 +858,34 @@ class OpenPretextApp {
             e.preventDefault();
             SelectionManager.selectAll();
             this.updateSidebarContigList();
+          }
+          break;
+
+        case 'x':
+          this.tracksVisible = !this.tracksVisible;
+          this.showToast(`Tracks: ${this.tracksVisible ? 'visible' : 'hidden'}`);
+          break;
+
+        case 'n':
+          if (this.currentMode === 'scaffold') {
+            const id = this.scaffoldManager.createScaffold();
+            this.scaffoldManager.setActiveScaffoldId(id);
+            const sc = this.scaffoldManager.getScaffold(id);
+            this.showToast(`Created: ${sc?.name ?? 'Scaffold'}`);
+            this.updateSidebarScaffoldList();
+          }
+          break;
+
+        case '1': case '2': case '3': case '4': case '5':
+        case '6': case '7': case '8': case '9':
+          if (this.currentMode === 'scaffold') {
+            const scaffolds = this.scaffoldManager.getAllScaffolds();
+            const idx = parseInt(e.key) - 1;
+            if (idx < scaffolds.length) {
+              this.scaffoldManager.setActiveScaffoldId(scaffolds[idx].id);
+              this.showToast(`Active: ${scaffolds[idx].name}`);
+              this.updateSidebarScaffoldList();
+            }
           }
           break;
 
@@ -722,6 +984,7 @@ class OpenPretextApp {
     { name: 'Toggle grid', shortcut: 'L', action: () => state.update({ showGrid: !state.get().showGrid }) },
     { name: 'Toggle sidebar', shortcut: 'I', action: () => { document.getElementById('sidebar')?.classList.toggle('visible'); this.updateSidebarContigList(); } },
     { name: 'Cycle color map', shortcut: '\u2191/\u2193', action: () => this.cycleColorMap() },
+    { name: 'Toggle minimap', shortcut: 'M', action: () => this.minimap.toggle() },
     { name: 'Reset view', shortcut: 'Home', action: () => this.camera.resetView() },
     { name: 'Jump to diagonal', shortcut: 'J', action: () => this.camera.jumpToDiagonal() },
     { name: 'Undo', shortcut: '\u2318Z', action: () => this.performUndo() },
@@ -731,6 +994,8 @@ class OpenPretextApp {
     { name: 'Screenshot', shortcut: '\u2318S', action: () => this.takeScreenshot() },
     { name: 'Select all contigs', shortcut: '\u2318A', action: () => { SelectionManager.selectAll(); this.updateSidebarContigList(); } },
     { name: 'Clear selection', shortcut: 'Esc', action: () => { SelectionManager.clearSelection(); this.updateSidebarContigList(); } },
+    { name: 'Toggle tracks', shortcut: 'X', action: () => { this.tracksVisible = !this.tracksVisible; this.showToast(`Tracks: ${this.tracksVisible ? 'visible' : 'hidden'}`); } },
+    { name: 'New scaffold', shortcut: 'N', action: () => { const id = this.scaffoldManager.createScaffold(); this.scaffoldManager.setActiveScaffoldId(id); this.updateSidebarScaffoldList(); } },
   ];
 
   private selectedCommandIndex = 0;
