@@ -1,9 +1,5 @@
 node_modules/
 dist/
 *.log
-agent_logs/
-current_tasks/*.txt
 .DS_Store
-# Development screenshots
-*.png
 test-data/
