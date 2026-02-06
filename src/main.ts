@@ -25,6 +25,8 @@ import { generateDemoTracks } from './formats/SyntheticTracks';
 import { downloadAGP } from './export/AGPWriter';
 import { downloadSnapshot } from './export/SnapshotExporter';
 import { exportSession, importSession, downloadSession, type SessionData } from './io/SessionManager';
+import { parseScript } from './scripting/ScriptParser';
+import { executeScript, type ScriptContext, type ScriptResult } from './scripting/ScriptExecutor';
 
 class OpenPretextApp {
   private renderer!: WebGLRenderer;
@@ -95,6 +97,7 @@ class OpenPretextApp {
     this.setupMouseTracking(canvas);
     this.setupClickInteractions(canvas);
     this.setupEventListeners();
+    this.setupScriptConsole();
     this.startRenderLoop();
 
     console.log('OpenPretext initialized');
@@ -1177,6 +1180,10 @@ class OpenPretextApp {
           }
           break;
 
+        case '`':
+          this.toggleScriptConsole();
+          break;
+
         case ']':
         case '.': {
           // Next waypoint
@@ -1304,6 +1311,9 @@ class OpenPretextApp {
     { name: 'Next waypoint', shortcut: '] or .', action: () => { const cam = this.camera.getState(); const wp = this.waypointManager.getNextWaypoint(cam.x, cam.y); if (wp) { this.currentWaypointId = wp.id; this.camera.animateTo({ x: wp.mapX, y: wp.mapY }, 250); } } },
     { name: 'Previous waypoint', shortcut: '[ or ,', action: () => { const cam = this.camera.getState(); const wp = this.waypointManager.getPrevWaypoint(cam.x, cam.y); if (wp) { this.currentWaypointId = wp.id; this.camera.animateTo({ x: wp.mapX, y: wp.mapY }, 250); } } },
     { name: 'Clear all waypoints', shortcut: 'Del', action: () => { this.waypointManager.clearAll(); this.currentWaypointId = null; this.showToast('All waypoints cleared'); } },
+    { name: 'Save session', shortcut: '', action: () => this.saveSession() },
+    { name: 'Load session', shortcut: '', action: () => document.getElementById('session-file-input')?.click() },
+    { name: 'Script console', shortcut: '`', action: () => this.toggleScriptConsole() },
   ];
 
   private selectedCommandIndex = 0;
@@ -1351,9 +1361,143 @@ class OpenPretextApp {
     }
     this.toggleCommandPalette();
   }
+
+  // ─── Script Console ──────────────────────────────────────
+
+  private scriptConsoleVisible = false;
+
+  private toggleScriptConsole(): void {
+    this.scriptConsoleVisible = !this.scriptConsoleVisible;
+    const el = document.getElementById('script-console');
+    if (el) el.classList.toggle('visible', this.scriptConsoleVisible);
+    if (this.scriptConsoleVisible) {
+      const input = document.getElementById('script-input') as HTMLTextAreaElement;
+      input?.focus();
+    }
+  }
+
+  private setupScriptConsole(): void {
+    document.getElementById('btn-console')?.addEventListener('click', () => {
+      this.toggleScriptConsole();
+    });
+    document.getElementById('btn-close-console')?.addEventListener('click', () => {
+      this.scriptConsoleVisible = false;
+      document.getElementById('script-console')?.classList.remove('visible');
+    });
+    document.getElementById('btn-run-script')?.addEventListener('click', () => {
+      this.runScript();
+    });
+    document.getElementById('btn-clear-script')?.addEventListener('click', () => {
+      const input = document.getElementById('script-input') as HTMLTextAreaElement;
+      const output = document.getElementById('script-output');
+      if (input) input.value = '';
+      if (output) output.innerHTML = '<span class="script-output-info">Output cleared.</span>';
+    });
+
+    // Ctrl+Enter to run script
+    const input = document.getElementById('script-input') as HTMLTextAreaElement;
+    input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.runScript();
+      }
+      // Tab key inserts spaces
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        input.value = input.value.substring(0, start) + '  ' + input.value.substring(end);
+        input.selectionStart = input.selectionEnd = start + 2;
+      }
+    });
+  }
+
+  private runScript(): void {
+    const input = document.getElementById('script-input') as HTMLTextAreaElement;
+    const outputEl = document.getElementById('script-output');
+    if (!input || !outputEl) return;
+
+    const text = input.value.trim();
+    if (!text) {
+      outputEl.innerHTML = '<span class="script-output-info">No script to run.</span>';
+      return;
+    }
+
+    const parseResult = parseScript(text);
+
+    // Build script context
+    const echoMessages: string[] = [];
+    const ctx: ScriptContext = {
+      curation: CurationEngine,
+      selection: SelectionManager,
+      scaffold: this.scaffoldManager,
+      state: state,
+      onEcho: (msg) => echoMessages.push(msg),
+    };
+
+    // Show parse errors
+    let html = '';
+    if (parseResult.errors.length > 0) {
+      for (const err of parseResult.errors) {
+        html += `<div class="script-output-error">Parse error (line ${err.line}): ${err.message}</div>`;
+      }
+    }
+
+    // Execute commands
+    if (parseResult.commands.length > 0) {
+      const results = executeScript(parseResult.commands, ctx);
+      for (const result of results) {
+        const cls = result.success ? 'script-output-success' : 'script-output-error';
+        html += `<div class="${cls}">Line ${result.line}: ${result.message}</div>`;
+      }
+
+      // Show echo output
+      for (const msg of echoMessages) {
+        html += `<div class="script-output-info">${msg}</div>`;
+      }
+
+      // Refresh UI after script execution
+      this.refreshAfterCuration();
+      this.updateSidebarScaffoldList();
+
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      html += `<div class="script-output-info">---</div>`;
+      html += `<div class="script-output-info">${successCount} succeeded, ${failCount} failed (${results.length} total)</div>`;
+    }
+
+    outputEl.innerHTML = html || '<span class="script-output-info">No commands to execute.</span>';
+  }
 }
 
 // ─── Boot ─────────────────────────────────────────────────
+
+// Global error handler — show user-friendly messages instead of silent failures
+window.addEventListener('error', (e) => {
+  console.error('Unhandled error:', e.error);
+  const toast = document.getElementById('toast-container');
+  if (toast) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = `Error: ${e.message || 'An unexpected error occurred'}`;
+    toast.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('visible'));
+    setTimeout(() => { el.classList.remove('visible'); setTimeout(() => el.remove(), 300); }, 4000);
+  }
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Unhandled promise rejection:', e.reason);
+  const toast = document.getElementById('toast-container');
+  if (toast) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = `Error: ${e.reason?.message || 'An unexpected error occurred'}`;
+    toast.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('visible'));
+    setTimeout(() => { el.classList.remove('visible'); setTimeout(() => el.remove(), 300); }, 4000);
+  }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   new OpenPretextApp();

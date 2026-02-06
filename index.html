@@ -168,6 +168,9 @@
       height: 100%;
       display: block;
       cursor: grab;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
     #map-canvas:active {
@@ -559,6 +562,170 @@
       color: var(--text-secondary);
       margin-top: 6px;
     }
+
+    /* Responsive layout */
+    @media (max-width: 900px) {
+      :root {
+        --sidebar-width: 200px;
+      }
+
+      #toolbar {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: var(--toolbar-height);
+        padding: 4px 8px;
+        gap: 4px;
+      }
+
+      .toolbar-separator {
+        display: none;
+      }
+
+      .toolbar-btn kbd {
+        display: none;
+      }
+
+      .toolbar-title {
+        font-size: 12px;
+        margin-right: 8px;
+      }
+
+      .toolbar-btn {
+        font-size: 11px;
+        padding: 3px 6px;
+      }
+
+      #statusbar {
+        font-size: 10px;
+        padding: 0 8px;
+        gap: 8px;
+      }
+
+      .toolbar-slider {
+        width: 40px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      :root {
+        --sidebar-width: 180px;
+      }
+
+      .toolbar-group:nth-child(n+4) {
+        display: none;
+      }
+
+      #command-palette {
+        width: 90vw;
+        top: 10%;
+      }
+
+      #welcome h1 {
+        font-size: 24px;
+      }
+
+      #welcome p {
+        font-size: 14px;
+      }
+    }
+
+    /* Script console */
+    #script-console {
+      display: none;
+      position: fixed;
+      bottom: var(--statusbar-height);
+      left: 0;
+      right: 0;
+      height: 240px;
+      background: var(--bg-secondary);
+      border-top: 2px solid var(--accent);
+      z-index: 200;
+      flex-direction: column;
+    }
+
+    #script-console.visible {
+      display: flex;
+    }
+
+    .script-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .script-header button {
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .script-header button:hover {
+      background: var(--accent-hover);
+    }
+
+    .script-header .btn-close-console {
+      background: none;
+      color: var(--text-secondary);
+      font-size: 16px;
+      padding: 0 4px;
+    }
+
+    .script-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #script-input {
+      flex: 1;
+      background: var(--bg-primary);
+      border: none;
+      border-right: 1px solid var(--border);
+      color: var(--text-primary);
+      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+      font-size: 12px;
+      padding: 8px;
+      resize: none;
+      outline: none;
+      line-height: 1.5;
+      tab-size: 2;
+    }
+
+    #script-input::placeholder {
+      color: var(--text-secondary);
+      opacity: 0.6;
+    }
+
+    #script-output {
+      flex: 1;
+      background: var(--bg-primary);
+      color: var(--text-secondary);
+      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+      font-size: 11px;
+      padding: 8px;
+      overflow-y: auto;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .script-output-success { color: #4caf50; }
+    .script-output-error { color: #e94560; }
+    .script-output-info { color: var(--text-secondary); }
+
+    /* High-DPI display adjustments */
+    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+      .toolbar-btn {
+        -webkit-font-smoothing: antialiased;
+      }
+    }
   </style>
 </head>
 <body>
@@ -606,6 +773,7 @@
         <button class="toolbar-btn" id="btn-grid">Grid <kbd>L</kbd></button>
         <button class="toolbar-btn" id="btn-tracks">Tracks <kbd>X</kbd></button>
         <button class="toolbar-btn" id="btn-sidebar">Info <kbd>I</kbd></button>
+        <button class="toolbar-btn" id="btn-console">Console <kbd>`</kbd></button>
       </div>
     </div>
 
@@ -661,6 +829,22 @@
 
     <!-- Drop overlay -->
     <div id="drop-overlay">Drop .pretext file to open</div>
+
+    <!-- Script console -->
+    <div id="script-console">
+      <div class="script-header">
+        <span>Script Console</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button id="btn-run-script">Run (Ctrl+Enter)</button>
+          <button id="btn-clear-script" style="background:var(--bg-surface);">Clear</button>
+          <button class="btn-close-console" id="btn-close-console">&times;</button>
+        </div>
+      </div>
+      <div class="script-body">
+        <textarea id="script-input" placeholder="# Enter curation commands...&#10;# Examples:&#10;#   invert chr1&#10;#   move chr3 to 1&#10;#   scaffold create Chr1_scaffold&#10;#   zoom chr5&#10;#   echo Hello world"></textarea>
+        <div id="script-output"><span class="script-output-info">Output will appear here...</span></div>
+      </div>
+    </div>
 
     <!-- Tooltip -->
     <div id="tooltip"></div>

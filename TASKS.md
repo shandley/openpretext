@@ -21,14 +21,14 @@
 - [x] Undo/redo stack (CurationEngine)
 - [x] Contig drag reorder (visual drag in edit mode)
 - [x] Scaffold painting mode
-- [ ] Waypoint mode
+- [x] Waypoint mode
 
 ## Priority 3 — I/O
 
 - [x] AGP 2.1 export
 - [x] Curation log (JSON operation history)
 - [x] PNG screenshot export
-- [ ] State save/load (session persistence as JSON)
+- [x] State save/load (session persistence as JSON)
 
 ## Priority 4 — Annotation Tracks
 
@@ -51,19 +51,20 @@
 - [x] Color map picker UI (dropdown)
 - [x] Gamma adjustment slider
 - [x] Minimap / overview
-- [ ] Tooltip with detailed contig info
-- [ ] Loading progress indicator
+- [x] Tooltip with detailed contig info
+- [x] Loading progress indicator
 
 ## Priority 6 — Scripting
 
-- [ ] Curation DSL design
-- [ ] Script parser
-- [ ] Script console UI
+- [x] Curation DSL design
+- [x] Script parser (18 command types, quoted strings, contig refs)
+- [x] Script executor (dependency-injected, testable)
+- [x] Script console UI (split input/output, Ctrl+Enter run)
 - [ ] Script replay from log
 
 ## Priority 7 — Polish
 
-- [ ] Responsive layout
-- [ ] Touch/trackpad gesture support
-- [ ] Error handling and user feedback
+- [x] Responsive layout (900px/600px breakpoints)
+- [x] Touch/trackpad gesture support (pinch-zoom, single-finger pan)
+- [x] Error handling and user feedback (global handlers, toast UI)
 - [ ] Performance optimization for large genomes
