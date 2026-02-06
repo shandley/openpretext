@@ -29,6 +29,15 @@ required.
 - Contig exclusion (mark contigs to exclude from export)
 - Batch operations (select by pattern/size, batch cut/join/invert, sort by length)
 
+**Automated Curation Algorithms**
+- **Auto Sort (Union Find)** — Scores all contig pairs using Hi-C inter-contig
+  link analysis across 4 orientations, then chains contigs into chromosome groups
+  using a greedy Union Find algorithm. Automatically applies inversions and
+  reordering via the command palette.
+- **Auto Cut (Breakpoint Detection)** — Analyzes diagonal Hi-C signal density to
+  detect misassembly breakpoints where the contact signal drops, automatically
+  splitting contigs at discontinuities.
+
 **Annotation Tracks**
 - Coverage, telomere, gap, and GC content tracks
 - Line, heatmap, and marker rendering modes
@@ -128,6 +137,7 @@ Press `?` at any time to open the shortcuts reference.
 
 ## Curation Workflow
 
+### Manual Curation
 1. Load a `.pretext` file
 2. Press `E` to enter edit mode
 3. Select contigs by clicking (shift-click for range, ctrl-click to toggle)
@@ -137,7 +147,20 @@ Press `?` at any time to open the shortcuts reference.
 7. Export the curated assembly as AGP, BED, or FASTA via the toolbar
 8. Toggle comparison mode (`P`) to see original vs curated boundaries
 
-All operations support undo (Cmd+Z) and redo (Cmd+Shift+Z).
+### Automated Curation
+Open the command palette (`Cmd+K`) and run:
+- **Auto cut: detect breakpoints** — Scans all contigs for misassembly
+  breakpoints by analyzing the diagonal Hi-C signal. Contigs are split wherever
+  the signal drops significantly. Each cut is a separate undo step.
+- **Auto sort: Union Find** — Scores every contig pair across 4 orientations
+  (head-head, head-tail, tail-head, tail-tail), then greedily chains contigs
+  into chromosome groups. The algorithm applies inversions where needed and
+  reorders the assembly. Each operation is individually undoable.
+
+A typical automated workflow: run Auto Cut first to break misassemblies, then
+Auto Sort to group and orient the fragments into chromosomes.
+
+All operations support undo (`Cmd+Z`) and redo (`Cmd+Shift+Z`).
 
 ## Scripting
 
@@ -187,7 +210,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev        # Start development server with hot reload
-npm test           # Run the test suite (716 tests)
+npm test           # Run the test suite (740 tests)
 npm run build      # Production build to dist/
 npm run preview    # Preview the production build
 ```
@@ -226,6 +249,8 @@ src/
     ContigExclusion.ts       Contig hide/exclude management
     BatchOperations.ts       Batch select/cut/join/invert/sort
     QualityMetrics.ts        N50/L50/N90/L90 assembly statistics
+    AutoCut.ts               Diagonal signal breakpoint detection
+    AutoSort.ts              Union Find link scoring and chaining
   scripting/
     ScriptParser.ts          Curation DSL tokenizer and parser
     ScriptExecutor.ts        Script execution engine
@@ -239,8 +264,8 @@ src/
   io/
     SessionManager.ts        Session save/load (JSON persistence)
 tests/
-  unit/                      716 unit tests across 19 test files
-  e2e/                       22 E2E tests (Playwright + Chromium)
+  unit/                      740 unit tests across 21 test files
+  e2e/                       E2E tests (Playwright + Chromium)
 ```
 
 ### Technology
