@@ -19,6 +19,7 @@ import { autoSort, type AutoSortParams } from './AutoSort';
 export interface BatchResult {
   operationsPerformed: number;
   description: string;
+  batchId?: string;
 }
 
 /**
@@ -282,6 +283,9 @@ export function autoCutContigs(params?: Partial<AutoCutParams>): BatchResult {
     return { operationsPerformed: 0, description: 'No contact map available' };
   }
 
+  const batchId = 'autocut-' + Date.now();
+  const undoStackBefore = s.undoStack.length;
+
   const result = autoCut(
     map.contactMap,
     map.contactMap.length === map.textureSize * map.textureSize ? map.textureSize : Math.round(Math.sqrt(map.contactMap.length)),
@@ -330,9 +334,20 @@ export function autoCutContigs(params?: Partial<AutoCutParams>): BatchResult {
     }
   }
 
+  // Tag new operations with batchId and algorithm info
+  const currentState = state.get();
+  const newOps = currentState.undoStack.slice(undoStackBefore);
+  const resolvedParams = { ...{ cutThreshold: 0.20, windowSize: 8, minFragmentSize: 16 }, ...params };
+  for (const op of newOps) {
+    op.batchId = batchId;
+    op.data.algorithm = 'autocut';
+    op.data.algorithmParams = resolvedParams;
+  }
+
   return {
     operationsPerformed: cutCount,
     description: `Auto cut: ${cutCount} breakpoint(s) detected and applied`,
+    batchId,
   };
 }
 
@@ -357,6 +372,9 @@ export function autoSortContigs(params?: Partial<AutoSortParams>): BatchResult {
   if (!map.contactMap) {
     return { operationsPerformed: 0, description: 'No contact map available' };
   }
+
+  const batchId = 'autosort-' + Date.now();
+  const undoStackBefore = s.undoStack.length;
 
   const result = autoSort(
     map.contactMap,
@@ -415,8 +433,19 @@ export function autoSortContigs(params?: Partial<AutoSortParams>): BatchResult {
     }
   }
 
+  // Tag new operations with batchId and algorithm info
+  const currentState = state.get();
+  const newOps = currentState.undoStack.slice(undoStackBefore);
+  const resolvedParams = { ...{ maxDiagonalDistance: 50, signalCutoff: 0.05, hardThreshold: 0.2 }, ...params };
+  for (const op of newOps) {
+    op.batchId = batchId;
+    op.data.algorithm = 'autosort';
+    op.data.algorithmParams = resolvedParams;
+  }
+
   return {
     operationsPerformed: opCount,
     description: `Auto sort: ${opCount} operation(s) (${result.chains.length} chain(s))`,
+    batchId,
   };
 }

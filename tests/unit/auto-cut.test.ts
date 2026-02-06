@@ -342,4 +342,63 @@ describe('AutoCut', () => {
       }
     });
   });
+
+  // -----------------------------------------------------------------------
+  // New default tuning tests
+  // -----------------------------------------------------------------------
+  describe('tuned defaults', () => {
+    it('cutThreshold=0.20 should NOT detect a 15% drop', () => {
+      const len = 100;
+      const density = new Float64Array(len);
+      for (let i = 0; i < len; i++) density[i] = 1.0;
+      // 15% drop at position 50 — below the 20% threshold
+      for (let i = 47; i <= 53; i++) density[i] = 0.85;
+
+      const bps = detectBreakpoints(density, 8, 0.20, 16);
+      expect(bps.length).toBe(0);
+    });
+
+    it('minFragmentSize=16 should filter breakpoints near edges', () => {
+      const len = 60;
+      const density = new Float64Array(len);
+      for (let i = 0; i < len; i++) density[i] = 1.0;
+      // Clear dip at position 10 — too close to start for minFragmentSize=16
+      for (let i = 8; i <= 12; i++) density[i] = 0.0;
+
+      const bps = detectBreakpoints(density, 4, 0.20, 16);
+      const tooClose = bps.some(bp => bp.offset < 16);
+      expect(tooClose).toBe(false);
+    });
+
+    it('confidence floor: breakpoints with confidence <= 0.3 are excluded from autoCut', () => {
+      const size = 256;
+      const contigs = [makeContig('chr1', 0, 0, 256, 256000)];
+
+      // Create a map with a very slight dip (low confidence) at position 128
+      const contactMap = new Float32Array(size * size);
+      for (let i = 0; i < size; i++) {
+        for (let d = 1; d <= 10; d++) {
+          if (i + d < size) {
+            // Slight dip near position 128 but mostly uniform
+            const inDip = (i >= 125 && i <= 131) || (i + d >= 125 && i + d <= 131);
+            const val = inDip ? 0.75 : 1.0;
+            contactMap[(i + d) * size + i] = val;
+            contactMap[i * size + (i + d)] = val;
+          }
+        }
+      }
+
+      const result = autoCut(
+        contactMap, size, contigs, [0], 256,
+        { cutThreshold: 0.05, windowSize: 6, minFragmentSize: 8 },
+      );
+
+      // Any detected breakpoints should have confidence > 0.3
+      for (const [, bps] of result.breakpoints) {
+        for (const bp of bps) {
+          expect(bp.confidence).toBeGreaterThan(0.3);
+        }
+      }
+    });
+  });
 });

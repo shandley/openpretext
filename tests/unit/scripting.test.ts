@@ -651,6 +651,57 @@ cut chr2 50`;
       expect(result.errors).toEqual([]);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // parseLine - autocut / autosort
+  // -----------------------------------------------------------------------
+  describe('parseLine - autocut', () => {
+    it('should parse autocut with no params', () => {
+      const cmd = parseLine('autocut');
+      expect(cmd).not.toBeNull();
+      expect(cmd!.type).toBe('autocut');
+      expect(cmd!.args.params).toEqual({});
+    });
+
+    it('should parse autocut threshold=0.2', () => {
+      const cmd = parseLine('autocut threshold=0.2');
+      expect(cmd!.type).toBe('autocut');
+      expect(cmd!.args.params).toEqual({ cutThreshold: 0.2 });
+    });
+
+    it('should parse autocut threshold=0.15 minsize=32', () => {
+      const cmd = parseLine('autocut threshold=0.15 minsize=32');
+      expect(cmd!.type).toBe('autocut');
+      expect(cmd!.args.params).toEqual({ cutThreshold: 0.15, minFragmentSize: 32 });
+    });
+
+    it('should error on autocut threshold=abc', () => {
+      expect(() => parseLine('autocut threshold=abc')).toThrow('parameter value must be numeric');
+    });
+
+    it('should error on autocut badparam=0.5', () => {
+      expect(() => parseLine('autocut badparam=0.5')).toThrow("unknown parameter 'badparam'");
+    });
+  });
+
+  describe('parseLine - autosort', () => {
+    it('should parse autosort with no params', () => {
+      const cmd = parseLine('autosort');
+      expect(cmd).not.toBeNull();
+      expect(cmd!.type).toBe('autosort');
+      expect(cmd!.args.params).toEqual({});
+    });
+
+    it('should parse autosort threshold=0.3', () => {
+      const cmd = parseLine('autosort threshold=0.3');
+      expect(cmd!.type).toBe('autosort');
+      expect(cmd!.args.params).toEqual({ hardThreshold: 0.3 });
+    });
+
+    it('should error on autosort badparam=0.5', () => {
+      expect(() => parseLine('autosort badparam=0.5')).toThrow("unknown parameter 'badparam'");
+    });
+  });
 });
 
 // ===========================================================================
@@ -1257,6 +1308,73 @@ scaffold paint chr2 Chromosome1
       expect(scaffolds.length).toBe(1);
       expect(scaffolds[0].name).toBe('Chromosome1');
       expect(calls.paintContigs.length).toBe(2);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // executeCommand - autocut / autosort
+  // -----------------------------------------------------------------------
+  describe('executeCommand - autocut', () => {
+    it('should fail when batch API is not available', () => {
+      const { ctx } = createMockContext();
+      const cmd: ScriptCommand = {
+        type: 'autocut' as any,
+        args: { params: {} },
+        line: 1,
+      };
+      const result = executeCommand(cmd, ctx);
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Batch operations not available');
+    });
+
+    it('should call batch.autoCutContigs when batch API is available', () => {
+      const { ctx } = createMockContext();
+      let calledWith: any = undefined;
+      ctx.batch = {
+        autoCutContigs: (params?: any) => { calledWith = params; return { operationsPerformed: 3, description: 'Auto cut: 3 breakpoint(s)' }; },
+        autoSortContigs: () => ({ operationsPerformed: 0, description: '' }),
+      };
+      const cmd: ScriptCommand = {
+        type: 'autocut' as any,
+        args: { params: { cutThreshold: 0.15 } },
+        line: 1,
+      };
+      const result = executeCommand(cmd, ctx);
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('3 breakpoint(s)');
+      expect(calledWith).toEqual({ cutThreshold: 0.15 });
+    });
+  });
+
+  describe('executeCommand - autosort', () => {
+    it('should fail when batch API is not available', () => {
+      const { ctx } = createMockContext();
+      const cmd: ScriptCommand = {
+        type: 'autosort' as any,
+        args: { params: {} },
+        line: 1,
+      };
+      const result = executeCommand(cmd, ctx);
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Batch operations not available');
+    });
+
+    it('should call batch.autoSortContigs when batch API is available', () => {
+      const { ctx } = createMockContext();
+      let calledWith: any = undefined;
+      ctx.batch = {
+        autoCutContigs: () => ({ operationsPerformed: 0, description: '' }),
+        autoSortContigs: (params?: any) => { calledWith = params; return { operationsPerformed: 5, description: 'Auto sort: 5 operation(s)' }; },
+      };
+      const cmd: ScriptCommand = {
+        type: 'autosort' as any,
+        args: { params: { hardThreshold: 0.3 } },
+        line: 1,
+      };
+      const result = executeCommand(cmd, ctx);
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('5 operation(s)');
+      expect(calledWith).toEqual({ hardThreshold: 0.3 });
     });
   });
 });

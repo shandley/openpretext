@@ -432,6 +432,23 @@ export function redo(): boolean {
   return true;
 }
 
+/**
+ * Undo all operations in a batch (by batchId).
+ * Pops operations from the undo stack while the top matches the batchId.
+ */
+export function undoBatch(batchId: string): number {
+  let count = 0;
+  while (true) {
+    const s = state.get();
+    if (s.undoStack.length === 0) break;
+    const top = s.undoStack[s.undoStack.length - 1];
+    if (top.batchId !== batchId) break;
+    undo();
+    count++;
+  }
+  return count;
+}
+
 // ---------------------------------------------------------------------------
 // Redo helpers - re-apply an operation from stored data
 // ---------------------------------------------------------------------------
@@ -537,5 +554,6 @@ export const CurationEngine = {
   move,
   undo,
   redo,
+  undoBatch,
   setScaffoldManager,
 };

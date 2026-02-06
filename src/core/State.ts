@@ -27,6 +27,7 @@ export interface CurationOperation {
   description: string;
   // Operation-specific data for undo
   data: Record<string, any>;
+  batchId?: string;
 }
 
 export interface MapData {

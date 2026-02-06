@@ -387,4 +387,34 @@ describe('AutoSort', () => {
       }
     });
   });
+
+  // -----------------------------------------------------------------------
+  // New default tuning tests
+  // -----------------------------------------------------------------------
+  describe('tuned defaults', () => {
+    it('hardThreshold=0.2 should allow chaining of score=0.3 links', () => {
+      const links: ContigLink[] = [
+        { i: 0, j: 1, score: 0.3, orientation: 'HH', allScores: [0.3, 0.1, 0.1, 0.1] },
+        { i: 1, j: 2, score: 0.25, orientation: 'HH', allScores: [0.25, 0.1, 0.1, 0.1] },
+      ];
+
+      // With the new default threshold of 0.2, both links should be accepted
+      const result = unionFindSort(links, 3, 0.2);
+
+      // All 3 contigs should be in one chain
+      expect(result.chains.length).toBe(1);
+      expect(result.chains[0].length).toBe(3);
+    });
+
+    it('hardThreshold=0.2 rejects links below threshold', () => {
+      const links: ContigLink[] = [
+        { i: 0, j: 1, score: 0.15, orientation: 'HH', allScores: [0.15, 0.1, 0.1, 0.1] },
+      ];
+
+      const result = unionFindSort(links, 2, 0.2);
+
+      // Should remain separate chains since score < threshold
+      expect(result.chains.length).toBe(2);
+    });
+  });
 });

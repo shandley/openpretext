@@ -34,7 +34,9 @@ export type ScriptCommandType =
   | 'zoom'
   | 'zoom_reset'
   | 'goto'
-  | 'echo';
+  | 'echo'
+  | 'autocut'
+  | 'autosort';
 
 /**
  * A single parsed script command.
@@ -330,6 +332,33 @@ export function parseLine(line: string, lineNumber: number = 1): ScriptCommand |
       // Everything after "echo" is the message
       const message = tokens.slice(1).join(' ');
       return { type: 'echo', args: { message }, line: lineNumber };
+    }
+
+    case 'autocut': {
+      const params: Record<string, number> = {};
+      for (let i = 1; i < tokens.length; i++) {
+        const [key, val] = tokens[i].split('=');
+        const num = parseFloat(val);
+        if (isNaN(num)) throw new Error(`Line ${lineNumber}: autocut parameter value must be numeric`);
+        if (key === 'threshold') params.cutThreshold = num;
+        else if (key === 'minsize') params.minFragmentSize = num;
+        else if (key === 'window') params.windowSize = num;
+        else throw new Error(`Line ${lineNumber}: autocut unknown parameter '${key}'`);
+      }
+      return { type: 'autocut', args: { params }, line: lineNumber };
+    }
+
+    case 'autosort': {
+      const params: Record<string, number> = {};
+      for (let i = 1; i < tokens.length; i++) {
+        const [key, val] = tokens[i].split('=');
+        const num = parseFloat(val);
+        if (isNaN(num)) throw new Error(`Line ${lineNumber}: autosort parameter value must be numeric`);
+        if (key === 'threshold') params.hardThreshold = num;
+        else if (key === 'maxdist') params.maxDiagonalDistance = num;
+        else throw new Error(`Line ${lineNumber}: autosort unknown parameter '${key}'`);
+      }
+      return { type: 'autosort', args: { params }, line: lineNumber };
     }
 
     default:

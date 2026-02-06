@@ -67,7 +67,7 @@ export interface ContigRange {
 const DEFAULT_PARAMS: AutoSortParams = {
   maxDiagonalDistance: 50,
   signalCutoff: 0.05,
-  hardThreshold: 0.4,
+  hardThreshold: 0.2,
 };
 
 // ---------------------------------------------------------------------------

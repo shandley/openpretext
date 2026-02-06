@@ -561,4 +561,111 @@ describe('BatchOperations', () => {
       expect(lengths).toEqual([2000, 5000, 10000, 30000, 50000]);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // batchId tagging
+  // -----------------------------------------------------------------------
+  describe('batchId tagging', () => {
+    it('autoCutContigs tags operations with batchId', async () => {
+      const { autoCutContigs } = await import('../../src/curation/BatchOperations');
+
+      const size = 128;
+      const contigs = [
+        makeContig('chr1', 0, 0, 64, 64000),
+        makeContig('chr2', 1, 64, 128, 64000),
+      ];
+
+      // Create map with a clear gap at pixel 32 (middle of chr1)
+      const map = new Float32Array(size * size);
+      for (let i = 0; i < size; i++) {
+        for (let d = 1; d <= 10; d++) {
+          if (i + d < size) {
+            const inGap = (i >= 28 && i < 36) || (i + d >= 28 && i + d < 36);
+            const val = inGap ? 0 : 1.0;
+            map[(i + d) * size + i] = val;
+            map[i * size + (i + d)] = val;
+          }
+        }
+      }
+
+      const testMap = makeTestMap([contigs[0], contigs[1]]);
+      testMap.contactMap = map;
+      testMap.textureSize = size;
+
+      state.update({
+        map: testMap,
+        contigOrder: [0, 1],
+        undoStack: [],
+        redoStack: [],
+      });
+
+      const result = autoCutContigs({
+        cutThreshold: 0.05,
+        windowSize: 4,
+        minFragmentSize: 4,
+      });
+
+      if (result.operationsPerformed > 0) {
+        expect(result.batchId).toBeDefined();
+        expect(result.batchId).toMatch(/^autocut-/);
+
+        const s = state.get();
+        for (const op of s.undoStack) {
+          expect(op.batchId).toBe(result.batchId);
+          expect(op.data.algorithm).toBe('autocut');
+        }
+      }
+    });
+
+    it('autoSortContigs tags operations with batchId', async () => {
+      const { autoSortContigs } = await import('../../src/curation/BatchOperations');
+
+      const size = 64;
+      const contigs = [
+        makeContig('b', 0, 0, 16, 16000),
+        makeContig('a', 1, 16, 32, 16000),
+        makeContig('d', 2, 32, 48, 16000),
+        makeContig('c', 3, 48, 64, 16000),
+      ];
+
+      // Create map with inter-contig signal for adjacent pairs
+      const map = new Float32Array(size * size);
+      for (let i = 0; i < size; i++) {
+        for (let d = 1; d <= 10; d++) {
+          if (i + d < size) {
+            map[(i + d) * size + i] = 2.0 / Math.sqrt(d);
+            map[i * size + (i + d)] = 2.0 / Math.sqrt(d);
+          }
+        }
+      }
+
+      const testMap = makeTestMap(contigs);
+      testMap.contactMap = map;
+      testMap.textureSize = size;
+
+      state.update({
+        map: testMap,
+        contigOrder: [0, 1, 2, 3],
+        undoStack: [],
+        redoStack: [],
+      });
+
+      const result = autoSortContigs({
+        maxDiagonalDistance: 10,
+        signalCutoff: 0.01,
+        hardThreshold: 0.01,
+      });
+
+      if (result.operationsPerformed > 0) {
+        expect(result.batchId).toBeDefined();
+        expect(result.batchId).toMatch(/^autosort-/);
+
+        const s = state.get();
+        for (const op of s.undoStack) {
+          expect(op.batchId).toBe(result.batchId);
+          expect(op.data.algorithm).toBe('autosort');
+        }
+      }
+    });
+  });
 });

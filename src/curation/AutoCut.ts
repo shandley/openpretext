@@ -39,9 +39,9 @@ export interface AutoCutResult {
 }
 
 const DEFAULT_PARAMS: AutoCutParams = {
-  cutThreshold: 0.05,
+  cutThreshold: 0.20,
   windowSize: 8,
-  minFragmentSize: 8,
+  minFragmentSize: 16,
 };
 
 // ---------------------------------------------------------------------------
@@ -294,7 +294,7 @@ export function autoCut(
       const textureBreakpoints = bps.map(bp => ({
         offset: Math.round(bp.offset * scale),
         confidence: bp.confidence,
-      })).filter(bp => bp.offset > 0 && bp.offset < contigPixelLength);
+      })).filter(bp => bp.offset > 0 && bp.offset < contigPixelLength && bp.confidence > 0.3);
 
       if (textureBreakpoints.length > 0) {
         breakpoints.set(orderIdx, textureBreakpoints);

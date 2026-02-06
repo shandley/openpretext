@@ -71,6 +71,14 @@ export interface StateAPI {
 }
 
 /**
+ * Abstraction over batch/auto operations.
+ */
+export interface BatchAPI {
+  autoCutContigs(params?: any): { operationsPerformed: number; description: string };
+  autoSortContigs(params?: any): { operationsPerformed: number; description: string };
+}
+
+/**
  * The execution context provides all the dependencies a command needs.
  */
 export interface ScriptContext {
@@ -78,6 +86,7 @@ export interface ScriptContext {
   selection: SelectionAPI;
   scaffold: ScaffoldAPI;
   state: StateAPI;
+  batch?: BatchAPI;
   /** Optional callback for echo messages. Defaults to console.log. */
   onEcho?: (message: string) => void;
 }
@@ -416,6 +425,20 @@ export function executeCommand(cmd: ScriptCommand, ctx: ScriptContext): ScriptRe
           message: message,
           line: cmd.line,
         };
+      }
+
+      case 'autocut': {
+        if (!ctx.batch) return { success: false, message: 'Batch operations not available', line: cmd.line };
+        const params = cmd.args.params;
+        const result = ctx.batch.autoCutContigs(Object.keys(params).length > 0 ? params : undefined);
+        return { success: true, message: result.description, line: cmd.line };
+      }
+
+      case 'autosort': {
+        if (!ctx.batch) return { success: false, message: 'Batch operations not available', line: cmd.line };
+        const params = cmd.args.params;
+        const result = ctx.batch.autoSortContigs(Object.keys(params).length > 0 ? params : undefined);
+        return { success: true, message: result.description, line: cmd.line };
       }
 
       default: {

@@ -37,6 +37,7 @@ import { operationsToScript } from './scripting/ScriptReplay';
 import { calculateMetrics, MetricsTracker, type AssemblyMetrics } from './curation/QualityMetrics';
 import { contigExclusion } from './curation/ContigExclusion';
 import { selectByPattern, selectBySize, batchCutBySize, batchJoinSelected, batchInvertSelected, sortByLength, autoSortContigs, autoCutContigs } from './curation/BatchOperations';
+import { undoBatch } from './curation/CurationEngine';
 
 class OpenPretextApp {
   private renderer!: WebGLRenderer;
@@ -1416,9 +1417,15 @@ class OpenPretextApp {
       this.showToast('No contact map loaded');
       return;
     }
+    const input = prompt('Link threshold (0.05-0.8, default 0.20):');
+    if (input === null) return;
+    const hardThreshold = input.trim() ? parseFloat(input) : undefined;
+    if (hardThreshold !== undefined && (isNaN(hardThreshold) || hardThreshold <= 0 || hardThreshold > 1)) {
+      this.showToast('Invalid threshold'); return;
+    }
     this.showToast('Auto sorting...');
     setTimeout(() => {
-      const result = autoSortContigs();
+      const result = autoSortContigs(hardThreshold !== undefined ? { hardThreshold } : undefined);
       this.refreshAfterCuration();
       this.showToast(result.description);
     }, 50);
@@ -1430,12 +1437,30 @@ class OpenPretextApp {
       this.showToast('No contact map loaded');
       return;
     }
+    const input = prompt('Cut sensitivity (0.05-0.5, default 0.20):');
+    if (input === null) return;
+    const cutThreshold = input.trim() ? parseFloat(input) : undefined;
+    if (cutThreshold !== undefined && (isNaN(cutThreshold) || cutThreshold <= 0 || cutThreshold > 1)) {
+      this.showToast('Invalid threshold'); return;
+    }
     this.showToast('Auto cutting...');
     setTimeout(() => {
-      const result = autoCutContigs();
+      const result = autoCutContigs(cutThreshold !== undefined ? { cutThreshold } : undefined);
       this.refreshAfterCuration();
       this.showToast(result.description);
     }, 50);
+  }
+
+  private undoLastBatch(prefix: string): void {
+    const s = state.get();
+    const lastOp = [...s.undoStack].reverse().find(op => op.batchId?.startsWith(prefix));
+    if (!lastOp?.batchId) {
+      this.showToast(`No ${prefix} operations to undo`);
+      return;
+    }
+    const count = undoBatch(lastOp.batchId);
+    this.refreshAfterCuration();
+    this.showToast(`Undid ${count} ${prefix} operation(s)`);
   }
 
   // ─── Stats Panel ──────────────────────────────────────────
@@ -2013,6 +2038,8 @@ class OpenPretextApp {
     { name: 'Sort contigs by length', shortcut: '', action: () => this.runSortByLength() },
     { name: 'Auto sort: Union Find', shortcut: '', action: () => this.runAutoSort() },
     { name: 'Auto cut: detect breakpoints', shortcut: '', action: () => this.runAutoCut() },
+    { name: 'Undo all auto-cut', shortcut: '', action: () => this.undoLastBatch('autocut') },
+    { name: 'Undo all auto-sort', shortcut: '', action: () => this.undoLastBatch('autosort') },
   ];
 
   private selectedCommandIndex = 0;
@@ -2155,6 +2182,7 @@ class OpenPretextApp {
       selection: SelectionManager,
       scaffold: this.scaffoldManager,
       state: state,
+      batch: { autoCutContigs, autoSortContigs },
       onEcho: (msg) => echoMessages.push(msg),
     };
 
