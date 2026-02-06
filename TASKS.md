@@ -8,7 +8,7 @@
 - [x] .pretext file parser (header + contig metadata)
 - [x] .pretext texture block decompression (deflate + BC4/RGTC1)
 - [x] Color maps (red-white, blue-white-red, viridis, magma, plasma)
-- [ ] Render real .pretext contact map data (parser done, needs e2e test with real file)
+- [x] Render real .pretext contact map data (tested with bTaeGut2.mat.pretext — zebra finch, 205 contigs)
 
 ## Priority 2 — Curation
 

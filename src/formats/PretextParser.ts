@@ -206,7 +206,7 @@ function decodeBC4Level(
  * Compute the linear index of tile (x, y) in the upper-triangular layout.
  * Assumes x <= y. Matches the C++ `texture_id_cal` function.
  */
-function tileLinearIndex(x: number, y: number, n: number): number {
+export function tileLinearIndex(x: number, y: number, n: number): number {
   if (x > y) {
     const tmp = x;
     x = y;
@@ -222,7 +222,22 @@ function tileLinearIndex(x: number, y: number, n: number): number {
 /**
  * Parse a .pretext file from an ArrayBuffer.
  */
-export async function parsePretextFile(buffer: ArrayBuffer): Promise<PretextFile> {
+export interface ParseOptions {
+  /**
+   * Which mipmap levels to decode. If not provided, all levels are decoded.
+   * Level 0 is the finest (full resolution), level (mipMapLevels-1) is the coarsest.
+   * Use `[mipMapLevels - 1]` to decode only the coarsest level for large files.
+   */
+  decodeLevels?: number[];
+  /**
+   * If true, only decode the coarsest mipmap level (level mipMapLevels-1).
+   * This is equivalent to decodeLevels: [mipMapLevels - 1] but doesn't
+   * require knowing the number of levels ahead of time.
+   */
+  coarsestOnly?: boolean;
+}
+
+export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptions): Promise<PretextFile> {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
   let offset = 0;
@@ -364,6 +379,11 @@ export async function parsePretextFile(buffer: ArrayBuffer): Promise<PretextFile
     bytesPerTexture,
   };
 
+  // Resolve coarsestOnly into decodeLevels
+  if (options?.coarsestOnly && !options.decodeLevels) {
+    options = { ...options, decodeLevels: [mipMapLevels - 1] };
+  }
+
   // ---- 6. Read texture blocks ----
   const tiles: Uint8Array[] = new Array(numberOfTextureBlocks);
   const tilesDecoded: Float32Array[][] = new Array(numberOfTextureBlocks);
@@ -400,19 +420,23 @@ export async function parsePretextFile(buffer: ArrayBuffer): Promise<PretextFile
     tiles[i] = decompressed;
 
     // Decode BC4 data for each mipmap level
-    const levels: Float32Array[] = [];
+    const decodeLevels = options?.decodeLevels;
+    const levels: Float32Array[] = new Array(mipMapLevels);
     let levelOffset = 0;
     let levelRes = textureResolution;
 
     for (let lev = 0; lev < mipMapLevels; lev++) {
       const levelBytes = (levelRes * levelRes) >> 1; // BC4: 0.5 bytes/pixel
 
-      if (levelOffset + levelBytes <= decompressed.length) {
-        const decoded = decodeBC4Level(decompressed, levelOffset, levelRes);
-        levels.push(decoded);
-      } else {
-        // Insufficient data, push zeroed level
-        levels.push(new Float32Array(levelRes * levelRes));
+      // Only decode requested levels (or all if decodeLevels not specified)
+      if (!decodeLevels || decodeLevels.includes(lev)) {
+        if (levelOffset + levelBytes <= decompressed.length) {
+          const decoded = decodeBC4Level(decompressed, levelOffset, levelRes);
+          levels[lev] = decoded;
+        } else {
+          // Insufficient data, push zeroed level
+          levels[lev] = new Float32Array(levelRes * levelRes);
+        }
       }
 
       levelOffset += levelBytes;
@@ -528,8 +552,6 @@ export function isPretextFile(buffer: ArrayBuffer): boolean {
  * x and y are 0-based tile coordinates. The function automatically
  * swaps to ensure x <= y (upper triangle).
  */
-export { tileLinearIndex };
-
 /**
  * Decode a single BC4 mipmap level from raw BC4 bytes.
  * Exported for cases where callers want to decode individual levels

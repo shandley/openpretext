@@ -10,7 +10,7 @@ import { LabelRenderer } from './renderer/LabelRenderer';
 import { Minimap } from './renderer/Minimap';
 import { type ColorMapName } from './renderer/ColorMaps';
 import { generateSyntheticMap } from './formats/SyntheticData';
-import { parsePretextFile, isPretextFile } from './formats/PretextParser';
+import { parsePretextFile, isPretextFile, tileLinearIndex } from './formats/PretextParser';
 import { events } from './core/EventBus';
 import { state, type InteractionMode } from './core/State';
 import { CurationEngine } from './curation/CurationEngine';
@@ -177,33 +177,37 @@ class OpenPretextApp {
 
       if (isPretextFile(buffer)) {
         this.updateLoading('Parsing header and metadata...', 20);
-        const parsed = await parsePretextFile(buffer);
+        const parsed = await parsePretextFile(buffer, { coarsestOnly: true });
         const h = parsed.header;
         const mapSize = h.numberOfPixels1D;
 
         this.updateLoading('Assembling contact map...', 50);
 
-        // Assemble the full contact map from decoded tiles (mipmap level 0).
-        const contactMap = new Float32Array(mapSize * mapSize);
+        // For large maps (e.g. 32768x32768), assembling the full-resolution map
+        // as a single Float32Array is infeasible (~4GB). Instead, use the coarsest
+        // mipmap level from each tile to build a downsampled overview texture.
         const N = h.numberOfTextures1D;
-        const tRes = h.textureResolution;
+        const coarsestMip = h.mipMapLevels - 1;
+        const coarsestRes = h.textureResolution >> coarsestMip; // e.g. 1024 >> 5 = 32
+        const overviewSize = N * coarsestRes; // e.g. 32 * 32 = 1024
+        const contactMap = new Float32Array(overviewSize * overviewSize);
         const totalTiles = (N * (N + 1)) / 2;
         let tilesDone = 0;
 
         for (let tx = 0; tx < N; tx++) {
           for (let ty = tx; ty < N; ty++) {
-            const linIdx = (((2 * N - tx - 1) * tx) >> 1) + ty;
-            const tileData = parsed.tilesDecoded[linIdx]?.[0];
+            const linIdx = tileLinearIndex(tx, ty, N);
+            const tileData = parsed.tilesDecoded[linIdx]?.[coarsestMip];
             if (!tileData) { tilesDone++; continue; }
 
-            for (let py = 0; py < tRes; py++) {
-              for (let px = 0; px < tRes; px++) {
-                const val = tileData[py * tRes + px];
-                const gx = tx * tRes + px;
-                const gy = ty * tRes + py;
-                if (gx < mapSize && gy < mapSize) {
-                  contactMap[gy * mapSize + gx] = val;
-                  contactMap[gx * mapSize + gy] = val;
+            for (let py = 0; py < coarsestRes; py++) {
+              for (let px = 0; px < coarsestRes; px++) {
+                const val = tileData[py * coarsestRes + px];
+                const gx = tx * coarsestRes + px;
+                const gy = ty * coarsestRes + py;
+                if (gx < overviewSize && gy < overviewSize) {
+                  contactMap[gy * overviewSize + gx] = val;
+                  contactMap[gx * overviewSize + gy] = val;
                 }
               }
             }
@@ -219,8 +223,9 @@ class OpenPretextApp {
         }
 
         this.updateLoading('Uploading to GPU...', 92);
-        this.renderer.uploadContactMap(contactMap, mapSize);
-        this.minimap.updateThumbnail(contactMap, mapSize);
+        this.renderer.uploadContactMap(contactMap, overviewSize);
+        this.minimap.updateThumbnail(contactMap, overviewSize);
+        // Map contig boundaries to normalized positions in the full map
         this.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
 
         this.updateLoading('Finalizing...', 98);
