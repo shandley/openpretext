@@ -29,13 +29,22 @@ export interface CurationOperation {
 
 export interface MapData {
   filename: string;
+  /** Total pixel dimension of the full contact map (numberOfPixels1D). */
   textureSize: number;
+  /** Number of mipmap levels stored in the file. */
   numMipMaps: number;
+  /** Single-texture resolution (pixels per tile dimension). */
+  tileResolution: number;
+  /** Number of tiles per dimension. */
+  tilesPerDimension: number;
   contigs: ContigInfo[];
-  // Texture data at each mipmap level
-  textures: Float32Array[];
-  // Extension track data
-  extensions: Map<string, Float32Array>;
+  /**
+   * Assembled full-resolution contact map as Float32Array (textureSize x textureSize).
+   * This is reconstructed from the per-tile decoded data.
+   */
+  contactMap: Float32Array | null;
+  // Extension track data (graph name -> Int32Array of per-pixel values)
+  extensions: Map<string, Int32Array>;
 }
 
 export type InteractionMode = 'navigate' | 'edit' | 'scaffold' | 'waypoint' | 'select_sort';
@@ -81,7 +90,7 @@ function createInitialState(): AppState {
     showIdBar: false,
     visibleTracks: new Set(),
     colorMapName: 'red-white',
-    gamma: 0.5,
+    gamma: 0.35,
     selectedContigs: new Set(),
     camera: { x: 0, y: 0, zoom: 1 },
     undoStack: [],

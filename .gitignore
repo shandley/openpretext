@@ -4,3 +4,5 @@ dist/
 agent_logs/
 current_tasks/*.txt
 .DS_Store
+# Development screenshots
+*.png

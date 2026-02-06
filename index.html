@@ -105,15 +105,31 @@
       overflow: hidden;
     }
 
-    /* Canvas */
-    #map-canvas {
+    /* Canvas container */
+    #canvas-container {
       flex: 1;
+      position: relative;
+    }
+
+    #map-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
       display: block;
       cursor: grab;
     }
 
     #map-canvas:active {
       cursor: grabbing;
+    }
+
+    #label-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
     }
 
     /* Sidebar */
@@ -289,6 +305,99 @@
       border-radius: 3px;
       font-size: 12px;
     }
+
+    /* Contig list items */
+    .contig-item {
+      padding: 6px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      transition: background 0.1s;
+      gap: 6px;
+    }
+
+    .contig-item:hover {
+      background: var(--bg-surface);
+    }
+
+    .contig-item.selected {
+      background: var(--accent);
+      color: white;
+    }
+
+    .contig-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .contig-meta {
+      font-size: 10px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .contig-item.selected .contig-meta {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .contig-badge {
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .contig-badge.inverted {
+      background: #f39c12;
+      color: #000;
+    }
+
+    .contig-badge.scaffold {
+      background: #3498db;
+      color: #fff;
+    }
+
+    /* Toast notifications */
+    #toast-container {
+      position: fixed;
+      bottom: 48px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      border: 1px solid var(--border);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.2s ease;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
   </style>
 </head>
 <body>
@@ -323,7 +432,10 @@
 
     <!-- Main content -->
     <div id="content">
-      <canvas id="map-canvas"></canvas>
+      <div id="canvas-container">
+        <canvas id="map-canvas"></canvas>
+        <canvas id="label-canvas"></canvas>
+      </div>
       <div id="sidebar">
         <div class="sidebar-section">
           <h3>Contigs</h3>
@@ -367,6 +479,9 @@
 
     <!-- Drop overlay -->
     <div id="drop-overlay">Drop .pretext file to open</div>
+
+    <!-- Toast notifications -->
+    <div id="toast-container"></div>
   </div>
 
   <!-- File input (hidden) -->

@@ -49,10 +49,14 @@ in vec2 v_texcoord;
 
 uniform sampler2D u_contactMap;
 uniform sampler2D u_colorMap;
+uniform vec2 u_resolution;
 uniform float u_gamma;
 uniform bool u_showGrid;
 uniform float u_gridOpacity;
 uniform int u_numContigs;
+uniform float u_highlightStart;
+uniform float u_highlightEnd;
+uniform bool u_hasHighlight;
 
 // Contig boundaries as pixel positions (normalized 0-1)
 uniform float u_contigBoundaries[512]; // max 512 contigs
@@ -63,35 +67,53 @@ float applyGamma(float value, float gamma) {
   return pow(clamp(value, 0.0, 1.0), gamma);
 }
 
-bool isOnGrid(vec2 uv, int numContigs) {
-  if (numContigs <= 0) return false;
-  
+float gridDistance(vec2 uv, int numContigs) {
+  if (numContigs <= 0) return 1.0;
+  float minDist = 1.0;
   for (int i = 0; i < 512; i++) {
     if (i >= numContigs) break;
     float boundary = u_contigBoundaries[i];
-    float pixelSize = 1.0 / 2048.0; // approximate
-    if (abs(uv.x - boundary) < pixelSize || abs(uv.y - boundary) < pixelSize) {
-      return true;
-    }
+    float dx = abs(uv.x - boundary);
+    float dy = abs(uv.y - boundary);
+    minDist = min(minDist, min(dx, dy));
   }
-  return false;
+  return minDist;
 }
 
 void main() {
   // Sample the contact map (single channel intensity)
   float intensity = texture(u_contactMap, v_texcoord).r;
-  
+
   // Apply gamma correction
   float mapped = applyGamma(intensity, u_gamma);
-  
+
   // Look up color from the 1D color map texture
   vec4 color = texture(u_colorMap, vec2(mapped, 0.5));
-  
-  // Grid overlay
-  if (u_showGrid && isOnGrid(v_texcoord, u_numContigs)) {
-    color = mix(color, vec4(0.3, 0.8, 0.3, 1.0), u_gridOpacity);
+
+  // Grid overlay with anti-aliased lines
+  if (u_showGrid) {
+    float dist = gridDistance(v_texcoord, u_numContigs);
+    float lineWidth = 1.5 / max(u_resolution.x, u_resolution.y);
+    float line = 1.0 - smoothstep(0.0, lineWidth, dist);
+    // Use a dark semi-transparent line that works on any background
+    vec4 gridColor = vec4(0.0, 0.0, 0.0, 0.6);
+    color = mix(color, gridColor, line * u_gridOpacity);
   }
-  
+
+  // Highlight selected/hovered contig
+  if (u_hasHighlight) {
+    bool inHighlightX = v_texcoord.x >= u_highlightStart && v_texcoord.x <= u_highlightEnd;
+    bool inHighlightY = v_texcoord.y >= u_highlightStart && v_texcoord.y <= u_highlightEnd;
+    if (inHighlightX || inHighlightY) {
+      // Brighten the cross-hair region
+      color = mix(color, vec4(1.0, 1.0, 0.5, 1.0), 0.15);
+    }
+    if (inHighlightX && inHighlightY) {
+      // Stronger highlight at intersection
+      color = mix(color, vec4(1.0, 1.0, 0.3, 1.0), 0.12);
+    }
+  }
+
   fragColor = color;
 }
 `;
@@ -115,6 +137,8 @@ export class WebGLRenderer {
   private textureSize: number = 0;
   private needsRender: boolean = true;
 
+  private floatLinearSupported: boolean = false;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const gl = canvas.getContext('webgl2', {
@@ -122,12 +146,16 @@ export class WebGLRenderer {
       premultipliedAlpha: false,
       preserveDrawingBuffer: true, // needed for screenshots
     });
-    
+
     if (!gl) {
       throw new Error('WebGL2 not supported');
     }
-    
+
     this.gl = gl;
+
+    // Enable float texture linear filtering if available
+    this.floatLinearSupported = !!gl.getExtension('OES_texture_float_linear');
+
     this.init();
   }
 
@@ -154,7 +182,8 @@ export class WebGLRenderer {
     // Get uniform locations
     const uniformNames = [
       'u_camera', 'u_zoom', 'u_resolution', 'u_contactMap', 'u_colorMap',
-      'u_gamma', 'u_showGrid', 'u_gridOpacity', 'u_numContigs', 'u_contigBoundaries'
+      'u_gamma', 'u_showGrid', 'u_gridOpacity', 'u_numContigs', 'u_contigBoundaries',
+      'u_highlightStart', 'u_highlightEnd', 'u_hasHighlight'
     ];
     for (const name of uniformNames) {
       this.uniforms[name] = gl.getUniformLocation(this.program, name);
@@ -231,14 +260,19 @@ export class WebGLRenderer {
     this.contactMapTexture = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, this.contactMapTexture);
     
-    // Upload as R32F single-channel float texture
+    // Convert float data to R8 normalized for maximum compatibility
+    const u8data = new Uint8Array(size * size);
+    for (let i = 0; i < data.length; i++) {
+      u8data[i] = Math.round(Math.min(1.0, Math.max(0.0, data[i])) * 255);
+    }
+
     gl.texImage2D(
-      gl.TEXTURE_2D, 0, gl.R32F,
+      gl.TEXTURE_2D, 0, gl.R8,
       size, size, 0,
-      gl.RED, gl.FLOAT, data
+      gl.RED, gl.UNSIGNED_BYTE, u8data
     );
-    
-    // Linear filtering for smooth zoom
+
+    // Linear filtering (always supported for R8)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -284,6 +318,8 @@ export class WebGLRenderer {
     showGrid?: boolean;
     gridOpacity?: number;
     contigBoundaries?: number[];
+    highlightStart?: number;
+    highlightEnd?: number;
   } = {}): void {
     const gl = this.gl;
     
@@ -318,6 +354,14 @@ export class WebGLRenderer {
     gl.uniform1i(this.uniforms['u_numContigs']!, boundaries.length);
     if (boundaries.length > 0) {
       gl.uniform1fv(this.uniforms['u_contigBoundaries']!, new Float32Array(boundaries));
+    }
+
+    // Highlight
+    const hasHighlight = options.highlightStart !== undefined && options.highlightEnd !== undefined;
+    gl.uniform1i(this.uniforms['u_hasHighlight']!, hasHighlight ? 1 : 0);
+    if (hasHighlight) {
+      gl.uniform1f(this.uniforms['u_highlightStart']!, options.highlightStart!);
+      gl.uniform1f(this.uniforms['u_highlightEnd']!, options.highlightEnd!);
     }
     
     // Bind textures

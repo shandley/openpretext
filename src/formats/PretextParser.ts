@@ -1,281 +1,538 @@
 /**
  * Parser for the .pretext binary file format.
- * 
- * The .pretext format stores Hi-C contact maps as DXT1-compressed texture blocks:
- * 
- * File layout:
- * 1. Magic header + version info
- * 2. Contig metadata (names, lengths, ordering)
- * 3. Texture resolution and mipmap count
- * 4. For each mipmap level:
- *    - Deflate-compressed DXT1 texture blocks
- * 5. Optional extension data (bedgraph tracks)
- * 
- * This parser reads the binary format and produces:
- * - Contig information
- * - Decoded texture data as Float32Array per mipmap level
- * - Extension track data
+ *
+ * The .pretext format stores Hi-C contact maps as BC4-compressed texture tiles
+ * organized in an upper-triangular grid layout with multiple mipmap levels.
+ *
+ * File layout (see docs/PRETEXT_FORMAT.md for full specification):
+ *
+ * 1. Magic bytes: 'pstm' (4 bytes)
+ * 2. Compressed header size (u32) + Uncompressed header size (u32)
+ * 3. Deflate-compressed header containing:
+ *    - Total genome length (u64)
+ *    - Number of contigs (u32)
+ *    - Per-contig: fractional length (f32) + name (64 bytes as u32[16])
+ *    - textureRes (u08), nTextRes (u08), mipMapLevels (u08)
+ * 4. For each tile in the upper triangle of the texture grid:
+ *    - Compressed size (u32) + deflate-compressed BC4 data (all mipmap levels)
+ * 5. Optional graph extensions (magic 'psgh' + compressed name + s32 values)
+ *
+ * Compression: raw DEFLATE (libdeflate level 12), decompressed with pako.inflateRaw.
+ * Texture format: BC4 / RGTC1 (single-channel, 8 bytes per 4x4 block).
+ *
+ * Derived from reading the source code of:
+ *   - PretextMap  (https://github.com/sanger-tol/PretextMap)
+ *   - PretextView (https://github.com/sanger-tol/PretextView)
+ *   - PretextGraph (https://github.com/sanger-tol/PretextGraph)
  */
 
 import pako from 'pako';
 
+// ---------------------------------------------------------------------------
+// Public interfaces
+// ---------------------------------------------------------------------------
+
 export interface PretextContig {
   name: string;
-  length: number;       // Original length in base pairs
-  pixelStart: number;   // Start position in the texture (pixels)
-  pixelEnd: number;     // End position in the texture (pixels)
+  /** Fractional length as stored in the file (contig_bp / total_genome_bp). */
+  fractionalLength: number;
+  /** Absolute length in base pairs (reconstructed: fractionalLength * totalGenomeLength). */
+  length: number;
+  /** Start position in the 1-D pixel map (inclusive). */
+  pixelStart: number;
+  /** End position in the 1-D pixel map (exclusive). */
+  pixelEnd: number;
 }
 
 export interface PretextExtension {
   name: string;
-  data: Float32Array;
+  /** One signed 32-bit value per pixel in the 1-D map (Number_of_Pixels_1D). */
+  data: Int32Array;
+}
+
+export interface PretextHeader {
+  totalGenomeLength: bigint;
+  numberOfContigs: number;
+  textureRes: number;      // log2(single texture resolution)
+  nTextRes: number;        // log2(number of textures per dimension)
+  mipMapLevels: number;
+  textureResolution: number;     // 1 << textureRes   (e.g. 1024)
+  numberOfTextures1D: number;    // 1 << nTextRes      (e.g. 32)
+  numberOfPixels1D: number;      // textureResolution * numberOfTextures1D
+  numberOfTextureBlocks: number; // upper-triangle tile count
+  bytesPerTexture: number;       // decompressed size of one tile (all mipmaps)
 }
 
 export interface PretextFile {
-  version: number;
-  textureSize: number;
-  numMipMaps: number;
+  header: PretextHeader;
   contigs: PretextContig[];
-  textures: Float32Array[];  // One per mipmap level
+  /**
+   * Raw decompressed tile data. Each entry is one upper-triangular tile
+   * containing BC4-compressed data for all mipmap levels concatenated.
+   * Index is the linear tile index from texture_id_cal().
+   */
+  tiles: Uint8Array[];
+  /**
+   * Decoded intensity values per mipmap level for each tile.
+   * tiles_decoded[tileIndex][mipmapLevel] is a Float32Array of size
+   * (levelRes * levelRes), where pixels are in row-major order.
+   */
+  tilesDecoded: Float32Array[][];
   extensions: PretextExtension[];
 }
 
+// ---------------------------------------------------------------------------
+// BC4 (RGTC1) decoding
+// ---------------------------------------------------------------------------
+
 /**
- * Decode a DXT1 (BC1) compressed block into RGBA pixels.
- * DXT1 encodes a 4×4 pixel block into 8 bytes:
- * - 2 bytes: color0 (RGB565)
- * - 2 bytes: color1 (RGB565)  
- * - 4 bytes: lookup table (2 bits per pixel, 16 pixels)
+ * Decode a single BC4 block (8 bytes) into 16 u08 pixel values.
+ *
+ * BC4 encodes 4x4 single-channel pixels as:
+ *   - byte 0: alpha0 (reference value 0)
+ *   - byte 1: alpha1 (reference value 1)
+ *   - bytes 2-7: 16 x 3-bit lookup indices (48 bits, little-endian)
  */
-function decodeDXT1Block(block: DataView, offset: number): Uint8Array {
-  // Read the two reference colors (RGB565)
-  const c0 = block.getUint16(offset, true);
-  const c1 = block.getUint16(offset + 2, true);
-  
-  // Convert RGB565 to RGB888
-  const r0 = ((c0 >> 11) & 0x1F) * 255 / 31;
-  const g0 = ((c0 >> 5) & 0x3F) * 255 / 63;
-  const b0 = (c0 & 0x1F) * 255 / 31;
-  
-  const r1 = ((c1 >> 11) & 0x1F) * 255 / 31;
-  const g1 = ((c1 >> 5) & 0x3F) * 255 / 63;
-  const b1 = (c1 & 0x1F) * 255 / 31;
-  
-  // Build color table
-  const colors: number[][] = [
-    [r0, g0, b0, 255],
-    [r1, g1, b1, 255],
-    [0, 0, 0, 255],
-    [0, 0, 0, 255],
-  ];
-  
-  if (c0 > c1) {
-    // 4-color mode: interpolate
-    colors[2] = [(2*r0 + r1)/3, (2*g0 + g1)/3, (2*b0 + b1)/3, 255];
-    colors[3] = [(r0 + 2*r1)/3, (g0 + 2*g1)/3, (b0 + 2*b1)/3, 255];
+function decodeBC4Block(data: Uint8Array, offset: number): Uint8Array {
+  const alpha0 = data[offset];
+  const alpha1 = data[offset + 1];
+
+  // Build the 8-entry interpolation palette
+  const palette = new Uint8Array(8);
+  palette[0] = alpha0;
+  palette[1] = alpha1;
+
+  if (alpha0 > alpha1) {
+    // 8-value interpolation
+    palette[2] = Math.round((6 * alpha0 + 1 * alpha1) / 7);
+    palette[3] = Math.round((5 * alpha0 + 2 * alpha1) / 7);
+    palette[4] = Math.round((4 * alpha0 + 3 * alpha1) / 7);
+    palette[5] = Math.round((3 * alpha0 + 4 * alpha1) / 7);
+    palette[6] = Math.round((2 * alpha0 + 5 * alpha1) / 7);
+    palette[7] = Math.round((1 * alpha0 + 6 * alpha1) / 7);
   } else {
-    // 3-color + transparent mode
-    colors[2] = [(r0 + r1)/2, (g0 + g1)/2, (b0 + b1)/2, 255];
-    colors[3] = [0, 0, 0, 0]; // Transparent
+    // 6-value interpolation + 0 and 255
+    palette[2] = Math.round((4 * alpha0 + 1 * alpha1) / 5);
+    palette[3] = Math.round((3 * alpha0 + 2 * alpha1) / 5);
+    palette[4] = Math.round((2 * alpha0 + 3 * alpha1) / 5);
+    palette[5] = Math.round((1 * alpha0 + 4 * alpha1) / 5);
+    palette[6] = 0;
+    palette[7] = 255;
   }
-  
-  // Read the 4-byte lookup table
-  const lookup = block.getUint32(offset + 4, true);
-  
-  // Decode 4×4 pixels
-  const pixels = new Uint8Array(4 * 4 * 4); // 16 pixels × 4 channels
-  for (let i = 0; i < 16; i++) {
-    const idx = (lookup >> (i * 2)) & 0x3;
-    const color = colors[idx];
-    pixels[i * 4 + 0] = color[0];
-    pixels[i * 4 + 1] = color[1];
-    pixels[i * 4 + 2] = color[2];
-    pixels[i * 4 + 3] = color[3];
+
+  // Read 48 bits of index data (6 bytes, little-endian)
+  // Each pixel gets a 3-bit index into the palette.
+  // The 48 bits are stored across bytes 2..7.
+  const pixels = new Uint8Array(16);
+
+  // Pack the 6 index bytes into a single 48-bit value.
+  // We process in two 24-bit halves to avoid precision issues.
+  const lo24 =
+    data[offset + 2] |
+    (data[offset + 3] << 8) |
+    (data[offset + 4] << 16);
+  const hi24 =
+    data[offset + 5] |
+    (data[offset + 6] << 8) |
+    (data[offset + 7] << 16);
+
+  // First 8 pixels from lo24
+  for (let i = 0; i < 8; i++) {
+    const idx = (lo24 >> (i * 3)) & 0x7;
+    pixels[i] = palette[idx];
   }
-  
+  // Next 8 pixels from hi24
+  for (let i = 0; i < 8; i++) {
+    const idx = (hi24 >> (i * 3)) & 0x7;
+    pixels[8 + i] = palette[idx];
+  }
+
   return pixels;
 }
 
 /**
- * Decode a full DXT1-compressed texture into an RGBA Float32Array (single channel intensity).
- * For Hi-C data, we only need the luminance/intensity.
+ * Decode an entire BC4-compressed mipmap level into a Float32Array of
+ * normalised intensity values [0..1].
+ *
+ * The BC4 data for a level of resolution `res x res` is `res * (res / 2)`
+ * bytes. Blocks are written column-major per 4-pixel-wide vertical strip
+ * (matching PretextMap's iteration order: outer loop x+=4, inner loop y+=4).
+ *
+ * Within each 4x4 block, PretextMap fills pixels in column-major order
+ * (outer dxt_x, inner dxt_y), so the 16 pixels in a block map to:
+ *   index 0 -> (x+0, y+0), index 1 -> (x+0, y+1), ...
+ *   index 4 -> (x+1, y+0), ...
  */
-function decodeDXT1Texture(compressedData: Uint8Array, width: number, height: number): Float32Array {
-  const output = new Float32Array(width * height);
-  const blocksX = Math.ceil(width / 4);
-  const blocksY = Math.ceil(height / 4);
-  const view = new DataView(compressedData.buffer, compressedData.byteOffset, compressedData.byteLength);
-  
-  let blockOffset = 0;
-  
-  for (let by = 0; by < blocksY; by++) {
-    for (let bx = 0; bx < blocksX; bx++) {
-      if (blockOffset + 8 > compressedData.length) break;
-      
-      const pixels = decodeDXT1Block(view, blockOffset);
-      blockOffset += 8; // 8 bytes per DXT1 block
-      
-      // Write decoded pixels to output
-      for (let py = 0; py < 4; py++) {
-        for (let px = 0; px < 4; px++) {
-          const x = bx * 4 + px;
-          const y = by * 4 + py;
-          if (x >= width || y >= height) continue;
-          
-          const srcIdx = (py * 4 + px) * 4;
-          // Convert to intensity (simple luminance)
-          const r = pixels[srcIdx] / 255;
-          const g = pixels[srcIdx + 1] / 255;
-          const b = pixels[srcIdx + 2] / 255;
-          output[y * width + x] = 0.299 * r + 0.587 * g + 0.114 * b;
+function decodeBC4Level(
+  bc4Data: Uint8Array,
+  bc4Offset: number,
+  resolution: number,
+): Float32Array {
+  const output = new Float32Array(resolution * resolution);
+  const blocksPerDim = resolution >> 2; // resolution / 4
+  let blockPtr = bc4Offset;
+
+  // PretextMap iteration: outer x (column of blocks), inner y (row of blocks)
+  for (let bx = 0; bx < blocksPerDim; bx++) {
+    for (let by = 0; by < blocksPerDim; by++) {
+      const pixels = decodeBC4Block(bc4Data, blockPtr);
+      blockPtr += 8;
+
+      // Map the 16 decoded pixels back into the output image.
+      // PretextMap packs them column-major within the block:
+      //   dxt_ptr = dxt_x * 4 + dxt_y  (outer dxt_x, inner dxt_y)
+      for (let dx = 0; dx < 4; dx++) {
+        for (let dy = 0; dy < 4; dy++) {
+          const px = bx * 4 + dx;
+          const py = by * 4 + dy;
+          if (px < resolution && py < resolution) {
+            // stb_compress_bc4_block receives pixels in the order they were
+            // packed: index = dxt_x * 4 + dxt_y (column-major within block)
+            output[py * resolution + px] = pixels[dx * 4 + dy] / 255;
+          }
         }
       }
     }
   }
-  
+
   return output;
 }
 
+// ---------------------------------------------------------------------------
+// Helper: compute linear tile index from (x, y) coordinates
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the linear index of tile (x, y) in the upper-triangular layout.
+ * Assumes x <= y. Matches the C++ `texture_id_cal` function.
+ */
+function tileLinearIndex(x: number, y: number, n: number): number {
+  if (x > y) {
+    const tmp = x;
+    x = y;
+    y = tmp;
+  }
+  return (((2 * n - x - 1) * x) >> 1) + y;
+}
+
+// ---------------------------------------------------------------------------
+// Main parser
+// ---------------------------------------------------------------------------
+
 /**
  * Parse a .pretext file from an ArrayBuffer.
- * 
- * NOTE: The exact binary layout is reverse-engineered from the PretextMap and
- * PretextView source code. This parser handles the known format but may need
- * updates for newer versions.
  */
 export async function parsePretextFile(buffer: ArrayBuffer): Promise<PretextFile> {
-  const view = new DataView(buffer);
   const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
   let offset = 0;
-  
-  // Helper to read a null-terminated string
-  function readString(): string {
-    let str = '';
-    while (offset < bytes.length && bytes[offset] !== 0) {
-      str += String.fromCharCode(bytes[offset]);
-      offset++;
-    }
-    offset++; // skip null terminator
-    return str;
+
+  // ---- 1. Validate magic bytes ----
+  if (
+    bytes[0] !== 0x70 || // 'p'
+    bytes[1] !== 0x73 || // 's'
+    bytes[2] !== 0x74 || // 't'
+    bytes[3] !== 0x6d    // 'm'
+  ) {
+    throw new Error(
+      `Invalid pretext file: expected magic 'pstm', got ` +
+        `'${String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3])}'`,
+    );
   }
-  
-  function readU32(): number {
-    const val = view.getUint32(offset, true);
-    offset += 4;
-    return val;
+  offset = 4;
+
+  // ---- 2. Read compressed / uncompressed header sizes ----
+  const nBytesHeaderComp = view.getUint32(offset, true);
+  offset += 4;
+  const nBytesHeader = view.getUint32(offset, true);
+  offset += 4;
+
+  // ---- 3. Decompress header ----
+  const compressedHeader = bytes.slice(offset, offset + nBytesHeaderComp);
+  offset += nBytesHeaderComp;
+
+  let headerBytes: Uint8Array;
+  try {
+    headerBytes = pako.inflateRaw(compressedHeader);
+  } catch (e) {
+    throw new Error(`Failed to decompress pretext header: ${e}`);
   }
-  
-  function readU16(): number {
-    const val = view.getUint16(offset, true);
-    offset += 2;
-    return val;
+
+  if (headerBytes.length !== nBytesHeader) {
+    throw new Error(
+      `Header size mismatch: expected ${nBytesHeader}, got ${headerBytes.length}`,
+    );
   }
-  
-  function readU8(): number {
-    return bytes[offset++];
-  }
-  
-  function readF32(): number {
-    const val = view.getFloat32(offset, true);
-    offset += 4;
-    return val;
-  }
-  
-  // Read magic and version
-  // The pretext format starts with identifying bytes
-  // Format may vary by version - this is a best-effort parser
-  
-  const magic = readString();
-  if (!magic.startsWith('pretext')) {
-    throw new Error(`Invalid pretext file: unexpected magic "${magic}"`);
-  }
-  
-  const version = readU32();
-  const textureSize = readU32();
-  const numMipMaps = readU32();
-  const numContigs = readU32();
-  
-  // Read contig metadata
+
+  // ---- 4. Parse decompressed header ----
+  const hdrView = new DataView(
+    headerBytes.buffer,
+    headerBytes.byteOffset,
+    headerBytes.byteLength,
+  );
+  let hdrOff = 0;
+
+  // Total genome length (u64, little-endian)
+  const totalGenomeLengthLo = hdrView.getUint32(hdrOff, true);
+  const totalGenomeLengthHi = hdrView.getUint32(hdrOff + 4, true);
+  const totalGenomeLength =
+    BigInt(totalGenomeLengthLo) | (BigInt(totalGenomeLengthHi) << 32n);
+  const totalGenomeLengthNum = Number(totalGenomeLength);
+  hdrOff += 8;
+
+  // Number of contigs (u32)
+  const numberOfContigs = hdrView.getUint32(hdrOff, true);
+  hdrOff += 4;
+
+  // Per-contig records
   const contigs: PretextContig[] = [];
-  for (let i = 0; i < numContigs; i++) {
-    const name = readString();
-    const length = readU32();
-    const pixelStart = readU32();
-    const pixelEnd = readU32();
-    contigs.push({ name, length, pixelStart, pixelEnd });
+  for (let i = 0; i < numberOfContigs; i++) {
+    // Fractional length (f32)
+    const fractionalLength = hdrView.getFloat32(hdrOff, true);
+    hdrOff += 4;
+
+    // Contig name: 64 bytes (u32[16]), null-terminated ASCII string
+    const nameBytes = headerBytes.slice(hdrOff, hdrOff + 64);
+    hdrOff += 64;
+
+    let name = '';
+    for (let j = 0; j < 64; j++) {
+      if (nameBytes[j] === 0) break;
+      name += String.fromCharCode(nameBytes[j]);
+    }
+
+    contigs.push({
+      name,
+      fractionalLength,
+      length: 0,      // filled in below
+      pixelStart: 0,  // filled in below
+      pixelEnd: 0,    // filled in below
+    });
   }
-  
-  // Read texture data for each mipmap level
-  const textures: Float32Array[] = [];
-  for (let level = 0; level < numMipMaps; level++) {
-    const levelSize = textureSize >> level;
-    const compressedSize = readU32();
-    
-    // Read compressed data
-    const compressedData = bytes.slice(offset, offset + compressedSize);
-    offset += compressedSize;
-    
-    // Decompress with deflate (raw, not gzip)
+
+  // Texture parameters (3 bytes)
+  const textureRes = headerBytes[hdrOff++];   // log2(single texture resolution)
+  const nTextRes = headerBytes[hdrOff++];     // log2(number of textures per dimension)
+  const mipMapLevels = headerBytes[hdrOff];   // number of mipmap levels
+
+  const textureResolution = 1 << textureRes;
+  const numberOfTextures1D = 1 << nTextRes;
+  const numberOfPixels1D = textureResolution * numberOfTextures1D;
+  const numberOfTextureBlocks =
+    ((numberOfTextures1D + 1) * numberOfTextures1D) >> 1;
+
+  // Compute Bytes_Per_Texture (decompressed size of one tile)
+  let bytesPerTexture = 0;
+  {
+    let tRes = textureRes;
+    for (let i = 0; i < mipMapLevels; i++) {
+      bytesPerTexture += 1 << (2 * tRes);
+      tRes--;
+    }
+    bytesPerTexture >>= 1; // BC4: 0.5 bytes per pixel
+  }
+
+  // ---- 5. Reconstruct pixel positions for contigs ----
+  {
+    let cumulativeFrac = 0;
+    for (let i = 0; i < numberOfContigs; i++) {
+      const startFrac = cumulativeFrac;
+      cumulativeFrac += contigs[i].fractionalLength;
+
+      contigs[i].length = Math.round(
+        contigs[i].fractionalLength * totalGenomeLengthNum,
+      );
+      contigs[i].pixelStart = Math.floor(startFrac * numberOfPixels1D);
+      contigs[i].pixelEnd = Math.floor(cumulativeFrac * numberOfPixels1D);
+    }
+    // Ensure the last contig extends to the end
+    if (numberOfContigs > 0) {
+      contigs[numberOfContigs - 1].pixelEnd = numberOfPixels1D;
+    }
+  }
+
+  const header: PretextHeader = {
+    totalGenomeLength,
+    numberOfContigs,
+    textureRes,
+    nTextRes,
+    mipMapLevels,
+    textureResolution,
+    numberOfTextures1D,
+    numberOfPixels1D,
+    numberOfTextureBlocks,
+    bytesPerTexture,
+  };
+
+  // ---- 6. Read texture blocks ----
+  const tiles: Uint8Array[] = new Array(numberOfTextureBlocks);
+  const tilesDecoded: Float32Array[][] = new Array(numberOfTextureBlocks);
+
+  for (let i = 0; i < numberOfTextureBlocks; i++) {
+    if (offset + 4 > bytes.length) {
+      console.warn(
+        `Unexpected end of file at texture block ${i}/${numberOfTextureBlocks}`,
+      );
+      break;
+    }
+
+    const compSize = view.getUint32(offset, true);
+    offset += 4;
+
+    if (offset + compSize > bytes.length) {
+      console.warn(
+        `Texture block ${i} compressed data extends past end of file`,
+      );
+      break;
+    }
+
+    const compData = bytes.slice(offset, offset + compSize);
+    offset += compSize;
+
     let decompressed: Uint8Array;
     try {
-      decompressed = pako.inflateRaw(compressedData);
+      decompressed = pako.inflateRaw(compData);
     } catch (e) {
-      console.warn(`Failed to decompress mipmap level ${level}, trying inflate:`, e);
+      console.warn(`Failed to decompress texture block ${i}: ${e}`);
+      decompressed = new Uint8Array(bytesPerTexture);
+    }
+
+    tiles[i] = decompressed;
+
+    // Decode BC4 data for each mipmap level
+    const levels: Float32Array[] = [];
+    let levelOffset = 0;
+    let levelRes = textureResolution;
+
+    for (let lev = 0; lev < mipMapLevels; lev++) {
+      const levelBytes = (levelRes * levelRes) >> 1; // BC4: 0.5 bytes/pixel
+
+      if (levelOffset + levelBytes <= decompressed.length) {
+        const decoded = decodeBC4Level(decompressed, levelOffset, levelRes);
+        levels.push(decoded);
+      } else {
+        // Insufficient data, push zeroed level
+        levels.push(new Float32Array(levelRes * levelRes));
+      }
+
+      levelOffset += levelBytes;
+      levelRes >>= 1;
+    }
+
+    tilesDecoded[i] = levels;
+  }
+
+  // ---- 7. Read extensions ----
+  const extensions: PretextExtension[] = [];
+  const GRAPH_MAGIC = [0x70, 0x73, 0x67, 0x68]; // 'psgh'
+
+  while (offset + 4 <= bytes.length) {
+    // Check for graph extension magic
+    if (
+      bytes[offset] === GRAPH_MAGIC[0] &&
+      bytes[offset + 1] === GRAPH_MAGIC[1] &&
+      bytes[offset + 2] === GRAPH_MAGIC[2] &&
+      bytes[offset + 3] === GRAPH_MAGIC[3]
+    ) {
+      offset += 4;
+
+      if (offset + 4 > bytes.length) break;
+      const compSize = view.getUint32(offset, true);
+      offset += 4;
+
+      if (offset + compSize > bytes.length) {
+        console.warn('Extension compressed data extends past end of file');
+        break;
+      }
+
+      const compData = bytes.slice(offset, offset + compSize);
+      offset += compSize;
+
+      // Expected decompressed size: 64 bytes name + 4 * numberOfPixels1D bytes values
+      const expectedSize = 64 + 4 * numberOfPixels1D;
+
+      let decompressed: Uint8Array;
       try {
-        decompressed = pako.inflate(compressedData);
-      } catch (e2) {
-        console.error(`Failed to decompress mipmap level ${level}:`, e2);
-        // Create empty texture for this level
-        textures.push(new Float32Array(levelSize * levelSize));
+        decompressed = pako.inflateRaw(compData);
+      } catch (e) {
+        console.warn(`Failed to decompress graph extension: ${e}`);
         continue;
       }
-    }
-    
-    // Decode DXT1 to float intensity
-    const decoded = decodeDXT1Texture(decompressed, levelSize, levelSize);
-    textures.push(decoded);
-  }
-  
-  // Read extension data (if present)
-  const extensions: PretextExtension[] = [];
-  while (offset < bytes.length - 4) {
-    try {
-      const extNameLength = readU32();
-      if (extNameLength === 0 || extNameLength > 256) break;
-      
-      let extName = '';
-      for (let i = 0; i < extNameLength; i++) {
-        extName += String.fromCharCode(readU8());
+
+      if (decompressed.length < expectedSize) {
+        console.warn(
+          `Graph extension too small: expected ${expectedSize}, got ${decompressed.length}`,
+        );
+        continue;
       }
-      
-      const extDataSize = readU32();
-      const compressedExtData = bytes.slice(offset, offset + extDataSize);
-      offset += extDataSize;
-      
-      const decompressedExt = pako.inflateRaw(compressedExtData);
-      const extData = new Float32Array(decompressedExt.buffer);
-      
-      extensions.push({ name: extName, data: extData });
-    } catch {
-      break; // End of extensions
+
+      // Parse extension name (first 64 bytes, null-terminated string)
+      let extName = '';
+      for (let j = 0; j < 64; j++) {
+        if (decompressed[j] === 0) break;
+        extName += String.fromCharCode(decompressed[j]);
+      }
+
+      // Parse graph values (s32 array starting at byte 64)
+      const valuesView = new DataView(
+        decompressed.buffer,
+        decompressed.byteOffset + 64,
+        4 * numberOfPixels1D,
+      );
+      const values = new Int32Array(numberOfPixels1D);
+      for (let j = 0; j < numberOfPixels1D; j++) {
+        values[j] = valuesView.getInt32(j * 4, true);
+      }
+
+      extensions.push({ name: extName, data: values });
+    } else {
+      // Unknown data; try advancing one byte and scanning
+      // This handles potential padding or unknown extension types.
+      offset++;
     }
   }
-  
+
   return {
-    version,
-    textureSize,
-    numMipMaps,
+    header,
     contigs,
-    textures,
+    tiles,
+    tilesDecoded,
     extensions,
   };
 }
 
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
+
 /**
  * Quick validation: is this likely a pretext file?
+ * Checks for the 'pstm' magic bytes.
  */
 export function isPretextFile(buffer: ArrayBuffer): boolean {
-  const bytes = new Uint8Array(buffer, 0, Math.min(20, buffer.byteLength));
-  const header = String.fromCharCode(...bytes.slice(0, 7));
-  return header.startsWith('pretext');
+  if (buffer.byteLength < 4) return false;
+  const bytes = new Uint8Array(buffer, 0, 4);
+  return (
+    bytes[0] === 0x70 && // 'p'
+    bytes[1] === 0x73 && // 's'
+    bytes[2] === 0x74 && // 't'
+    bytes[3] === 0x6d    // 'm'
+  );
 }
+
+/**
+ * Compute the linear tile index for a given (x, y) tile coordinate.
+ * Exported for use by renderers that need to map tile coordinates to
+ * the tiles[] array.
+ *
+ * x and y are 0-based tile coordinates. The function automatically
+ * swaps to ensure x <= y (upper triangle).
+ */
+export { tileLinearIndex };
+
+/**
+ * Decode a single BC4 mipmap level from raw BC4 bytes.
+ * Exported for cases where callers want to decode individual levels
+ * from the raw tile data.
+ */
+export { decodeBC4Level, decodeBC4Block };

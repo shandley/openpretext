@@ -52,39 +52,54 @@ export function generateSyntheticMap(size: number = 1024, numChromosomes: number
       
       // Distance from diagonal
       const dist = Math.abs(x - y);
-      
-      // Strong diagonal decay (power law)
-      if (dist < size / 2) {
-        value += Math.pow(1.0 / (1 + dist * 0.1), 1.5);
+
+      // Strong diagonal decay (power law, like real Hi-C data)
+      if (dist < size) {
+        value += Math.pow(1.0 / (1 + dist * 0.02), 1.8);
       }
-      
+
       // Chromosome blocks
       for (const contig of contigs) {
         const inX = x >= contig.start && x < contig.end;
         const inY = y >= contig.start && y < contig.end;
-        
+
         if (inX && inY) {
-          // Intra-chromosomal: stronger signal
+          // Intra-chromosomal: strong block signal
           const localDist = Math.abs(x - y);
-          value += 0.3 * Math.pow(1.0 / (1 + localDist * 0.05), 1.2);
-          
-          // Sub-TAD structures (small bright squares along diagonal)
-          const tadSize = 15 + Math.floor(Math.random() * 10);
+          const chromSize = contig.end - contig.start;
+          value += 0.5 * Math.pow(1.0 / (1 + localDist * 0.03), 1.5);
+
+          // TAD-like domains (nested squares along diagonal)
           const localX = x - contig.start;
           const localY = y - contig.start;
-          const tadX = Math.floor(localX / tadSize);
-          const tadY = Math.floor(localY / tadSize);
-          if (tadX === tadY) {
-            value += 0.15;
+
+          // Multiple TAD sizes for realistic appearance
+          for (const tadSize of [Math.floor(chromSize / 3), Math.floor(chromSize / 6), Math.floor(chromSize / 12)]) {
+            if (tadSize < 4) continue;
+            const tadX = Math.floor(localX / tadSize);
+            const tadY = Math.floor(localY / tadSize);
+            if (tadX === tadY) {
+              value += 0.1;
+            }
+          }
+
+          // Compartment pattern (checkerboard-like at large scale)
+          const compSize = Math.floor(chromSize / 4);
+          if (compSize > 2) {
+            const compX = Math.floor(localX / compSize) % 2;
+            const compY = Math.floor(localY / compSize) % 2;
+            if (compX === compY) {
+              value += 0.05;
+            }
           }
         } else if (inX || inY) {
-          // Inter-chromosomal: weak signal
-          value += 0.02 * Math.random();
+          // Inter-chromosomal: very weak signal
+          value += 0.01 * Math.random();
         }
       }
-      
+
       // Add some noise
-      value += Math.random() * 0.03;
+      value += Math.random() * 0.02;
       
       // Symmetry (Hi-C matrices are symmetric)
       const idx1 = y * size + x;
