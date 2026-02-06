@@ -10,10 +10,12 @@
 import { test, expect } from '@playwright/test';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const TEST_FILE = resolve(__dirname, '../../test-data/bTaeGut2.mat.pretext');
+const HAS_TEST_FILE = existsSync(TEST_FILE);
 
 /**
  * Helper: zoom into the map center by dispatching wheel events directly on
@@ -55,6 +57,8 @@ async function sampleCenterPixels(page: import('@playwright/test').Page, size = 
 }
 
 test.describe('Tile streaming with real .pretext file', () => {
+  test.skip(!HAS_TEST_FILE, 'Requires test-data/bTaeGut2.mat.pretext (not committed to repo)');
+
   test('should load file, render overview, zoom in, and render detail tiles', async ({ page }) => {
     await page.goto('/');
 

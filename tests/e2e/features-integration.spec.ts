@@ -71,6 +71,9 @@ test.describe('Stats panel', () => {
     const statsContent = page.locator('#stats-content');
     await expect(statsContent).toBeVisible();
 
+    // Wait for stats to populate (may take a moment on slow CI runners)
+    await expect(statsContent).not.toHaveText('No data loaded', { timeout: 5_000 });
+
     // The stats panel should contain assembly metrics populated from demo data
     const statsText = await statsContent.textContent();
     expect(statsText).toBeTruthy();
@@ -193,6 +196,9 @@ test.describe('Track config panel', () => {
 
     const trackConfigList = page.locator('#track-config-list');
     await expect(trackConfigList).toBeVisible();
+
+    // Wait for track config to populate
+    await expect(trackConfigList).not.toHaveText('', { timeout: 5_000 });
 
     // With demo data (no external tracks), should show placeholder text
     const text = await trackConfigList.textContent();
