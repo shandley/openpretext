@@ -25,11 +25,18 @@ import { WaypointOverlay } from './renderer/WaypointOverlay';
 import { WaypointManager } from './curation/WaypointManager';
 import { generateDemoTracks } from './formats/SyntheticTracks';
 import { downloadAGP } from './export/AGPWriter';
+import { downloadBED } from './export/BEDWriter';
+import { downloadFASTA } from './export/FASTAWriter';
+import { parseFASTA, type FASTARecord } from './formats/FASTAParser';
+import { parseBedGraph, bedGraphToTrack } from './formats/BedGraphParser';
 import { downloadSnapshot } from './export/SnapshotExporter';
 import { exportSession, importSession, downloadSession, type SessionData } from './io/SessionManager';
 import { parseScript } from './scripting/ScriptParser';
 import { executeScript, type ScriptContext, type ScriptResult } from './scripting/ScriptExecutor';
 import { operationsToScript } from './scripting/ScriptReplay';
+import { calculateMetrics, MetricsTracker, type AssemblyMetrics } from './curation/QualityMetrics';
+import { contigExclusion } from './curation/ContigExclusion';
+import { selectByPattern, selectBySize, batchCutBySize, batchJoinSelected, batchInvertSelected, sortByLength } from './curation/BatchOperations';
 
 class OpenPretextApp {
   private renderer!: WebGLRenderer;
@@ -54,6 +61,16 @@ class OpenPretextApp {
   // Tile streaming state
   private tileManager: TileManager | null = null;
   private cancelTileDecode: (() => void) | null = null;
+
+  // Feature: quality metrics tracking
+  private metricsTracker = new MetricsTracker();
+
+  // Feature: reference sequences for FASTA export
+  private referenceSequences: Map<string, string> | null = null;
+
+  // Feature: comparison mode (stores original contig order snapshot)
+  private comparisonSnapshot: number[] | null = null;
+  private comparisonVisible = false;
 
   constructor() {
     this.init();
@@ -107,6 +124,8 @@ class OpenPretextApp {
     this.setupScriptConsole();
     this.setupShortcutsModal();
     this.setupContigSearch();
+    this.setupTrackUpload();
+    this.setupFastaUpload();
     this.startRenderLoop();
 
     console.log('OpenPretext initialized');
@@ -117,17 +136,37 @@ class OpenPretextApp {
   private setupEventListeners(): void {
     events.on('file:loaded', () => {
       this.updateSidebarContigList();
+      // Take initial metrics snapshot
+      const s = state.get();
+      if (s.map) {
+        this.metricsTracker.clear();
+        this.metricsTracker.snapshot(s.map.contigs, s.contigOrder, 0);
+        // Store initial order for comparison mode
+        this.comparisonSnapshot = [...s.contigOrder];
+        this.comparisonVisible = false;
+        contigExclusion.clearAll();
+      }
+      this.updateStatsPanel();
     });
 
     events.on('curation:cut', () => this.refreshAfterCuration());
     events.on('curation:join', () => this.refreshAfterCuration());
     events.on('curation:invert', () => this.refreshAfterCuration());
     events.on('curation:move', () => this.refreshAfterCuration());
+    events.on('curation:undo', () => this.refreshAfterCuration());
+    events.on('curation:redo', () => this.refreshAfterCuration());
   }
 
   private refreshAfterCuration(): void {
     this.rebuildContigBoundaries();
     this.updateSidebarContigList();
+    const s = state.get();
+    document.getElementById('status-contigs')!.textContent = `${s.contigOrder.length} contigs`;
+    // Snapshot quality metrics
+    if (s.map) {
+      this.metricsTracker.snapshot(s.map.contigs, s.contigOrder, s.undoStack.length);
+    }
+    this.updateStatsPanel();
   }
 
   private rebuildContigBoundaries(): void {
@@ -630,13 +669,14 @@ class OpenPretextApp {
       const isSelected = selected.has(orderIdx);
       const lengthStr = this.formatBp(contig.length);
       const invertedBadge = contig.inverted ? '<span class="contig-badge inverted">INV</span>' : '';
+      const excludedBadge = contigExclusion.isExcluded(orderIdx) ? '<span class="contig-badge excluded">EXC</span>' : '';
       const scaffoldBadge = contig.scaffoldId !== null
         ? `<span class="contig-badge scaffold">S${contig.scaffoldId}</span>`
         : '';
 
       return `<div class="contig-item ${isSelected ? 'selected' : ''}" data-order-index="${orderIdx}">
         <span class="contig-name">${contig.name}</span>
-        <span class="contig-meta">${lengthStr} ${invertedBadge}${scaffoldBadge}</span>
+        <span class="contig-meta">${lengthStr} ${invertedBadge}${excludedBadge}${scaffoldBadge}</span>
       </div>`;
     }).join('');
 
@@ -775,6 +815,24 @@ class OpenPretextApp {
             renderDragIndicator(ctx, this.dragReorder.getDragState(), this.contigBoundaries, cam, w, h);
           }
         }
+
+        // Draw cut indicator in edit mode
+        if (this.currentMode === 'edit' && this.hoveredContigIndex >= 0 && !this.dragReorder.isActive()) {
+          const labelCanvas = document.getElementById('label-canvas') as HTMLCanvasElement;
+          const ctx = labelCanvas.getContext('2d');
+          if (ctx) {
+            this.renderCutIndicator(ctx, cam, w, h);
+          }
+        }
+
+        // Draw comparison overlay
+        if (this.comparisonVisible) {
+          const labelCanvas = document.getElementById('label-canvas') as HTMLCanvasElement;
+          const ctx = labelCanvas.getContext('2d');
+          if (ctx) {
+            this.renderComparisonOverlay(ctx, cam, w, h);
+          }
+        }
       }
 
       // Scaffold overlay
@@ -823,6 +881,32 @@ class OpenPretextApp {
     };
     this.startRenderLoop = () => { renderFrame(); };
     renderFrame();
+  }
+
+  private renderCutIndicator(ctx: CanvasRenderingContext2D, cam: CameraState, canvasWidth: number, canvasHeight: number): void {
+    const mapX = this.mouseMapPos.x;
+    // Convert map position to canvas pixel
+    const canvasX = (mapX - cam.x) * cam.zoom * canvasWidth + canvasWidth / 2;
+
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = 'rgba(255, 220, 50, 0.8)';
+    ctx.lineWidth = 1.5;
+
+    // Vertical line
+    ctx.beginPath();
+    ctx.moveTo(canvasX, 0);
+    ctx.lineTo(canvasX, canvasHeight);
+    ctx.stroke();
+
+    // Horizontal line
+    const canvasY = (mapX - cam.y) * cam.zoom * canvasHeight + canvasHeight / 2;
+    ctx.beginPath();
+    ctx.moveTo(0, canvasY);
+    ctx.lineTo(canvasWidth, canvasY);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   private onCameraChange(cam: CameraState): void {
@@ -961,6 +1045,61 @@ class OpenPretextApp {
     this.showToast(`Inverted ${selected.length} contig(s)`);
   }
 
+  private cutAtCursorPosition(): void {
+    if (this.currentMode !== 'edit') return;
+    const s = state.get();
+    if (!s.map || this.hoveredContigIndex < 0) {
+      this.showToast('Hover over a contig to cut');
+      return;
+    }
+
+    const prevBoundary = this.hoveredContigIndex === 0 ? 0 : this.contigBoundaries[this.hoveredContigIndex - 1];
+    const curBoundary = this.contigBoundaries[this.hoveredContigIndex];
+    const fraction = (this.mouseMapPos.x - prevBoundary) / (curBoundary - prevBoundary);
+
+    const contigId = s.contigOrder[this.hoveredContigIndex];
+    const contig = s.map.contigs[contigId];
+    const contigPixelLength = contig.pixelEnd - contig.pixelStart;
+    const pixelOffset = Math.round(fraction * contigPixelLength);
+
+    if (pixelOffset <= 0 || pixelOffset >= contigPixelLength) {
+      this.showToast('Cannot cut at edge of contig');
+      return;
+    }
+
+    CurationEngine.cut(this.hoveredContigIndex, pixelOffset);
+    SelectionManager.clearSelection();
+    this.showToast(`Cut: ${contig.name} at offset ${pixelOffset}`);
+  }
+
+  private joinSelectedContigs(): void {
+    if (this.currentMode !== 'edit') return;
+    const selected = SelectionManager.getSelectedIndices();
+
+    if (selected.length === 1) {
+      const idx = selected[0];
+      const s = state.get();
+      if (idx >= s.contigOrder.length - 1) {
+        this.showToast('No right neighbor to join with');
+        return;
+      }
+      CurationEngine.join(idx);
+      SelectionManager.clearSelection();
+      this.showToast('Joined contigs');
+    } else if (selected.length === 2) {
+      const sorted = [...selected].sort((a, b) => a - b);
+      if (sorted[1] - sorted[0] !== 1) {
+        this.showToast('Selected contigs must be adjacent to join');
+        return;
+      }
+      CurationEngine.join(sorted[0]);
+      SelectionManager.clearSelection();
+      this.showToast('Joined contigs');
+    } else {
+      this.showToast('Select 1 or 2 adjacent contigs to join');
+    }
+  }
+
   // ─── Export ──────────────────────────────────────────────
 
   private exportAGP(): void {
@@ -1074,6 +1213,376 @@ class OpenPretextApp {
     }
   }
 
+  // ─── BED Export ──────────────────────────────────────────
+
+  private exportBEDFile(): void {
+    const s = state.get();
+    if (!s.map) {
+      this.showToast('No data to export');
+      return;
+    }
+    try {
+      downloadBED(s);
+      this.showToast('BED exported');
+    } catch (err) {
+      console.error('BED export error:', err);
+      this.showToast('BED export failed');
+    }
+  }
+
+  // ─── FASTA Export ──────────────────────────────────────────
+
+  private exportFASTAFile(): void {
+    const s = state.get();
+    if (!s.map) {
+      this.showToast('No data to export');
+      return;
+    }
+    if (!this.referenceSequences) {
+      this.showToast('Load a reference FASTA first');
+      return;
+    }
+    try {
+      downloadFASTA(s, this.referenceSequences);
+      this.showToast('FASTA exported');
+    } catch (err) {
+      console.error('FASTA export error:', err);
+      this.showToast('FASTA export failed');
+    }
+  }
+
+  private async loadReferenceFasta(file: File): Promise<void> {
+    try {
+      const text = await file.text();
+      const records = parseFASTA(text);
+      this.referenceSequences = new Map(records.map(r => [r.name, r.sequence]));
+      this.showToast(`Loaded ${records.length} reference sequences`);
+    } catch (err) {
+      console.error('FASTA parse error:', err);
+      this.showToast(`FASTA load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  private setupFastaUpload(): void {
+    const input = document.getElementById('fasta-file-input') as HTMLInputElement;
+    if (!input) return;
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (file) await this.loadReferenceFasta(file);
+      input.value = '';
+    });
+  }
+
+  // ─── BedGraph Track Upload ────────────────────────────────
+
+  private async loadBedGraphTrack(file: File): Promise<void> {
+    const s = state.get();
+    if (!s.map) {
+      this.showToast('Load a map file first');
+      return;
+    }
+    try {
+      const text = await file.text();
+      const result = parseBedGraph(text);
+      const track = bedGraphToTrack(
+        result,
+        s.map.contigs,
+        s.contigOrder,
+        s.map.textureSize,
+        { name: result.trackName ?? file.name },
+      );
+      this.trackRenderer.addTrack(track);
+      this.tracksVisible = true;
+      this.showToast(`Track loaded: ${track.name}`);
+      this.updateTrackConfigPanel();
+    } catch (err) {
+      console.error('BedGraph parse error:', err);
+      this.showToast(`Track load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  private setupTrackUpload(): void {
+    const input = document.getElementById('track-file-input') as HTMLInputElement;
+    if (!input) return;
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (file) await this.loadBedGraphTrack(file);
+      input.value = '';
+    });
+  }
+
+  // ─── Contig Exclusion ──────────────────────────────────────
+
+  private toggleContigExclusion(): void {
+    if (this.currentMode !== 'edit') return;
+    const selected = SelectionManager.getSelectedIndices();
+    if (selected.length > 0) {
+      for (const idx of selected) {
+        contigExclusion.toggle(idx);
+      }
+      this.showToast(`Toggled exclusion on ${selected.length} contig(s)`);
+    } else if (this.hoveredContigIndex >= 0) {
+      const wasExcluded = contigExclusion.toggle(this.hoveredContigIndex);
+      this.showToast(wasExcluded ? 'Contig excluded' : 'Contig included');
+    } else {
+      this.showToast('Hover or select contigs to exclude');
+    }
+    this.updateSidebarContigList();
+    this.updateStatsPanel();
+  }
+
+  // ─── Batch Operations ──────────────────────────────────────
+
+  private runBatchSelectByPattern(): void {
+    const pattern = prompt('Enter name pattern (regex):');
+    if (!pattern) return;
+    try {
+      const indices = selectByPattern(pattern);
+      if (indices.length === 0) {
+        this.showToast('No contigs match pattern');
+        return;
+      }
+      for (const idx of indices) {
+        SelectionManager.selectToggle(idx);
+      }
+      this.updateSidebarContigList();
+      this.showToast(`Selected ${indices.length} contigs matching "${pattern}"`);
+    } catch (err) {
+      this.showToast(`Invalid pattern: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  private runBatchSelectBySize(): void {
+    const input = prompt('Enter size range in bp (min-max, e.g. 1000000-5000000):');
+    if (!input) return;
+    const parts = input.split('-').map(s => parseInt(s.trim(), 10));
+    const min = parts[0] || undefined;
+    const max = parts[1] || undefined;
+    const indices = selectBySize(min, max);
+    if (indices.length === 0) {
+      this.showToast('No contigs in size range');
+      return;
+    }
+    for (const idx of indices) {
+      SelectionManager.selectToggle(idx);
+    }
+    this.updateSidebarContigList();
+    this.showToast(`Selected ${indices.length} contigs in size range`);
+  }
+
+  private runBatchCut(): void {
+    const input = prompt('Cut contigs larger than (bp):');
+    if (!input) return;
+    const minLength = parseInt(input.trim(), 10);
+    if (isNaN(minLength) || minLength <= 0) {
+      this.showToast('Invalid size');
+      return;
+    }
+    const result = batchCutBySize(minLength);
+    this.refreshAfterCuration();
+    this.showToast(result.description);
+  }
+
+  private runBatchJoin(): void {
+    const result = batchJoinSelected();
+    if (result.operationsPerformed === 0) {
+      this.showToast('Select adjacent contigs to batch join');
+      return;
+    }
+    SelectionManager.clearSelection();
+    this.refreshAfterCuration();
+    this.showToast(result.description);
+  }
+
+  private runBatchInvert(): void {
+    const result = batchInvertSelected();
+    if (result.operationsPerformed === 0) {
+      this.showToast('Select contigs to batch invert');
+      return;
+    }
+    this.refreshAfterCuration();
+    this.showToast(result.description);
+  }
+
+  private runSortByLength(): void {
+    const result = sortByLength(true);
+    this.refreshAfterCuration();
+    this.showToast(result.description);
+  }
+
+  // ─── Stats Panel ──────────────────────────────────────────
+
+  private updateStatsPanel(): void {
+    const el = document.getElementById('stats-content');
+    if (!el) return;
+
+    const summary = this.metricsTracker.getSummary();
+    if (!summary) {
+      el.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No data loaded</div>';
+      return;
+    }
+
+    const m = summary.current;
+    const excluded = contigExclusion.getExcludedCount();
+
+    const fmtBp = (bp: number) => {
+      if (bp >= 1_000_000_000) return `${(bp / 1_000_000_000).toFixed(2)} Gb`;
+      if (bp >= 1_000_000) return `${(bp / 1_000_000).toFixed(2)} Mb`;
+      if (bp >= 1_000) return `${(bp / 1_000).toFixed(1)} kb`;
+      return `${bp} bp`;
+    };
+
+    const delta = (val: number) => {
+      if (val === 0) return '';
+      const sign = val > 0 ? '+' : '';
+      return ` <span style="color:${val > 0 ? '#4caf50' : '#e94560'};font-size:10px;">(${sign}${val})</span>`;
+    };
+
+    let html = '';
+    html += `<div class="stats-row"><span>Contigs</span><span>${m.contigCount}${delta(summary.contigCountDelta)}</span></div>`;
+    if (excluded > 0) {
+      html += `<div class="stats-row"><span>Excluded</span><span style="color:#f39c12;">${excluded}</span></div>`;
+    }
+    html += `<div class="stats-row"><span>Total length</span><span>${fmtBp(m.totalLength)}</span></div>`;
+    html += `<div class="stats-row"><span>N50</span><span>${fmtBp(m.n50)}${delta(summary.n50Delta)}</span></div>`;
+    html += `<div class="stats-row"><span>L50</span><span>${m.l50}</span></div>`;
+    html += `<div class="stats-row"><span>N90</span><span>${fmtBp(m.n90)}</span></div>`;
+    html += `<div class="stats-row"><span>L90</span><span>${m.l90}</span></div>`;
+    html += `<div class="stats-row"><span>Longest</span><span>${fmtBp(m.longestContig)}</span></div>`;
+    html += `<div class="stats-row"><span>Shortest</span><span>${fmtBp(m.shortestContig)}</span></div>`;
+    html += `<div class="stats-row"><span>Median</span><span>${fmtBp(m.medianLength)}</span></div>`;
+    html += `<div class="stats-row"><span>Scaffolds</span><span>${m.scaffoldCount}${delta(summary.scaffoldCountDelta)}</span></div>`;
+    html += `<div class="stats-row"><span>Operations</span><span>${m.operationCount}</span></div>`;
+
+    el.innerHTML = html;
+  }
+
+  // ─── Track Configuration ──────────────────────────────────
+
+  private updateTrackConfigPanel(): void {
+    const el = document.getElementById('track-config-list');
+    if (!el) return;
+
+    const tracks = this.trackRenderer.getTracks();
+    if (tracks.length === 0) {
+      el.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No tracks loaded. Press X to toggle visibility.</div>';
+      return;
+    }
+
+    const html = tracks.map((track, i) =>
+      `<div class="track-config-item" data-track-index="${i}">
+        <label class="track-config-toggle">
+          <input type="checkbox" ${track.visible ? 'checked' : ''} data-track-name="${track.name}" class="track-vis-checkbox">
+          <span class="track-config-name" style="border-left: 3px solid ${track.color}; padding-left: 6px;">${track.name}</span>
+        </label>
+        <div class="track-config-controls">
+          <input type="color" value="${track.color}" data-track-name="${track.name}" class="track-color-input" title="Track color">
+          <select data-track-name="${track.name}" class="track-type-select" title="Track type">
+            <option value="line" ${track.type === 'line' ? 'selected' : ''}>Line</option>
+            <option value="heatmap" ${track.type === 'heatmap' ? 'selected' : ''}>Heatmap</option>
+            <option value="marker" ${track.type === 'marker' ? 'selected' : ''}>Marker</option>
+          </select>
+          <button class="track-remove-btn" data-track-name="${track.name}" title="Remove track">&times;</button>
+        </div>
+      </div>`
+    ).join('');
+
+    el.innerHTML = html;
+
+    // Wire up event listeners
+    el.querySelectorAll('.track-vis-checkbox').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const name = (cb as HTMLInputElement).dataset.trackName!;
+        this.trackRenderer.setTrackVisibility(name, (cb as HTMLInputElement).checked);
+      });
+    });
+
+    el.querySelectorAll('.track-color-input').forEach((input) => {
+      input.addEventListener('input', () => {
+        const name = (input as HTMLInputElement).dataset.trackName!;
+        const track = this.trackRenderer.getTrack(name);
+        if (track) (track as any).color = (input as HTMLInputElement).value;
+      });
+    });
+
+    el.querySelectorAll('.track-type-select').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        const name = (sel as HTMLSelectElement).dataset.trackName!;
+        const track = this.trackRenderer.getTrack(name);
+        if (track) (track as any).type = (sel as HTMLSelectElement).value;
+      });
+    });
+
+    el.querySelectorAll('.track-remove-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const name = (btn as HTMLElement).dataset.trackName!;
+        this.trackRenderer.removeTrack(name);
+        this.updateTrackConfigPanel();
+        this.showToast(`Removed track: ${name}`);
+      });
+    });
+  }
+
+  // ─── Comparison Mode ──────────────────────────────────────
+
+  private toggleComparisonMode(): void {
+    const s = state.get();
+    if (!s.map) {
+      this.showToast('No data loaded');
+      return;
+    }
+    if (!this.comparisonSnapshot) {
+      this.showToast('No comparison snapshot available');
+      return;
+    }
+    this.comparisonVisible = !this.comparisonVisible;
+    this.showToast(`Comparison: ${this.comparisonVisible ? 'ON' : 'OFF'}`);
+  }
+
+  private renderComparisonOverlay(ctx: CanvasRenderingContext2D, cam: CameraState, canvasWidth: number, canvasHeight: number): void {
+    if (!this.comparisonVisible || !this.comparisonSnapshot) return;
+    const s = state.get();
+    if (!s.map) return;
+
+    // Build boundary arrays for original order
+    const totalPixels = s.map.textureSize;
+    const origBoundaries: number[] = [];
+    let acc = 0;
+    for (const contigId of this.comparisonSnapshot) {
+      const contig = s.map.contigs[contigId];
+      if (contig) {
+        acc += (contig.pixelEnd - contig.pixelStart);
+        origBoundaries.push(acc / totalPixels);
+      }
+    }
+
+    // Draw original boundaries as semi-transparent blue lines
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(52, 152, 219, 0.5)';
+    ctx.lineWidth = 1;
+
+    for (const boundary of origBoundaries) {
+      const screenX = (boundary - cam.x) * cam.zoom * canvasWidth + canvasWidth / 2;
+      const screenY = (boundary - cam.y) * cam.zoom * canvasHeight + canvasHeight / 2;
+
+      if (screenX > 0 && screenX < canvasWidth) {
+        ctx.beginPath();
+        ctx.moveTo(screenX, 0);
+        ctx.lineTo(screenX, canvasHeight);
+        ctx.stroke();
+      }
+      if (screenY > 0 && screenY < canvasHeight) {
+        ctx.beginPath();
+        ctx.moveTo(0, screenY);
+        ctx.lineTo(canvasWidth, screenY);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
   // ─── UI Setup ─────────────────────────────────────────────
 
   private setupToolbar(): void {
@@ -1089,6 +1598,18 @@ class OpenPretextApp {
 
     document.getElementById('btn-save-agp')?.addEventListener('click', () => {
       this.exportAGP();
+    });
+    document.getElementById('btn-save-bed')?.addEventListener('click', () => {
+      this.exportBEDFile();
+    });
+    document.getElementById('btn-save-fasta')?.addEventListener('click', () => {
+      this.exportFASTAFile();
+    });
+    document.getElementById('btn-load-fasta')?.addEventListener('click', () => {
+      document.getElementById('fasta-file-input')?.click();
+    });
+    document.getElementById('btn-load-track')?.addEventListener('click', () => {
+      document.getElementById('track-file-input')?.click();
     });
 
     document.getElementById('btn-screenshot')?.addEventListener('click', () => {
@@ -1117,10 +1638,13 @@ class OpenPretextApp {
     document.getElementById('btn-tracks')?.addEventListener('click', () => {
       this.tracksVisible = !this.tracksVisible;
       this.showToast(`Tracks: ${this.tracksVisible ? 'visible' : 'hidden'}`);
+      this.updateTrackConfigPanel();
     });
     document.getElementById('btn-sidebar')?.addEventListener('click', () => {
       document.getElementById('sidebar')?.classList.toggle('visible');
       this.updateSidebarContigList();
+      this.updateStatsPanel();
+      this.updateTrackConfigPanel();
     });
 
     // Color map dropdown
@@ -1168,6 +1692,8 @@ class OpenPretextApp {
         case 'i':
           document.getElementById('sidebar')?.classList.toggle('visible');
           this.updateSidebarContigList();
+          this.updateStatsPanel();
+          this.updateTrackConfigPanel();
           break;
         case 'escape':
           if (this.commandPaletteVisible) {
@@ -1217,10 +1743,34 @@ class OpenPretextApp {
           }
           break;
 
+        case 'c':
+          if (this.currentMode === 'edit') {
+            this.cutAtCursorPosition();
+          }
+          break;
+
+        case 'j':
+          if (this.currentMode === 'edit') {
+            this.joinSelectedContigs();
+          } else {
+            this.camera.jumpToDiagonal();
+          }
+          break;
+
         case 'f':
           if (this.currentMode === 'edit') {
             this.invertSelectedContigs();
           }
+          break;
+
+        case 'h':
+          if (this.currentMode === 'edit') {
+            this.toggleContigExclusion();
+          }
+          break;
+
+        case 'p':
+          this.toggleComparisonMode();
           break;
 
         case 'a':
@@ -1405,6 +1955,8 @@ class OpenPretextApp {
     { name: 'Undo', shortcut: '\u2318Z', action: () => this.performUndo() },
     { name: 'Redo', shortcut: '\u2318\u21e7Z', action: () => this.performRedo() },
     { name: 'Invert selected', shortcut: 'F', action: () => this.invertSelectedContigs() },
+    { name: 'Cut contig at cursor', shortcut: 'C', action: () => this.cutAtCursorPosition() },
+    { name: 'Join selected contigs', shortcut: 'J', action: () => this.joinSelectedContigs() },
     { name: 'Export AGP', shortcut: '\u2318G', action: () => this.exportAGP() },
     { name: 'Screenshot', shortcut: '\u2318S', action: () => this.takeScreenshot() },
     { name: 'Select all contigs', shortcut: '\u2318A', action: () => { SelectionManager.selectAll(); this.updateSidebarContigList(); } },
@@ -1419,6 +1971,18 @@ class OpenPretextApp {
     { name: 'Script console', shortcut: '`', action: () => this.toggleScriptConsole() },
     { name: 'Keyboard shortcuts', shortcut: '?', action: () => this.toggleShortcutsModal() },
     { name: 'Generate script from log', action: () => { document.getElementById('btn-generate-from-log')?.click(); this.toggleScriptConsole(); } },
+    { name: 'Export BED', shortcut: '', action: () => this.exportBEDFile() },
+    { name: 'Export FASTA', shortcut: '', action: () => this.exportFASTAFile() },
+    { name: 'Load reference FASTA', shortcut: '', action: () => document.getElementById('fasta-file-input')?.click() },
+    { name: 'Load BedGraph track', shortcut: '', action: () => document.getElementById('track-file-input')?.click() },
+    { name: 'Toggle contig exclusion', shortcut: 'H', action: () => this.toggleContigExclusion() },
+    { name: 'Toggle comparison mode', shortcut: 'P', action: () => this.toggleComparisonMode() },
+    { name: 'Batch: select by pattern', shortcut: '', action: () => this.runBatchSelectByPattern() },
+    { name: 'Batch: select by size', shortcut: '', action: () => this.runBatchSelectBySize() },
+    { name: 'Batch: cut large contigs', shortcut: '', action: () => this.runBatchCut() },
+    { name: 'Batch: join selected', shortcut: '', action: () => this.runBatchJoin() },
+    { name: 'Batch: invert selected', shortcut: '', action: () => this.runBatchInvert() },
+    { name: 'Sort contigs by length', shortcut: '', action: () => this.runSortByLength() },
   ];
 
   private selectedCommandIndex = 0;

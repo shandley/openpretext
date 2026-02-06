@@ -813,6 +813,140 @@
       opacity: 0.5;
     }
 
+    /* Stats panel */
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 0;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .stats-row span:last-child {
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Excluded badge */
+    .contig-badge.excluded {
+      background: #e74c3c;
+      color: #fff;
+    }
+
+    /* Track configuration */
+    .track-config-item {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .track-config-item:last-child {
+      border-bottom: none;
+    }
+    .track-config-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .track-config-toggle input[type="checkbox"] {
+      accent-color: var(--accent);
+    }
+    .track-config-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .track-config-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      padding-left: 22px;
+    }
+    .track-color-input {
+      width: 24px;
+      height: 20px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    .track-type-select {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      font-size: 11px;
+      border-radius: 3px;
+      padding: 2px 4px;
+      cursor: pointer;
+    }
+    .track-remove-btn {
+      background: none;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+    .track-remove-btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* Mobile / tablet touch optimization */
+    @media (max-width: 600px), (pointer: coarse) {
+      .toolbar-btn {
+        min-height: 36px;
+        min-width: 36px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      #statusbar {
+        min-height: 32px;
+      }
+
+      .contig-item {
+        min-height: 40px;
+        padding: 8px 10px;
+      }
+
+      .track-config-item {
+        padding: 8px 0;
+      }
+
+      .track-config-toggle {
+        min-height: 36px;
+      }
+
+      #tooltip {
+        display: none !important;
+      }
+
+      #sidebar {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 150;
+        box-shadow: -4px 0 16px rgba(0,0,0,0.3);
+      }
+    }
+
+    @media (pointer: coarse) {
+      .toolbar-slider {
+        height: 8px;
+        width: 80px;
+      }
+
+      .toolbar-slider::-webkit-slider-thumb {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
     /* High-DPI display adjustments */
     @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
       .toolbar-btn {
@@ -829,9 +963,13 @@
       <div class="toolbar-group">
         <button class="toolbar-btn" id="btn-open">Open <kbd>⌘O</kbd></button>
         <button class="toolbar-btn" id="btn-save-agp">Export AGP</button>
+        <button class="toolbar-btn" id="btn-save-bed">Export BED</button>
+        <button class="toolbar-btn" id="btn-save-fasta">Export FASTA</button>
         <button class="toolbar-btn" id="btn-save-session">Save Session</button>
         <button class="toolbar-btn" id="btn-load-session">Load Session</button>
         <button class="toolbar-btn" id="btn-screenshot">Screenshot <kbd>⌘S</kbd></button>
+        <button class="toolbar-btn" id="btn-load-fasta">Load FASTA</button>
+        <button class="toolbar-btn" id="btn-load-track">Load Track</button>
       </div>
       <div class="toolbar-separator"></div>
       <div class="toolbar-group">
@@ -888,6 +1026,18 @@
         <div class="sidebar-section">
           <h3>Scaffolds</h3>
           <div id="scaffold-list"></div>
+        </div>
+        <div class="sidebar-section">
+          <h3>Assembly Metrics</h3>
+          <div id="stats-content">
+            <div style="color: var(--text-secondary); font-size: 12px;">No data loaded</div>
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <h3>Tracks</h3>
+          <div id="track-config-list">
+            <div style="color: var(--text-secondary); font-size: 12px;">No tracks loaded. Press X to toggle visibility.</div>
+          </div>
         </div>
       </div>
 
@@ -961,8 +1111,14 @@
         </div>
         <div class="shortcuts-section">
           <h3>Curation</h3>
+          <div class="shortcut-row"><span class="desc">Cut contig at cursor</span><span class="key"><kbd>C</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Join selected contigs</span><span class="key"><kbd>J</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Invert selected</span><span class="key"><kbd>F</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Select all</span><span class="key"><kbd>&#8984;</kbd><kbd>A</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Undo</span><span class="key"><kbd>&#8984;</kbd><kbd>Z</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Redo</span><span class="key"><kbd>&#8984;</kbd><kbd>&#8679;</kbd><kbd>Z</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Toggle exclusion</span><span class="key"><kbd>H</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Toggle comparison</span><span class="key"><kbd>P</kbd></span></div>
         </div>
         <div class="shortcuts-section">
           <h3>Waypoints</h3>
@@ -1010,6 +1166,8 @@
   <!-- File input (hidden) -->
   <input type="file" id="file-input" accept=".pretext" style="display:none">
   <input type="file" id="session-file-input" accept=".json" style="display:none">
+  <input type="file" id="fasta-file-input" accept=".fasta,.fa,.fna,.faa" style="display:none">
+  <input type="file" id="track-file-input" accept=".bedgraph,.bg,.bed,.bedGraph" style="display:none">
 
   <script type="module" src="/src/main.ts"></script>
 </body>

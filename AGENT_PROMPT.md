@@ -22,10 +22,13 @@ src/
     PretextParser.ts         Binary .pretext parser (BC4 + deflate)
     SyntheticData.ts         Demo contact map generator
     SyntheticTracks.ts       Demo annotation track generator
+    FASTAParser.ts           FASTA sequence parser
+    BedGraphParser.ts        BedGraph annotation track parser
   renderer/
     WebGLRenderer.ts         WebGL2 contact map quad with color map shader
     Camera.ts                Pan/zoom camera with mouse/touch/trackpad
     TileManager.ts           Tile-based LOD rendering with LRU cache
+    TileDecoder.ts           Background tile decompression worker
     ColorMaps.ts             Color ramp textures (6 maps)
     LabelRenderer.ts         Contig name labels on map edges
     Minimap.ts               Corner overview with viewport indicator
@@ -38,18 +41,23 @@ src/
     DragReorder.ts           Visual drag-and-drop reordering
     ScaffoldManager.ts       Scaffold (chromosome) assignment CRUD
     WaypointManager.ts       Named position markers
+    ContigExclusion.ts       Set-based contig hide/exclude management
+    BatchOperations.ts       Batch select/cut/join/invert/sort operations
+    QualityMetrics.ts        N50/L50/N90/L90 assembly statistics + tracking
   scripting/
     ScriptParser.ts          Tokenizer + parser for 18-command DSL
     ScriptExecutor.ts        Executes parsed AST via ScriptContext DI
     ScriptReplay.ts          Converts operation logs to DSL scripts
   export/
     AGPWriter.ts             AGP 2.1 format generation
+    BEDWriter.ts             BED6 format export (scaffold-aware)
+    FASTAWriter.ts           FASTA export with reverse complement
     SnapshotExporter.ts      PNG screenshot via canvas.toBlob
     CurationLog.ts           JSON operation history export
   io/
     SessionManager.ts        Session save/load (JSON with undo stack)
 tests/
-  unit/                      503 unit tests (vitest)
+  unit/                      716 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -59,7 +67,20 @@ tests/
     scripting.test.ts        Script parser + executor (110 tests)
     replay.test.ts           Script replay from logs
     tiles.test.ts            TileManager, frustum culling, LRU
+    tile-decoder.test.ts     Tile decoder BC4 decompression
+    tile-decoder-integration.test.ts  Decoder fidelity vs parser
     tracks.test.ts           TrackRenderer
+    bed-export.test.ts       BED6 export
+    fasta.test.ts            FASTA parser + writer
+    bedgraph.test.ts         BedGraph parser + track conversion
+    quality-metrics.test.ts  N50/L50 computation + MetricsTracker
+    contig-exclusion.test.ts ContigExclusion manager
+    batch-operations.test.ts Batch select/cut/join/invert/sort
+    feature-integration.test.ts  Cross-module integration tests
+  e2e/                       22 E2E tests (Playwright + Chromium)
+    curation.spec.ts         Cut/join UI, undo/redo (7 tests)
+    tile-streaming.spec.ts   Tile LOD with real .pretext file
+    features-integration.spec.ts  Stats, exclusion, comparison, batch, tracks
 ```
 
 ## Key Technical Decisions
@@ -72,6 +93,8 @@ tests/
 4. **Single runtime dependency** -- only `pako` for deflate decompression
 5. **Dependency injection** -- ScriptExecutor uses a ScriptContext interface
    so tests can run without DOM or GPU
+6. **Singleton patterns** -- `contigExclusion` and `state` are singletons;
+   batch operations read directly from state
 
 ## The .pretext File Format
 
@@ -114,14 +137,27 @@ themselves. The undo stack is the source of truth for curation history.
 - Contig boundaries are stored as normalized positions (pixelEnd / mapSize)
 - The vertex shader applies camera transform with aspect ratio correction
 
+## Module Integration Points
+
+- **ContigExclusion**: `contigExclusion.getIncludedOrder(contigOrder)` filters
+  the order array for export pipelines. UI shows EXC badges in sidebar.
+- **BatchOperations**: All functions read from `state.get()` directly and call
+  `CurationEngine` methods. They return `BatchResult` with operation counts.
+- **QualityMetrics**: `MetricsTracker.snapshot()` is called in
+  `refreshAfterCuration()` and on `file:loaded`. Stats panel reads `getSummary()`.
+- **BedGraphParser**: `bedGraphToTrack()` converts parsed data to `TrackConfig`
+  using contig pixel spans for coordinate mapping.
+- **BEDWriter/FASTAWriter**: Use `AppState` directly; FASTA needs a
+  `Map<string, string>` of reference sequences loaded separately.
+
 ## Conventions
 
-- All source in `src/`, tests in `tests/unit/`
+- All source in `src/`, tests in `tests/unit/`, E2E tests in `tests/e2e/`
 - No comments on obvious code; comments only where logic is non-obvious
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 503 tests must pass
+- Run `npm test` before committing; all 716 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls
@@ -135,3 +171,6 @@ themselves. The undo stack is the source of truth for curation history.
 - The uniform `u_contigBoundaries[512]` limits the shader to 512 contigs.
 - Contig `originalIndex` (position in the file) differs from the display
   order stored in `contigOrder[]`.
+- `contigExclusion` is a singleton -- call `clearAll()` when loading new data.
+- Batch operations process indices right-to-left to maintain index stability
+  during cuts and joins.

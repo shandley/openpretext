@@ -18,6 +18,7 @@ required.
 - Contig grid overlay with anti-aliased lines
 - Contig labels along map edges
 - Minimap overview with click-to-navigate
+- Comparison mode overlay (original vs curated assembly boundaries)
 
 **Curation**
 - Cut, join, invert, and move contigs with full undo/redo
@@ -25,17 +26,27 @@ required.
 - Scaffold painting mode for chromosome assignment
 - Waypoint markers for positions of interest
 - Selection system (click, shift-range, ctrl-toggle)
+- Contig exclusion (mark contigs to exclude from export)
+- Batch operations (select by pattern/size, batch cut/join/invert, sort by length)
 
 **Annotation Tracks**
 - Coverage, telomere, gap, and GC content tracks
 - Line, heatmap, and marker rendering modes
 - Reads embedded graph extensions from `.pretext` files
+- BedGraph track upload with per-track configuration (color, type, visibility)
 
 **I/O**
 - AGP 2.1 export
+- BED6 export (scaffold-aware)
+- FASTA export (with reverse complement for inverted contigs)
 - PNG screenshot export
 - Session save/load (JSON)
 - Curation log with full operation history
+
+**Assembly Quality Metrics**
+- N50/L50, N90/L90, contig count, total length
+- Live stats panel in the sidebar with delta tracking
+- Automatic metric snapshots after each curation operation
 
 **Scripting**
 - 18-command curation DSL
@@ -46,9 +57,9 @@ required.
 **UI/UX**
 - Command palette (Cmd+K / Ctrl+K)
 - Keyboard shortcuts for all operations
-- Responsive layout with mobile breakpoints
+- Responsive layout with mobile/tablet breakpoints
 - Touch and trackpad gesture support (pinch-zoom, pan)
-- Sidebar with searchable contig list and scaffold assignments
+- Sidebar with searchable contig list, scaffold assignments, stats panel, and track config
 - Toast notifications and detailed tooltips
 
 ## Getting Started
@@ -95,31 +106,36 @@ Press `?` at any time to open the shortcuts reference.
 | `S` | Scaffold painting mode |
 | `W` | Waypoint mode |
 | `Esc` | Return to navigate mode |
+| `C` | Cut contig at cursor (edit mode) |
+| `J` | Join selected contigs (edit mode) / Jump to diagonal |
+| `F` | Flip/invert selected (edit mode) |
+| `H` | Toggle contig exclusion (edit mode) |
+| `P` | Toggle comparison mode |
 | `L` | Toggle contig grid |
 | `I` | Toggle info sidebar |
 | `X` | Toggle annotation tracks |
 | `M` | Toggle minimap |
-| `J` | Jump to diagonal |
 | `?` | Keyboard shortcuts reference |
 | `Cmd+K` | Command palette |
 | `Cmd+Z` | Undo |
 | `Cmd+Shift+Z` | Redo |
 | `Cmd+O` | Open file |
 | `Cmd+S` | Screenshot |
+| `Cmd+A` | Select all contigs (edit mode) |
 | `Up/Down` | Cycle color maps |
 | `Left/Right` | Adjust gamma |
 | `Home` | Reset view |
-| `Delete` | Cut selected contig (edit mode) |
-| `F` | Flip/invert selected (edit mode) |
 
 ## Curation Workflow
 
 1. Load a `.pretext` file
 2. Press `E` to enter edit mode
 3. Select contigs by clicking (shift-click for range, ctrl-click to toggle)
-4. Use cut, join, invert, and move to correct the assembly
-5. Press `S` to enter scaffold mode and paint contigs into chromosomes
-6. Export the curated assembly as AGP via **Export AGP**
+4. Use cut (`C`), join (`J`), invert (`F`), and drag to reorder the assembly
+5. Press `H` to exclude contigs from export
+6. Press `S` to enter scaffold mode and paint contigs into chromosomes
+7. Export the curated assembly as AGP, BED, or FASTA via the toolbar
+8. Toggle comparison mode (`P`) to see original vs curated boundaries
 
 All operations support undo (Cmd+Z) and redo (Cmd+Shift+Z).
 
@@ -161,6 +177,8 @@ See the full DSL reference by typing `help` in the script console.
   [PretextMap](https://github.com/sanger-tol/PretextMap), including embedded
   graph extensions from
   [PretextGraph](https://github.com/sanger-tol/PretextGraph)
+- **`.bedgraph`** -- annotation tracks loaded via the **Load Track** button
+- **`.fasta`** -- reference sequences loaded via **Load FASTA** for curated export
 
 For technical details on the binary format, see
 [docs/PRETEXT_FORMAT.md](docs/PRETEXT_FORMAT.md).
@@ -169,7 +187,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev        # Start development server with hot reload
-npm test           # Run the test suite (503 tests)
+npm test           # Run the test suite (716 tests)
 npm run build      # Production build to dist/
 npm run preview    # Preview the production build
 ```
@@ -186,10 +204,13 @@ src/
     PretextParser.ts         .pretext binary format parser (BC4/deflate)
     SyntheticData.ts         Demo contact map generator
     SyntheticTracks.ts       Demo annotation track generator
+    FASTAParser.ts           FASTA sequence parser
+    BedGraphParser.ts        BedGraph annotation track parser
   renderer/
     WebGLRenderer.ts         WebGL2 contact map renderer
     Camera.ts                Pan/zoom camera with touch gestures
     TileManager.ts           Tile-based LOD with LRU cache
+    TileDecoder.ts           Background tile decompression
     ColorMaps.ts             Color map implementations
     LabelRenderer.ts         Contig label overlay
     Minimap.ts               Overview minimap
@@ -202,18 +223,24 @@ src/
     DragReorder.ts           Visual drag reordering
     ScaffoldManager.ts       Scaffold (chromosome) assignments
     WaypointManager.ts       Waypoint markers
+    ContigExclusion.ts       Contig hide/exclude management
+    BatchOperations.ts       Batch select/cut/join/invert/sort
+    QualityMetrics.ts        N50/L50/N90/L90 assembly statistics
   scripting/
     ScriptParser.ts          Curation DSL tokenizer and parser
     ScriptExecutor.ts        Script execution engine
     ScriptReplay.ts          Operation log to DSL converter
   export/
     AGPWriter.ts             AGP 2.1 format export
+    BEDWriter.ts             BED6 format export
+    FASTAWriter.ts           FASTA format export (with reverse complement)
     SnapshotExporter.ts      PNG screenshot export
     CurationLog.ts           JSON operation history
   io/
     SessionManager.ts        Session save/load (JSON persistence)
 tests/
-  unit/                      503 unit tests across 10 test files
+  unit/                      716 unit tests across 19 test files
+  e2e/                       22 E2E tests (Playwright + Chromium)
 ```
 
 ### Technology
@@ -223,6 +250,7 @@ tests/
 - **WebGL2** for GPU-accelerated rendering (no framework)
 - **pako** for deflate decompression
 - **Vitest** for unit testing
+- **Playwright** for E2E testing
 - Pure DOM manipulation for UI (no React/Vue/Angular)
 
 ## Background

@@ -140,12 +140,8 @@ export class Camera {
     // Prevent context menu
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts (J key handled in main.ts to support mode-aware routing)
     window.addEventListener('keydown', (e) => {
-      // Jump to diagonal (J key in PretextView)
-      if (e.key === 'j' || e.key === 'J') {
-        this.jumpToDiagonal();
-      }
       // Reset view (Home)
       if (e.key === 'Home') {
         this.resetView();
