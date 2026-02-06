@@ -71,10 +71,23 @@ test.describe('Stats panel', () => {
     const statsContent = page.locator('#stats-content');
     await expect(statsContent).toBeVisible();
 
-    // Wait for stats to populate (may take a moment on slow CI runners)
+    // getSummary() requires >=2 snapshots (initial + post-curation).
+    // After loading demo data there is only 1 snapshot, so the panel
+    // correctly shows "No data loaded" until a curation op creates a
+    // second snapshot.  Perform a cut to generate the second snapshot.
+    await enterEditMode(page);
+    await hoverCanvasCenter(page);
+    await page.keyboard.press('c');
+    await page.waitForTimeout(300);
+    // Return to navigate mode so sidebar keyboard shortcut works
+    await page.keyboard.press('Escape');
+
+    // Re-open sidebar to refresh stats
+    await openSidebar(page);
+
+    // Stats should now be populated
     await expect(statsContent).not.toHaveText('No data loaded', { timeout: 5_000 });
 
-    // The stats panel should contain assembly metrics populated from demo data
     const statsText = await statsContent.textContent();
     expect(statsText).toBeTruthy();
 
@@ -197,15 +210,12 @@ test.describe('Track config panel', () => {
     const trackConfigList = page.locator('#track-config-list');
     await expect(trackConfigList).toBeVisible();
 
-    // Wait for track config to populate
-    await expect(trackConfigList).not.toHaveText('', { timeout: 5_000 });
-
-    // With demo data (no external tracks), should show placeholder text
+    // Demo data generates tracks named Coverage, GC Content, Telomeres, Gaps
     const text = await trackConfigList.textContent();
     expect(text).toBeTruthy();
-    // Either has track items or the "No tracks loaded" placeholder
+    // Should have demo track names or the "No tracks loaded" placeholder
     expect(
-      text!.includes('No tracks loaded') || text!.includes('track')
+      text!.includes('Coverage') || text!.includes('No tracks loaded')
     ).toBe(true);
   });
 });
