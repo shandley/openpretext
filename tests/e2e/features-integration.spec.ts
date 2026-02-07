@@ -18,7 +18,7 @@ import { test, expect } from '@playwright/test';
 async function loadDemo(page: import('@playwright/test').Page) {
   await page.goto('/');
   await expect(page.locator('#welcome')).toBeVisible();
-  await page.keyboard.press('Meta+k');
+  await page.keyboard.press('ControlOrMeta+k');
   await expect(page.locator('#command-palette')).toHaveClass(/visible/);
   await page.locator('#command-input').fill('Load synthetic demo');
   await page.keyboard.press('Enter');
@@ -263,7 +263,7 @@ test.describe('Batch operations via command palette', () => {
     await loadDemo(page);
 
     // Open command palette
-    await page.keyboard.press('Meta+k');
+    await page.keyboard.press('ControlOrMeta+k');
     await expect(page.locator('#command-palette')).toHaveClass(/visible/);
 
     // Type "Batch" to filter commands
@@ -288,7 +288,7 @@ test.describe('Batch operations via command palette', () => {
     await loadDemo(page);
 
     // Open
-    await page.keyboard.press('Meta+k');
+    await page.keyboard.press('ControlOrMeta+k');
     await expect(page.locator('#command-palette')).toHaveClass(/visible/);
 
     // Close

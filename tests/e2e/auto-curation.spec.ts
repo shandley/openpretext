@@ -16,7 +16,7 @@ import { test, expect } from '@playwright/test';
 async function loadDemo(page: import('@playwright/test').Page) {
   await page.goto('/');
   await expect(page.locator('#welcome')).toBeVisible();
-  await page.keyboard.press('Meta+k');
+  await page.keyboard.press('ControlOrMeta+k');
   await expect(page.locator('#command-palette')).toHaveClass(/visible/);
   await page.locator('#command-input').fill('Load synthetic demo');
   await page.keyboard.press('Enter');
@@ -26,7 +26,7 @@ async function loadDemo(page: import('@playwright/test').Page) {
 
 /** Open the command palette with Cmd+K. */
 async function openCommandPalette(page: import('@playwright/test').Page) {
-  await page.keyboard.press('Meta+k');
+  await page.keyboard.press('ControlOrMeta+k');
   await expect(page.locator('#command-palette')).toHaveClass(/visible/);
 }
 

@@ -159,7 +159,7 @@ test.describe('Tile streaming with real .pretext file', () => {
     await page.waitForTimeout(1000);
 
     // Load synthetic demo data via command palette — should clean up tile manager
-    await page.keyboard.press('Meta+k');
+    await page.keyboard.press('ControlOrMeta+k');
     await page.locator('#command-input').fill('Load synthetic demo');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(500);
