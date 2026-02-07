@@ -124,13 +124,17 @@ export async function loadPretextFile(ctx: AppContext, file: File): Promise<void
 }
 
 export async function loadExampleDataset(ctx: AppContext): Promise<void> {
-  const EXAMPLE_URL = 'https://github.com/shandley/openpretext/releases/download/v0.1.0/Phascolarctos_cinereus.pretext';
+  // Use GitHub API asset endpoint (has CORS headers) instead of the releases
+  // download URL (which returns a 302 without CORS headers).
+  const EXAMPLE_URL = 'https://api.github.com/repos/shandley/openpretext/releases/assets/352230856';
   const EXAMPLE_FILENAME = 'Phascolarctos_cinereus.pretext';
 
   showLoading('Loading example dataset', 'Downloading koala genome...');
 
   try {
-    const response = await fetch(EXAMPLE_URL);
+    const response = await fetch(EXAMPLE_URL, {
+      headers: { 'Accept': 'application/octet-stream' },
+    });
     if (!response.ok) throw new Error(`Download failed: ${response.status}`);
 
     const contentLength = Number(response.headers.get('content-length')) || 0;
