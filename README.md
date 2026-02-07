@@ -88,7 +88,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 in a browser, then either:
+Open http://localhost:3000 in a browser, then either:
 - Click **Load Example — Koala genome** to download and explore a real pre-curation assembly (109 MB)
 - Click **Open** to load a `.pretext` file from your computer
 - Drag and drop a `.pretext` file onto the window
