@@ -29,6 +29,8 @@ export interface AutoCutParams {
   windowSize: number;
   /** Minimum fragment size (in pixels) after cutting. */
   minFragmentSize: number;
+  /** Off-diagonal signal ratio above which a candidate is rejected as centromeric. */
+  offDiagonalThreshold: number;
 }
 
 export interface AutoCutResult {
@@ -42,6 +44,7 @@ const DEFAULT_PARAMS: AutoCutParams = {
   cutThreshold: 0.30,
   windowSize: 8,
   minFragmentSize: 16,
+  offDiagonalThreshold: 0.3,
 };
 
 // ---------------------------------------------------------------------------
@@ -98,6 +101,79 @@ export function computeDiagonalDensity(
   }
 
   return density;
+}
+
+// ---------------------------------------------------------------------------
+// Off-diagonal verification
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the ratio of off-diagonal signal at a breakpoint versus
+ * the median off-diagonal signal at reference split positions within
+ * the same contig.
+ *
+ * Centromeres dip on the diagonal but maintain strong off-diagonal signal
+ * between chromosome arms (ratio ≈ 1).  Real misassemblies dip on BOTH
+ * diagonal and off-diagonal because the two misjoined pieces lack
+ * inter-contacts (ratio ≈ 0).
+ *
+ * @returns Ratio of BP off-diagonal mean to median reference off-diagonal.
+ *          High (≥ threshold) → centromere; Low → real misassembly.
+ */
+function computeOffDiagonalScore(
+  contactMap: Float32Array,
+  size: number,
+  overviewStart: number,
+  overviewEnd: number,
+  breakpointOverviewPos: number,
+  _windowSize: number,
+): number {
+  const overviewLength = overviewEnd - overviewStart;
+  if (overviewLength < 6) return 1; // too small to judge
+
+  // Compute mean off-diagonal signal for a virtual split at `splitPos`
+  // (absolute pixel coordinate) within [overviewStart, overviewEnd).
+  function offDiagMean(splitPos: number): number {
+    const leftLen = splitPos - overviewStart;
+    const rightLen = overviewEnd - splitPos;
+    if (leftLen < 2 || rightLen < 2) return 0;
+    const maxSamples = 100;
+    const leftStride = Math.max(1, Math.floor(leftLen / maxSamples));
+    const rightStride = Math.max(1, Math.floor(rightLen / maxSamples));
+    let sum = 0;
+    let count = 0;
+    for (let r = overviewStart; r < splitPos; r += leftStride) {
+      for (let c = splitPos; c < overviewEnd; c += rightStride) {
+        sum += contactMap[c * size + r] + contactMap[r * size + c];
+        count += 2;
+      }
+    }
+    return count > 0 ? sum / count : 0;
+  }
+
+  // Off-diagonal at the breakpoint
+  const bpAbsolute = overviewStart + breakpointOverviewPos;
+  const bpOffDiag = offDiagMean(bpAbsolute);
+
+  // Compute off-diagonal at reference positions (20%–80% of contig, step 10%)
+  // excluding positions too close to the breakpoint.
+  const refValues: number[] = [];
+  for (let frac = 0.2; frac <= 0.8; frac += 0.1) {
+    const pos = overviewStart + Math.floor(overviewLength * frac);
+    if (Math.abs(pos - bpAbsolute) < overviewLength * 0.1) continue;
+    const val = offDiagMean(pos);
+    if (val > 0) refValues.push(val);
+  }
+
+  if (refValues.length === 0) return 1; // no reference — don't filter
+
+  // Use median reference value
+  refValues.sort((a, b) => a - b);
+  const medianRef = refValues[Math.floor(refValues.length / 2)];
+
+  if (medianRef <= 0) return 1;
+
+  return bpOffDiag / medianRef;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,9 +380,17 @@ export function autoCut(
     const bps = detectBreakpoints(density, p.windowSize, p.cutThreshold, p.minFragmentSize);
 
     if (bps.length > 0) {
+      // Verify candidates with off-diagonal signal — reject centromeric dips
+      const verifiedBps = bps.filter(bp => {
+        const offDiagScore = computeOffDiagonalScore(
+          contactMap, size, overviewStart, overviewEnd, bp.offset, p.windowSize,
+        );
+        return offDiagScore < p.offDiagonalThreshold;
+      });
+
       // Map overview-pixel offsets back to texture-space offsets
       const scale = contigPixelLength / overviewLength;
-      const textureBreakpoints = bps.map(bp => ({
+      const textureBreakpoints = verifiedBps.map(bp => ({
         offset: Math.round(bp.offset * scale),
         confidence: bp.confidence,
       })).filter(bp => bp.offset > 0 && bp.offset < contigPixelLength && bp.confidence > 0.5);
