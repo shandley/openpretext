@@ -72,7 +72,7 @@
       "instruction": "Notice the faint grid lines on the map? These mark the boundaries between contigs (assembled DNA fragments).\n\nClick the grid toggle button to turn them on and off. See how it changes your view of the assembly structure.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#toggle-grid"
+        "selector": "#btn-grid"
       },
       "expectedAction": {
         "type": "observe"

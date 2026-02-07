@@ -82,8 +82,7 @@ jobs:
         run: |
           mkdir -p bench/data/regression
           gh release download v0.2.0-data \
-            --pattern 'Thalassoma_bifasciatum*.pretext' \
-            --pattern 'Branchiostoma_lanceolatum_hap2*.pretext' \
+            --pattern '*.pretext' \
             --dir bench/data/regression
         env:
           GH_TOKEN: ${{ github.token }}

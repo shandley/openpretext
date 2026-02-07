@@ -15,7 +15,8 @@
     "bench:acquire": "npx tsx bench/acquire/cli.ts",
     "bench:run": "npx tsx bench/cli.ts run",
     "bench:sweep": "npx tsx bench/cli.ts sweep",
-    "bench:regression": "npx tsx bench/cli.ts regression"
+    "bench:regression": "npx tsx bench/cli.ts regression",
+    "bench:extract-ground-truth": "npx tsx bench/extract-lesson-ground-truth.ts"
   },
   "dependencies": {
     "pako": "^2.1.0"

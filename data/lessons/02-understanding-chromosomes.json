@@ -70,7 +70,7 @@
       "instruction": "The color scheme affects how you perceive contact frequencies. Try switching between different color maps using the dropdown menu.\n\nEach color map emphasizes different aspects of the data. Find one that makes the chromosome boundaries most clear to you.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#color-map-select"
+        "selector": "#colormap-select"
       },
       "expectedAction": {
         "type": "observe"

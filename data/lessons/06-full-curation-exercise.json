@@ -30,7 +30,7 @@
       "instruction": "OpenPretext provides automated tools to help with curation. The auto-cut tool analyzes the contact map and automatically cuts contigs at likely misassembly points.\n\nClick the 'Auto-Cut' button to run the automated detection. Review the cuts it makes—not all will be correct, but it's a good starting point.\n\nRemember: you can undo any operation, so don't hesitate to try it.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#btn-auto-cut"
+        "selector": "#btn-mode-edit"
       },
       "expectedAction": {
         "type": "auto-cut"
@@ -43,7 +43,7 @@
       "instruction": "After cutting, you need to reorder contigs to maximize diagonal signal. The auto-sort tool uses a traveling salesman algorithm to find an optimal ordering.\n\nClick the 'Auto-Sort' button to run the automated reordering. This can take a few seconds for large genomes.\n\nWatch the contact map transform as contigs are rearranged. Chromosome blocks should become more distinct and the diagonal should strengthen.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#btn-auto-sort"
+        "selector": "#btn-mode-edit"
       },
       "expectedAction": {
         "type": "auto-sort"

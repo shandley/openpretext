@@ -12,7 +12,7 @@
       "instruction": "To modify the assembly, you need to switch from View mode to Edit mode. Click the \"Edit\" mode button in the toolbar.\n\nIn Edit mode, you can:\n• Cut contigs at misassembly points\n• Join adjacent contigs\n• Invert contig orientation\n• Reorder contigs\n\nLet's start with the basics: cutting and joining.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#mode-edit"
+        "selector": "#btn-mode-edit"
       },
       "expectedAction": {
         "type": "mode-change"
@@ -35,7 +35,7 @@
       "instruction": "Now try it yourself:\n\n1. Click on a contig in the map to select it\n2. Click the 'Cut' button in the toolbar\n3. Confirm the operation\n\nWatch how the contig splits and the map redraws. The sidebar will show two new contigs where there was one before.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#btn-cut"
+        "selector": "#btn-mode-edit"
       },
       "expectedAction": {
         "type": "cut"
@@ -58,7 +58,7 @@
       "instruction": "Try joining two contigs:\n\n1. Click on one contig to select it\n2. Hold Shift and click an adjacent contig (both should be highlighted)\n3. Click the 'Join' button in the toolbar\n4. Confirm the operation\n\nWatch the two contigs merge into one. The contact map will update to show the new unified sequence.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#btn-join"
+        "selector": "#btn-mode-edit"
       },
       "expectedAction": {
         "type": "join"

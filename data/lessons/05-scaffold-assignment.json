@@ -12,7 +12,7 @@
       "instruction": "To work with scaffolds, switch to Scaffold mode using the mode selector in the toolbar.\n\nIn Scaffold mode, you can:\n• Create new scaffolds (chromosomes)\n• Assign contigs to scaffolds\n• Rename and color-code scaffolds\n• Reorder contigs within scaffolds\n\nScaffold mode also displays colored bands on the contact map, helping you visualize which contigs belong to which chromosome.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#mode-scaffold"
+        "selector": "#btn-mode-scaffold"
       },
       "expectedAction": {
         "type": "mode-change"
