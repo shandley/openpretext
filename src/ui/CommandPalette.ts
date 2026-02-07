@@ -7,7 +7,7 @@
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { SelectionManager } from '../curation/SelectionManager';
-import { loadDemoData } from './FileLoading';
+import { loadExampleDataset, loadDemoData } from './FileLoading';
 import { performUndo, performRedo, invertSelectedContigs, cutAtCursorPosition, joinSelectedContigs, toggleContigExclusion } from './CurationActions';
 import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession } from './ExportSession';
 import { cycleColorMap } from './ColorMapControls';
@@ -38,7 +38,8 @@ export function toggleCommandPalette(ctx: AppContext): void {
 function getCommands(ctx: AppContext) {
   return [
     { name: 'Open file', shortcut: '\u2318O', action: () => document.getElementById('file-input')?.click() },
-    { name: 'Load demo data', shortcut: '', action: () => loadDemoData(ctx) },
+    { name: 'Load example dataset (Koala)', shortcut: '', action: () => loadExampleDataset(ctx) },
+    { name: 'Load synthetic demo', shortcut: '', action: () => loadDemoData(ctx) },
     { name: 'Navigate mode', shortcut: 'Esc', action: () => ctx.setMode('navigate') },
     { name: 'Edit mode', shortcut: 'E', action: () => ctx.setMode('edit') },
     { name: 'Scaffold mode', shortcut: 'S', action: () => ctx.setMode('scaffold') },

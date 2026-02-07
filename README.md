@@ -2,6 +2,8 @@
 
 A modern, web-based Hi-C contact map viewer and genome assembly curation tool.
 
+**[Try it now at shandley.github.io/openpretext](https://shandley.github.io/openpretext/)** — no installation required. Click **Load Example** to explore a real koala genome assembly.
+
 OpenPretext is designed as a browser-based alternative to
 [PretextView](https://github.com/sanger-tol/PretextView), the Wellcome Sanger
 Institute's desktop application used by genome assembly teams worldwide
@@ -87,8 +89,8 @@ npm run dev
 ```
 
 Open http://localhost:5173 in a browser, then either:
+- Click **Load Example — Koala genome** to download and explore a real pre-curation assembly (109 MB)
 - Click **Open** to load a `.pretext` file from your computer
-- Click **Load Demo Data** to explore the interface with synthetic data
 - Drag and drop a `.pretext` file onto the window
 
 ### Obtaining Test Data
@@ -210,7 +212,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev        # Start development server with hot reload
-npm test           # Run the test suite (740 tests)
+npm test           # Run the test suite (1,395 tests)
 npm run build      # Production build to dist/
 npm run preview    # Preview the production build
 ```
@@ -264,7 +266,7 @@ src/
   io/
     SessionManager.ts        Session save/load (JSON persistence)
 tests/
-  unit/                      740 unit tests across 21 test files
+  unit/                      1,395 unit tests across 45 test files
   e2e/                       E2E tests (Playwright + Chromium)
 ```
 

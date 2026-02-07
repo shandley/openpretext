@@ -19,6 +19,7 @@ vi.mock('../../src/curation/SelectionManager', () => ({
 }));
 
 vi.mock('../../src/ui/FileLoading', () => ({
+  loadExampleDataset: vi.fn(),
   loadDemoData: vi.fn(),
 }));
 
@@ -431,7 +432,8 @@ describe('CommandPalette', () => {
 
       const expectedCommands = [
         'Open file',
-        'Load demo data',
+        'Load example dataset (Koala)',
+        'Load synthetic demo',
         'Navigate mode',
         'Edit mode',
         'Scaffold mode',

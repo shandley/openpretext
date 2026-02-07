@@ -53,7 +53,7 @@ export { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoi
 export { exportAGP, takeScreenshot, saveSession, loadSession, exportBEDFile, exportFASTAFile, loadReferenceFasta, setupFastaUpload, loadBedGraphTrack, setupTrackUpload } from './ExportSession';
 
 // FileLoading
-export { loadPretextFile, loadDemoData, setupFileDrop, setupFileInput } from './FileLoading';
+export { loadPretextFile, loadExampleDataset, loadDemoData, setupFileDrop, setupFileInput } from './FileLoading';
 
 // RenderLoop
 export { startRenderLoop, renderCutIndicator, onCameraChange, updateDetailTiles } from './RenderLoop';

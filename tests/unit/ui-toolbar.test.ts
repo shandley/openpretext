@@ -26,7 +26,7 @@ vi.mock('../../src/ui/ExportSession', () => ({
 }));
 
 vi.mock('../../src/ui/FileLoading', () => ({
-  loadDemoData: vi.fn(),
+  loadExampleDataset: vi.fn(),
 }));
 
 vi.mock('../../src/ui/CurationActions', () => ({
@@ -38,7 +38,7 @@ import { setupToolbar } from '../../src/ui/Toolbar';
 import { state } from '../../src/core/State';
 import { events } from '../../src/core/EventBus';
 import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession } from '../../src/ui/ExportSession';
-import { loadDemoData } from '../../src/ui/FileLoading';
+import { loadExampleDataset } from '../../src/ui/FileLoading';
 import { performUndo, performRedo } from '../../src/ui/CurationActions';
 
 import type { AppContext } from '../../src/ui/AppContext';
@@ -127,7 +127,7 @@ describe('Toolbar', () => {
     elements = {
       'btn-open': createMockElement(),
       'btn-welcome-open': createMockElement(),
-      'btn-demo': createMockElement(),
+      'btn-example': createMockElement(),
       'btn-save-agp': createMockElement(),
       'btn-save-bed': createMockElement(),
       'btn-save-fasta': createMockElement(),
@@ -190,7 +190,7 @@ describe('Toolbar', () => {
       setupToolbar(ctx);
 
       const buttonsWithClick = [
-        'btn-open', 'btn-welcome-open', 'btn-demo',
+        'btn-open', 'btn-welcome-open', 'btn-example',
         'btn-save-agp', 'btn-save-bed', 'btn-save-fasta',
         'btn-load-fasta', 'btn-load-track',
         'btn-screenshot', 'btn-save-session', 'btn-load-session',
@@ -283,14 +283,14 @@ describe('Toolbar', () => {
   });
 
   // -------------------------------------------------------------------------
-  // btn-demo -> calls loadDemoData
+  // btn-example -> calls loadExampleDataset
   // -------------------------------------------------------------------------
-  describe('btn-demo', () => {
-    it('should call loadDemoData(ctx) when btn-demo is clicked', () => {
+  describe('btn-example', () => {
+    it('should call loadExampleDataset(ctx) when btn-example is clicked', () => {
       setupToolbar(ctx);
-      const handler = getHandler('btn-demo');
+      const handler = getHandler('btn-example');
       handler();
-      expect(loadDemoData).toHaveBeenCalledWith(ctx);
+      expect(loadExampleDataset).toHaveBeenCalledWith(ctx);
     });
   });
 

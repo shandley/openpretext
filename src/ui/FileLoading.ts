@@ -12,6 +12,98 @@ import { TileManager } from '../renderer/TileManager';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 import { loadSession } from './ExportSession';
 
+async function loadPretextFromBuffer(
+  ctx: AppContext,
+  buffer: ArrayBuffer,
+  filename: string,
+): Promise<void> {
+  const statusEl = document.getElementById('status-file')!;
+
+  if (!isPretextFile(buffer)) {
+    statusEl.textContent = 'Invalid file format';
+    ctx.showToast('Invalid file — not a .pretext file');
+    return;
+  }
+
+  updateLoading('Parsing header and metadata...', 20);
+  const parsed = await parsePretextFile(buffer, { coarsestOnly: true });
+  const h = parsed.header;
+  const mapSize = h.numberOfPixels1D;
+
+  updateLoading('Assembling contact map...', 50);
+
+  const N = h.numberOfTextures1D;
+  const coarsestMip = h.mipMapLevels - 1;
+  const coarsestRes = h.textureResolution >> coarsestMip;
+  const overviewSize = N * coarsestRes;
+  const contactMap = new Float32Array(overviewSize * overviewSize);
+  const totalTiles = (N * (N + 1)) / 2;
+  let tilesDone = 0;
+
+  for (let tx = 0; tx < N; tx++) {
+    for (let ty = tx; ty < N; ty++) {
+      const linIdx = tileLinearIndex(tx, ty, N);
+      const tileData = parsed.tilesDecoded[linIdx]?.[coarsestMip];
+      if (!tileData) { tilesDone++; continue; }
+
+      for (let py = 0; py < coarsestRes; py++) {
+        for (let px = 0; px < coarsestRes; px++) {
+          const val = tileData[py * coarsestRes + px];
+          const gx = tx * coarsestRes + px;
+          const gy = ty * coarsestRes + py;
+          if (gx < overviewSize && gy < overviewSize) {
+            contactMap[gy * overviewSize + gx] = val;
+            contactMap[gx * overviewSize + gy] = val;
+          }
+        }
+      }
+
+      tilesDone++;
+      if (tilesDone % Math.max(1, Math.floor(totalTiles / 20)) === 0) {
+        updateLoading(
+          `Assembling tiles... (${tilesDone}/${totalTiles})`,
+          50 + Math.round((tilesDone / totalTiles) * 40),
+        );
+      }
+    }
+  }
+
+  updateLoading('Uploading to GPU...', 92);
+  ctx.renderer.uploadContactMap(contactMap, overviewSize);
+  ctx.minimap.updateThumbnail(contactMap, overviewSize);
+  ctx.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
+
+  // Dispose previous tile manager and cancel in-flight decodes
+  if (ctx.cancelTileDecode) { ctx.cancelTileDecode(); ctx.cancelTileDecode = null; }
+  if (ctx.tileManager) { ctx.tileManager.dispose(); }
+  ctx.tileManager = new TileManager(ctx.renderer.getGL());
+
+  updateLoading('Finalizing...', 98);
+  state.update({
+    map: {
+      filename,
+      textureSize: mapSize,
+      numMipMaps: h.mipMapLevels,
+      tileResolution: h.textureResolution,
+      tilesPerDimension: h.numberOfTextures1D,
+      contigs: parsed.contigs.map((c, i) => ({
+        name: c.name, originalIndex: i, length: c.length,
+        pixelStart: c.pixelStart, pixelEnd: c.pixelEnd,
+        inverted: false, scaffoldId: null,
+      })),
+      contactMap,
+      rawTiles: parsed.tiles,
+      parsedHeader: h,
+      extensions: new Map(parsed.extensions.map(e => [e.name, e.data])),
+    },
+    contigOrder: parsed.contigs.map((_, i) => i),
+  });
+  statusEl.textContent = filename;
+  document.getElementById('status-contigs')!.textContent = `${parsed.contigs.length} contigs`;
+  events.emit('file:loaded', { filename, contigs: parsed.contigs.length, textureSize: mapSize });
+  ctx.showToast(`Loaded ${filename} — ${parsed.contigs.length} contigs, ${mapSize}px`);
+}
+
 export async function loadPretextFile(ctx: AppContext, file: File): Promise<void> {
   const statusEl = document.getElementById('status-file')!;
   statusEl.textContent = `Loading ${file.name}...`;
@@ -20,93 +112,59 @@ export async function loadPretextFile(ctx: AppContext, file: File): Promise<void
   try {
     updateLoading('Reading file into memory...', 10);
     const buffer = await file.arrayBuffer();
-
-    if (isPretextFile(buffer)) {
-      updateLoading('Parsing header and metadata...', 20);
-      const parsed = await parsePretextFile(buffer, { coarsestOnly: true });
-      const h = parsed.header;
-      const mapSize = h.numberOfPixels1D;
-
-      updateLoading('Assembling contact map...', 50);
-
-      const N = h.numberOfTextures1D;
-      const coarsestMip = h.mipMapLevels - 1;
-      const coarsestRes = h.textureResolution >> coarsestMip;
-      const overviewSize = N * coarsestRes;
-      const contactMap = new Float32Array(overviewSize * overviewSize);
-      const totalTiles = (N * (N + 1)) / 2;
-      let tilesDone = 0;
-
-      for (let tx = 0; tx < N; tx++) {
-        for (let ty = tx; ty < N; ty++) {
-          const linIdx = tileLinearIndex(tx, ty, N);
-          const tileData = parsed.tilesDecoded[linIdx]?.[coarsestMip];
-          if (!tileData) { tilesDone++; continue; }
-
-          for (let py = 0; py < coarsestRes; py++) {
-            for (let px = 0; px < coarsestRes; px++) {
-              const val = tileData[py * coarsestRes + px];
-              const gx = tx * coarsestRes + px;
-              const gy = ty * coarsestRes + py;
-              if (gx < overviewSize && gy < overviewSize) {
-                contactMap[gy * overviewSize + gx] = val;
-                contactMap[gx * overviewSize + gy] = val;
-              }
-            }
-          }
-
-          tilesDone++;
-          if (tilesDone % Math.max(1, Math.floor(totalTiles / 20)) === 0) {
-            updateLoading(
-              `Assembling tiles... (${tilesDone}/${totalTiles})`,
-              50 + Math.round((tilesDone / totalTiles) * 40),
-            );
-          }
-        }
-      }
-
-      updateLoading('Uploading to GPU...', 92);
-      ctx.renderer.uploadContactMap(contactMap, overviewSize);
-      ctx.minimap.updateThumbnail(contactMap, overviewSize);
-      ctx.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
-
-      // Dispose previous tile manager and cancel in-flight decodes
-      if (ctx.cancelTileDecode) { ctx.cancelTileDecode(); ctx.cancelTileDecode = null; }
-      if (ctx.tileManager) { ctx.tileManager.dispose(); }
-      ctx.tileManager = new TileManager(ctx.renderer.getGL());
-
-      updateLoading('Finalizing...', 98);
-      state.update({
-        map: {
-          filename: file.name,
-          textureSize: mapSize,
-          numMipMaps: h.mipMapLevels,
-          tileResolution: h.textureResolution,
-          tilesPerDimension: h.numberOfTextures1D,
-          contigs: parsed.contigs.map((c, i) => ({
-            name: c.name, originalIndex: i, length: c.length,
-            pixelStart: c.pixelStart, pixelEnd: c.pixelEnd,
-            inverted: false, scaffoldId: null,
-          })),
-          contactMap,
-          rawTiles: parsed.tiles,
-          parsedHeader: h,
-          extensions: new Map(parsed.extensions.map(e => [e.name, e.data])),
-        },
-        contigOrder: parsed.contigs.map((_, i) => i),
-      });
-      statusEl.textContent = file.name;
-      document.getElementById('status-contigs')!.textContent = `${parsed.contigs.length} contigs`;
-      events.emit('file:loaded', { filename: file.name, contigs: parsed.contigs.length, textureSize: mapSize });
-      ctx.showToast(`Loaded ${file.name} — ${parsed.contigs.length} contigs, ${mapSize}px`);
-    } else {
-      statusEl.textContent = 'Invalid file format';
-      ctx.showToast('Invalid file — not a .pretext file');
-    }
+    await loadPretextFromBuffer(ctx, buffer, file.name);
   } catch (err) {
     console.error('Error loading file:', err);
-    statusEl.textContent = 'Error loading file';
+    document.getElementById('status-file')!.textContent = 'Error loading file';
     ctx.showToast(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+
+  hideLoading();
+  document.getElementById('welcome')!.style.display = 'none';
+}
+
+export async function loadExampleDataset(ctx: AppContext): Promise<void> {
+  const EXAMPLE_URL = 'https://github.com/shandley/openpretext/releases/download/v0.1.0/Phascolarctos_cinereus.pretext';
+  const EXAMPLE_FILENAME = 'Phascolarctos_cinereus.pretext';
+
+  showLoading('Loading example dataset', 'Downloading koala genome...');
+
+  try {
+    const response = await fetch(EXAMPLE_URL);
+    if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+
+    const contentLength = Number(response.headers.get('content-length')) || 0;
+    const reader = response.body!.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      if (contentLength > 0) {
+        const pct = Math.round((received / contentLength) * 60); // 0-60% for download
+        const mb = (received / 1048576).toFixed(0);
+        const totalMb = (contentLength / 1048576).toFixed(0);
+        updateLoading(`Downloading... ${mb}/${totalMb} MB`, pct);
+      }
+    }
+
+    // Concatenate chunks into single ArrayBuffer
+    const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+    const combined = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    await loadPretextFromBuffer(ctx, combined.buffer, EXAMPLE_FILENAME);
+  } catch (err) {
+    console.error('Error loading example dataset:', err);
+    document.getElementById('status-file')!.textContent = 'Error loading example';
+    ctx.showToast(`Error: ${err instanceof Error ? err.message : 'Failed to download example dataset'}`);
   }
 
   hideLoading();

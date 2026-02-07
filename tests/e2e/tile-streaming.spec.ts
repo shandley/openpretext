@@ -158,10 +158,10 @@ test.describe('Tile streaming with real .pretext file', () => {
     await zoomIn(page, 10);
     await page.waitForTimeout(1000);
 
-    // Load demo data — should clean up tile manager
-    await page.evaluate(() => {
-      document.getElementById('btn-demo')?.click();
-    });
+    // Load synthetic demo data via command palette — should clean up tile manager
+    await page.keyboard.press('Meta+k');
+    await page.locator('#command-input').fill('Load synthetic demo');
+    await page.keyboard.press('Enter');
     await page.waitForTimeout(500);
 
     // Verify demo data loaded
