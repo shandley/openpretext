@@ -47,16 +47,27 @@ async function fileExists(filePath: string, expectedSize?: number): Promise<bool
 
 /**
  * Download a single file from S3.
+ * If the S3 key ends with `.gz`, the file is downloaded to a temporary `.gz`
+ * path and then decompressed with `gunzip`, producing the final `.pretext` file.
  */
 async function downloadFile(bucket: string, s3Key: string, localDest: string): Promise<void> {
   await mkdir(dirname(localDest), { recursive: true });
+
+  const isGzipped = s3Key.endsWith('.gz');
+  const downloadDest = isGzipped ? localDest + '.gz' : localDest;
 
   console.log(`  Downloading s3://${bucket}/${s3Key}...`);
   await execFileAsync('aws', [
     's3', 'cp', '--no-sign-request',
     `s3://${bucket}/${s3Key}`,
-    localDest,
+    downloadDest,
   ], { maxBuffer: 1024 * 1024, timeout: 600_000 });
+
+  if (isGzipped) {
+    console.log(`  Decompressing ${downloadDest}...`);
+    await execFileAsync('gunzip', ['-f', downloadDest], { timeout: 600_000 });
+  }
+
   console.log(`  -> ${localDest}`);
 }
 
