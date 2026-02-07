@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": [
+    "./**/*.ts",
+    "../src/core/State.ts",
+    "../src/curation/AutoCut.ts",
+    "../src/curation/AutoSort.ts",
+    "../src/formats/PretextParser.ts",
+    "../src/formats/SyntheticData.ts"
+  ]
+}

@@ -5,3 +5,4 @@ dist/
 test-data/
 test-results/
 *.png
+bench/data/
