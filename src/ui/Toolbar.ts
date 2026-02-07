@@ -8,7 +8,7 @@ import { state } from '../core/State';
 import { events } from '../core/EventBus';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession } from './ExportSession';
-import { loadExampleDataset } from './FileLoading';
+import { loadExampleDataset, loadDemoData } from './FileLoading';
 import { performUndo, performRedo } from './CurationActions';
 
 export function setupToolbar(ctx: AppContext): void {
@@ -20,6 +20,9 @@ export function setupToolbar(ctx: AppContext): void {
   });
   document.getElementById('btn-example')?.addEventListener('click', () => {
     loadExampleDataset(ctx);
+  });
+  document.getElementById('btn-demo')?.addEventListener('click', () => {
+    loadDemoData(ctx);
   });
 
   document.getElementById('btn-save-agp')?.addEventListener('click', () => {

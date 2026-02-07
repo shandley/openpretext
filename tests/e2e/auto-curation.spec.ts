@@ -12,14 +12,11 @@
 
 import { test, expect } from '@playwright/test';
 
-/** Load synthetic demo data via command palette and wait for the app to be ready. */
+/** Load synthetic demo data and wait for the app to be ready. */
 async function loadDemo(page: import('@playwright/test').Page) {
   await page.goto('/');
   await expect(page.locator('#welcome')).toBeVisible();
-  await page.keyboard.press('ControlOrMeta+k');
-  await expect(page.locator('#command-palette')).toHaveClass(/visible/);
-  await page.locator('#command-input').fill('Load synthetic demo');
-  await page.keyboard.press('Enter');
+  await page.locator('#btn-demo').click({ force: true });
   await expect(page.locator('#welcome')).toBeHidden({ timeout: 5_000 });
   await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
 }

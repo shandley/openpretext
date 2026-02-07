@@ -27,6 +27,7 @@ vi.mock('../../src/ui/ExportSession', () => ({
 
 vi.mock('../../src/ui/FileLoading', () => ({
   loadExampleDataset: vi.fn(),
+  loadDemoData: vi.fn(),
 }));
 
 vi.mock('../../src/ui/CurationActions', () => ({
@@ -38,7 +39,7 @@ import { setupToolbar } from '../../src/ui/Toolbar';
 import { state } from '../../src/core/State';
 import { events } from '../../src/core/EventBus';
 import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession } from '../../src/ui/ExportSession';
-import { loadExampleDataset } from '../../src/ui/FileLoading';
+import { loadExampleDataset, loadDemoData } from '../../src/ui/FileLoading';
 import { performUndo, performRedo } from '../../src/ui/CurationActions';
 
 import type { AppContext } from '../../src/ui/AppContext';
@@ -128,6 +129,7 @@ describe('Toolbar', () => {
       'btn-open': createMockElement(),
       'btn-welcome-open': createMockElement(),
       'btn-example': createMockElement(),
+      'btn-demo': createMockElement(),
       'btn-save-agp': createMockElement(),
       'btn-save-bed': createMockElement(),
       'btn-save-fasta': createMockElement(),
@@ -190,7 +192,7 @@ describe('Toolbar', () => {
       setupToolbar(ctx);
 
       const buttonsWithClick = [
-        'btn-open', 'btn-welcome-open', 'btn-example',
+        'btn-open', 'btn-welcome-open', 'btn-example', 'btn-demo',
         'btn-save-agp', 'btn-save-bed', 'btn-save-fasta',
         'btn-load-fasta', 'btn-load-track',
         'btn-screenshot', 'btn-save-session', 'btn-load-session',
@@ -291,6 +293,18 @@ describe('Toolbar', () => {
       const handler = getHandler('btn-example');
       handler();
       expect(loadExampleDataset).toHaveBeenCalledWith(ctx);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // btn-demo -> calls loadDemoData (hidden, for E2E tests)
+  // -------------------------------------------------------------------------
+  describe('btn-demo', () => {
+    it('should call loadDemoData(ctx) when btn-demo is clicked', () => {
+      setupToolbar(ctx);
+      const handler = getHandler('btn-demo');
+      handler();
+      expect(loadDemoData).toHaveBeenCalledWith(ctx);
     });
   });
 
