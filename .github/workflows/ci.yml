@@ -44,6 +44,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Download example dataset into dist
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        run: |
+          mkdir -p dist/data
+          gh release download v0.1.0 --pattern 'Phascolarctos_cinereus.pretext' --dir dist/data
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Upload artifact
         if: github.ref == 'refs/heads/master' && github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
