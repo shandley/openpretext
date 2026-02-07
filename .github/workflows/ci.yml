@@ -52,6 +52,8 @@ jobs:
             --pattern '*.pretext' \
             --dir dist/data
           cp data/specimen-catalog.json dist/data/
+          cp data/pattern-gallery.json dist/data/
+          cp -r data/lessons dist/data/
         env:
           GH_TOKEN: ${{ github.token }}
 

@@ -80,6 +80,7 @@
   ],
   "assessment": {
     "type": "compare-ordering",
+    "_note": "groundTruthOrder is a placeholder; update with actual 134-element finch ordering from curated .pretext once available",
     "groundTruthOrder": [0, 1, 2, 3, 4],
     "scoring": {
       "passingTau": 0.85

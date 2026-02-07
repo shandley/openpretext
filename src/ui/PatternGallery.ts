@@ -56,16 +56,20 @@ async function loadAndRender(ctx: AppContext, modal: HTMLElement): Promise<void>
   }
 }
 
+function esc(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderPatterns(ctx: AppContext, modal: HTMLElement, patterns: PatternEntry[]): void {
   const content = modal.querySelector('.pattern-gallery-content');
   if (!content) return;
 
   content.innerHTML = patterns.map(p => `
-    <div class="pattern-card" data-pattern-id="${p.id}">
-      <div class="pattern-card-title">${p.title}</div>
-      <div class="pattern-card-desc">${p.description}</div>
-      <div class="pattern-card-look"><strong>Look for:</strong> ${p.whatToLookFor}</div>
-      <div class="pattern-card-specimen">Specimen: ${p.specimenId}</div>
+    <div class="pattern-card" data-pattern-id="${esc(p.id)}">
+      <div class="pattern-card-title">${esc(p.title)}</div>
+      <div class="pattern-card-desc">${esc(p.description)}</div>
+      <div class="pattern-card-look"><strong>Look for:</strong> ${esc(p.whatToLookFor)}</div>
+      <div class="pattern-card-specimen">Specimen: ${esc(p.specimenId)}</div>
     </div>
   `).join('');
 

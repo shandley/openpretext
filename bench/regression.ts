@@ -6,7 +6,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { existsSync, readdirSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runBenchmark } from './runner';
 
@@ -19,6 +19,14 @@ interface BaselineEntry {
 type Baselines = Record<string, BaselineEntry>;
 
 export async function runRegression(dataDir: string): Promise<boolean> {
+  const resolvedDir = resolve(dataDir);
+  try {
+    readdirSync(resolvedDir);
+  } catch {
+    console.error(`Data directory not found: ${resolvedDir}`);
+    return false;
+  }
+
   const baselinesPath = resolve(join(import.meta.dirname ?? '.', 'baselines.json'));
   const baselines: Baselines = JSON.parse(await readFile(baselinesPath, 'utf-8'));
 
@@ -29,7 +37,7 @@ export async function runRegression(dataDir: string): Promise<boolean> {
     const baseline = baselines[species];
 
     // Find pre and post curation files in data dir
-    const files = readdirSync(dataDir).filter(f => f.includes(species) && f.endsWith('.pretext'));
+    const files = readdirSync(resolvedDir).filter(f => f.includes(species) && f.endsWith('.pretext'));
     const preFile = files.find(f => !f.includes('_post'));
     const postFile = files.find(f => f.includes('_post'));
 
@@ -41,8 +49,8 @@ export async function runRegression(dataDir: string): Promise<boolean> {
     }
 
     console.log(`\nRegression test: ${species}`);
-    const prePath = join(dataDir, preFile);
-    const postPath = join(dataDir, postFile);
+    const prePath = join(resolvedDir, preFile);
+    const postPath = join(resolvedDir, postFile);
 
     const result = await runBenchmark(prePath, postPath, species);
 

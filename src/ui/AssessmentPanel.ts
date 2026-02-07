@@ -27,8 +27,18 @@ export function setupAssessmentPanel(ctx: AppContext, tutorialManager: TutorialM
 
     const currentOrder = state.get().contigOrder;
     const groundTruth = lesson.assessment.groundTruthOrder;
+
+    if (groundTruth.length < 2 || groundTruth.length < currentOrder.length * 0.5) {
+      scoreEl.textContent = 'Assessment not available (ground truth data incomplete)';
+      barFill.style.width = '0%';
+      feedbackEl.textContent = 'The ground truth ordering for this lesson has not been configured yet.';
+      legendEl.innerHTML = '';
+      panel.classList.add('visible');
+      return;
+    }
+
     const tau = kendallTau(currentOrder, groundTruth);
-    const pct = Math.max(0, Math.min(100, ((tau + 1) / 2) * 100));
+    const pct = Math.max(0, Math.min(100, tau * 100));
 
     scoreEl.textContent = `Ordering accuracy: ${(pct).toFixed(1)}%`;
 

@@ -22,9 +22,13 @@ export class TutorialManager {
   private onAssessment: ((lesson: Lesson) => void) | null = null;
 
   constructor() {
-    this.completedLessons = new Set(
-      JSON.parse(localStorage.getItem('openpretext-completed-lessons') || '[]'),
-    );
+    let completed: string[] = [];
+    try {
+      completed = JSON.parse(localStorage.getItem('openpretext-completed-lessons') || '[]');
+    } catch {
+      // Corrupted localStorage — start fresh
+    }
+    this.completedLessons = new Set(completed);
   }
 
   setOnStepChange(cb: (step: LessonStep | null, progress: { current: number; total: number }) => void): void {
@@ -151,6 +155,8 @@ export class TutorialManager {
       'invert': 'curation:invert',
       'select-contig': 'contig:selected',
       'mode-change': 'mode:changed',
+      'auto-sort': 'curation:join',
+      'auto-cut': 'curation:cut',
     };
 
     const eventName = eventMap[actionType];

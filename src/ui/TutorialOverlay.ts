@@ -94,9 +94,16 @@ function removeHighlights(): void {
   });
 }
 
-function renderMarkdown(text: string): string {
-  // Minimal markdown: **bold**, *italic*, `code`
+function escapeHtml(text: string): string {
   return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderMarkdown(text: string): string {
+  return escapeHtml(text)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code>$1</code>')

@@ -68,12 +68,12 @@ export function chainPurity(
   predictedChains: ChainEntry[][],
   trueChromAssignments: number[],
 ): number {
-  if (predictedChains.length === 0) return 0;
+  const nonEmpty = predictedChains.filter(c => c.length > 0);
+  if (nonEmpty.length === 0) return 0;
 
   let totalPurity = 0;
 
-  for (const chain of predictedChains) {
-    if (chain.length === 0) continue;
+  for (const chain of nonEmpty) {
     const chromCounts = new Map<number, number>();
     for (const entry of chain) {
       const chrom = trueChromAssignments[entry.orderIndex] ?? -1;
@@ -83,7 +83,7 @@ export function chainPurity(
     totalPurity += maxCount / chain.length;
   }
 
-  return totalPurity / predictedChains.length;
+  return totalPurity / nonEmpty.length;
 }
 
 /**

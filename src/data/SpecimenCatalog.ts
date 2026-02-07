@@ -7,13 +7,15 @@
 
 export type CurationPattern =
   | 'clean-diagonal'
+  | 'chromosome-block'
   | 'microchromosomes'
   | 'inversions'
   | 'translocations'
   | 'sparse-signal'
   | 'haplotype-switch'
   | 'misassembly'
-  | 'unplaced-contigs';
+  | 'unplaced-contigs'
+  | 'compartments';
 
 export interface SpecimenEntry {
   id: string;
