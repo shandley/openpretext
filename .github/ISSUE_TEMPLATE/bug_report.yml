@@ -1,0 +1,67 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the sections below.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Load a .pretext file
+        2. Click '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the application is affected?
+      options:
+        - File loading / parsing
+        - Contact map rendering
+        - Curation (cut/join/invert/move)
+        - AutoSort / AutoCut
+        - Annotation tracks
+        - Export (AGP/BED/FASTA/session)
+        - UI (sidebar, toolbar, command palette)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, OS, and how you're running OpenPretext
+      placeholder: |
+        - Browser: Chrome 120
+        - OS: macOS 14
+        - URL: https://shandley.github.io/openpretext/ (or local dev)
+    validations:
+      required: false
+
+  - type: textarea
+    id: file-info
+    attributes:
+      label: File details
+      description: If relevant, describe the .pretext file (species, size, number of contigs)
+      placeholder: e.g., Koala genome, 109 MB, 1245 contigs
+    validations:
+      required: false
