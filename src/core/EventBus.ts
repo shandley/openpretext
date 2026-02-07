@@ -22,6 +22,9 @@ export interface AppEvents {
   'tracks:toggled': { track: string; visible: boolean };
   'colormap:changed': { name: string };
   'render:request': {};
+  'tutorial:started': { lessonId: string };
+  'tutorial:step-advanced': { lessonId: string; stepId: string };
+  'tutorial:completed': { lessonId: string; score?: number };
 }
 
 class EventBus {

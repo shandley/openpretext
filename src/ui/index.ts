@@ -53,7 +53,7 @@ export { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoi
 export { exportAGP, takeScreenshot, saveSession, loadSession, exportBEDFile, exportFASTAFile, loadReferenceFasta, setupFastaUpload, loadBedGraphTrack, setupTrackUpload } from './ExportSession';
 
 // FileLoading
-export { loadPretextFile, loadExampleDataset, loadDemoData, setupFileDrop, setupFileInput } from './FileLoading';
+export { loadPretextFile, loadExampleDataset, loadSpecimen, loadDemoData, setupFileDrop, setupFileInput } from './FileLoading';
 
 // RenderLoop
 export { startRenderLoop, renderCutIndicator, onCameraChange, updateDetailTiles } from './RenderLoop';
@@ -69,6 +69,21 @@ export { setupKeyboardShortcuts } from './KeyboardShortcuts';
 
 // Toolbar
 export { setupToolbar } from './Toolbar';
+
+// SpecimenPicker
+export { setupSpecimenPicker } from './SpecimenPicker';
+
+// TutorialOverlay
+export { setupTutorialOverlay } from './TutorialOverlay';
+
+// TutorialManager
+export { TutorialManager } from './TutorialManager';
+
+// AssessmentPanel
+export { setupAssessmentPanel } from './AssessmentPanel';
+
+// PatternGallery
+export { togglePatternGallery, setupPatternGallery } from './PatternGallery';
 
 // Boot
 export { boot } from './Boot';

@@ -16,6 +16,7 @@ import { writeResults, readResults } from './output/json-writer';
 import { formatTable, type TableFormat } from './output/table-formatter';
 import { loadManifest } from './acquire/manifest';
 import { computeAggregateStats } from './metrics/summary';
+import { runRegression } from './regression';
 import type { SpecimenResult } from './metrics/summary';
 
 async function runCommand(args: string[]) {
@@ -149,6 +150,28 @@ async function reportCommand(args: string[]) {
   console.log(formatTable(results, agg, format));
 }
 
+async function regressionCommand(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      'data-dir': { type: 'string', default: 'bench/data/regression' },
+    },
+  });
+
+  const dataDir = values['data-dir'] ?? 'bench/data/regression';
+  console.log('OpenPretext Regression Benchmark');
+  console.log(`Data directory: ${dataDir}\n`);
+
+  const passed = await runRegression(dataDir);
+
+  if (passed) {
+    console.log('\nAll regression checks passed.');
+  } else {
+    console.error('\nRegression checks FAILED.');
+    process.exit(1);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -164,13 +187,17 @@ async function main() {
     case 'report':
       await reportCommand(commandArgs);
       break;
+    case 'regression':
+      await regressionCommand(commandArgs);
+      break;
     default:
       console.log('OpenPretext Benchmark Harness');
       console.log('');
       console.log('Commands:');
-      console.log('  run    [--species X] [--output results.json]    Run benchmarks');
-      console.log('  sweep  [--sweep-config sweep.json]              Parameter sweep');
-      console.log('  report [--input results.json] [--format md]     Generate report');
+      console.log('  run        [--species X] [--output results.json]    Run benchmarks');
+      console.log('  sweep      [--sweep-config sweep.json]              Parameter sweep');
+      console.log('  report     [--input results.json] [--format md]     Generate report');
+      console.log('  regression [--data-dir bench/data/regression]       Regression tests');
       console.log('');
       console.log('Data acquisition:');
       console.log('  npx tsx bench/acquire/cli.ts --discover         Discover specimens');

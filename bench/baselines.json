@@ -1,0 +1,12 @@
+{
+  "Thalassoma_bifasciatum": {
+    "minKendallTau": 0.98,
+    "minF1": 1.0,
+    "minOrientationAccuracy": 0.95
+  },
+  "Branchiostoma_lanceolatum_hap2": {
+    "minKendallTau": 0.85,
+    "minF1": 1.0,
+    "minOrientationAccuracy": 0.90
+  }
+}

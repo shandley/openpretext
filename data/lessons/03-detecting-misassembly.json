@@ -1,0 +1,65 @@
+{
+  "id": "03-detecting-misassembly",
+  "title": "Detecting Misassembly Patterns",
+  "difficulty": "intermediate",
+  "estimatedMinutes": 15,
+  "specimenId": "finch",
+  "introduction": "Real-world genome assemblies often contain errors—regions where the assembler incorrectly joined DNA sequences. These misassemblies create distinctive patterns on Hi-C contact maps that you can learn to recognize.\n\nIn this lesson, you'll examine the finch genome and learn to identify common misassembly patterns: inversions (butterfly patterns), anti-diagonal signals, and translocations (off-diagonal blocks). Detecting these errors is the first step in manual curation.",
+  "steps": [
+    {
+      "id": "intro-misassembly",
+      "title": "What Misassemblies Look Like",
+      "instruction": "Misassemblies appear as disruptions to the expected contact pattern. While correct assemblies show strong signal along the diagonal, errors create characteristic \"artifacts\":\n\n• Inversions create butterfly or bow-tie patterns\n• Translocations appear as bright blocks off the diagonal\n• Anti-diagonal streaks indicate reversed sequences\n\nLet's examine the finch genome to find examples of each.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Look for regions where the pattern breaks or looks unusual compared to the clean diagonal blocks."
+    },
+    {
+      "id": "identify-inversions",
+      "title": "Spotting Inversions (Butterfly Patterns)",
+      "instruction": "Inversions occur when a DNA sequence is assembled in reverse orientation. On the contact map, they create a distinctive \"butterfly\" or \"bow-tie\" pattern.\n\nLook for regions where:\n• The signal splits from the diagonal\n• Forms a symmetrical X or butterfly shape\n• Returns to the diagonal afterward\n\nZoom in on suspicious regions to confirm the pattern. Can you find an inversion in this assembly?",
+      "expectedAction": {
+        "type": "zoom"
+      },
+      "hint": "Inversions often appear within chromosome blocks. Look for X-shaped or butterfly-shaped bright regions that cross the diagonal."
+    },
+    {
+      "id": "anti-diagonal",
+      "title": "Understanding Anti-Diagonal Signals",
+      "instruction": "An anti-diagonal signal (bright line perpendicular to the main diagonal) indicates that a sequence is inverted relative to its neighbors.\n\nThis happens when:\n• The assembler flipped a contig 180°\n• The DNA is actually in reverse complement orientation\n\nZoom out and look for any anti-diagonal streaks. These are clear signs of orientation errors that need manual correction.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Anti-diagonal signals run from top-right to bottom-left, perpendicular to the main diagonal. They're usually easier to spot at lower zoom levels."
+    },
+    {
+      "id": "translocations",
+      "title": "Finding Translocations (Off-Diagonal Blocks)",
+      "instruction": "Translocations are misassemblies where sequences from different chromosomes are incorrectly joined. They appear as bright blocks OFF the diagonal.\n\nLook for:\n• Bright rectangles away from the diagonal\n• Signal connecting two different chromosome blocks\n• Asymmetric patterns that break the expected symmetry\n\nUse the minimap to scan the entire genome for these off-diagonal signals.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "True translocations are rare but very visible. They create bright rectangular blocks in the off-diagonal regions where signal should be weak."
+    },
+    {
+      "id": "practice-finding",
+      "title": "Practice Finding Problems",
+      "instruction": "Now that you know what to look for, spend a few minutes exploring the finch genome and identifying potential misassemblies.\n\nFor each suspicious region:\n1. Zoom in to confirm the pattern\n2. Check if it's symmetric (inversions) or asymmetric (translocations)\n3. Note the approximate genomic position\n\nIn later lessons, you'll learn how to fix these errors using cut, join, and invert operations.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Not every irregularity is a misassembly—some patterns reflect real biology like centromeres or heterochromatin. Look for clear, systematic deviations from the expected diagonal pattern."
+    },
+    {
+      "id": "summary",
+      "title": "Misassembly Detection Summary",
+      "instruction": "Excellent detective work! You can now identify:\n\n• Inversions (butterfly/bow-tie patterns on the diagonal)\n• Anti-diagonal signals (perpendicular bright lines)\n• Translocations (off-diagonal bright blocks)\n\nThese skills are critical for quality control and manual curation. The next lesson will teach you how to fix these errors using OpenPretext's curation tools.\n\nRemember: Detection is the first step. Always confirm a pattern before making edits!",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Review the different misassembly types in your mind. When ready, complete this lesson."
+    }
+  ],
+  "assessment": null
+}

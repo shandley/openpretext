@@ -24,6 +24,9 @@ export function setupToolbar(ctx: AppContext): void {
   document.getElementById('btn-demo')?.addEventListener('click', () => {
     loadDemoData(ctx);
   });
+  document.getElementById('btn-start-tutorial')?.addEventListener('click', () => {
+    ctx.tutorialManager?.startLesson(ctx, '01-reading-the-map');
+  });
 
   document.getElementById('btn-save-agp')?.addEventListener('click', () => {
     exportAGP(ctx);

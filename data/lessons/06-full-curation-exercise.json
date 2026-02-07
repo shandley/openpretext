@@ -1,0 +1,93 @@
+{
+  "id": "06-full-curation-exercise",
+  "title": "Full Curation Exercise",
+  "difficulty": "advanced",
+  "estimatedMinutes": 30,
+  "specimenId": "finch",
+  "introduction": "This is your final challenge: a complete genome curation from start to finish. You'll return to the finch genome (which you explored in lesson 3) and apply all the skills you've learned.\n\nYour task:\n1. Examine the assembly and identify misassemblies\n2. Use automated tools (auto-cut and auto-sort) as a starting point\n3. Perform manual refinements where needed\n4. Produce a high-quality chromosome-level assembly\n\nYour work will be assessed against a ground truth ordering using Kendall's tau correlation. Aim for at least 85% accuracy to pass. Good luck!",
+  "steps": [
+    {
+      "id": "overview",
+      "title": "Survey the Finch Assembly",
+      "instruction": "Start by examining the finch genome in its current state. Take your time to:\n\n• Identify major chromosome blocks\n• Look for obvious misassemblies (inversions, translocations)\n• Count how many chromosomes you expect to find\n• Note regions that will need manual correction\n\nRemember: finches typically have around 30-40 chromosomes, including small microchromosomes. Not all will be well-assembled in the starting data.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Use zoom and the minimap to scan the entire genome systematically. Make mental notes of problem areas."
+    },
+    {
+      "id": "examine-assembly",
+      "title": "Detailed Examination",
+      "instruction": "Zoom into suspicious regions and confirm your initial observations:\n\n• Do you see butterfly patterns indicating inversions?\n• Are there off-diagonal blocks suggesting translocations?\n• Are chromosome boundaries clean, or are contigs misplaced?\n\nToggle the contig grid on to see boundaries more clearly. Open the sidebar to see contig lengths and names.",
+      "expectedAction": {
+        "type": "zoom"
+      },
+      "hint": "Focus on the largest chromosomes first. Small microchromosomes can be handled later."
+    },
+    {
+      "id": "use-auto-cut",
+      "title": "Apply Auto-Cut",
+      "instruction": "OpenPretext provides automated tools to help with curation. The auto-cut tool analyzes the contact map and automatically cuts contigs at likely misassembly points.\n\nClick the 'Auto-Cut' button to run the automated detection. Review the cuts it makes—not all will be correct, but it's a good starting point.\n\nRemember: you can undo any operation, so don't hesitate to try it.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#btn-auto-cut"
+      },
+      "expectedAction": {
+        "type": "auto-cut"
+      },
+      "hint": "Auto-cut uses signal analysis to find break points. It's not perfect but handles obvious cases well."
+    },
+    {
+      "id": "use-auto-sort",
+      "title": "Apply Auto-Sort",
+      "instruction": "After cutting, you need to reorder contigs to maximize diagonal signal. The auto-sort tool uses a traveling salesman algorithm to find an optimal ordering.\n\nClick the 'Auto-Sort' button to run the automated reordering. This can take a few seconds for large genomes.\n\nWatch the contact map transform as contigs are rearranged. Chromosome blocks should become more distinct and the diagonal should strengthen.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#btn-auto-sort"
+      },
+      "expectedAction": {
+        "type": "auto-sort"
+      },
+      "hint": "Auto-sort works best after you've used auto-cut to break up large misassemblies. The two tools complement each other."
+    },
+    {
+      "id": "review-results",
+      "title": "Review Automated Results",
+      "instruction": "Examine the results of auto-cut and auto-sort:\n\n• Are chromosome blocks now cleaner and more distinct?\n• Do you still see misassembly patterns?\n• Are there regions that need manual intervention?\n\nThe automated tools handle ~80-90% of the work, but expert curation requires human judgment for the remaining cases.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Zoom into each chromosome block systematically. Look for remaining inversions or translocations that the automated tools missed."
+    },
+    {
+      "id": "manual-refinement",
+      "title": "Manual Refinement",
+      "instruction": "Now apply your manual curation skills to fix remaining issues:\n\n• Cut any contigs that still contain inversions\n• Join adjacent contigs with strong contact signal\n• Invert contigs showing anti-diagonal patterns\n• Reorder contigs to maximize diagonal signal\n\nThis is where your expertise matters. Take your time and make thoughtful edits. Use undo freely to experiment.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Focus on high-impact changes. Fixing inversions in large contigs will improve the assembly more than tweaking small pieces."
+    },
+    {
+      "id": "check-work",
+      "title": "Final Quality Check",
+      "instruction": "Before completing this lesson, do a final quality check:\n\n• Zoom out and view the entire genome\n• Each chromosome should be a clean, bright square block\n• The diagonal should be strong and continuous\n• Off-diagonal signal should be minimal except at centromeres\n• Open the stats panel to see assembly metrics (N50, L50, etc.)\n\nWhen you're satisfied with your curation, complete this lesson. Your work will be scored against the ground truth ordering.\n\nYour target: 85% accuracy (Kendall's tau ≥ 0.85)",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "A good chromosome-level assembly has: clear boundaries, strong diagonal signal, minimal artifacts, and high N50/L50 values."
+    }
+  ],
+  "assessment": {
+    "type": "compare-ordering",
+    "groundTruthOrder": [0, 1, 2, 3, 4],
+    "scoring": {
+      "passingTau": 0.85
+    },
+    "feedback": {
+      "excellent": "Outstanding work! You achieved ≥95% accuracy. Your contig ordering closely matches the ground truth, demonstrating expert-level curation skills. You successfully identified and corrected misassemblies, producing a high-quality chromosome-level assembly. You're ready for real-world genome curation projects!",
+      "good": "Good job! You achieved ≥85% accuracy and passed the assessment. Your contig ordering is largely correct, with only minor deviations from the ground truth. Continue practicing to refine your ability to detect subtle misassemblies and optimize contig order. You have solid foundational skills for genome curation work.",
+      "needsWork": "Your curation needs improvement. You scored <85% accuracy compared to the ground truth. Review the lessons on detecting misassemblies (lesson 3) and using cut/join operations (lesson 4). Pay close attention to: (1) identifying inversion patterns, (2) using auto-cut and auto-sort effectively, and (3) manually refining the automated results. Practice these skills before attempting real curation projects."
+    }
+  }
+}

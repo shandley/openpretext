@@ -18,6 +18,7 @@ import type { MetricsTracker } from '../curation/QualityMetrics';
 import type { TileManager } from '../renderer/TileManager';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import type { InteractionMode } from '../core/State';
+import type { TutorialManager } from './TutorialManager';
 
 export interface AppContext {
   // Renderers (readonly after init)
@@ -51,6 +52,7 @@ export interface AppContext {
   referenceSequences: Map<string, string> | null;
   comparisonSnapshot: number[] | null;
   comparisonVisible: boolean;
+  tutorialManager: TutorialManager | null;
 
   // Cross-module callbacks (readonly after init)
   readonly showToast: (message: string, duration?: number) => void;

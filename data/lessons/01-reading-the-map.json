@@ -1,0 +1,93 @@
+{
+  "id": "01-reading-the-map",
+  "title": "Reading a Hi-C Contact Map",
+  "difficulty": "beginner",
+  "estimatedMinutes": 10,
+  "specimenId": "wrasse",
+  "introduction": "Welcome to your first lesson in genome assembly curation! In this lesson, you'll learn how to read and interpret a Hi-C contact map. Hi-C maps visualize the 3D proximity of different genomic regions—brighter pixels indicate DNA sequences that are physically close to each other in the cell nucleus.\n\nYou'll explore the wrasse genome and learn to identify key features like the diagonal, chromosome blocks, and use the navigation tools. Take your time and get comfortable with the interface.",
+  "steps": [
+    {
+      "id": "welcome",
+      "title": "Welcome to the Contact Map",
+      "instruction": "You're looking at a Hi-C contact map of the wrasse genome. Each pixel represents the interaction frequency between two genomic positions. Brighter colors mean those regions are physically close in 3D space inside the nucleus.\n\nThe map is symmetric across the diagonal—the top-right triangle mirrors the bottom-left. We'll explore what these patterns mean.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Just observe the map for now. Notice the bright diagonal line and the square blocks along it."
+    },
+    {
+      "id": "zoom-in",
+      "title": "Zoom Into the Map",
+      "instruction": "Let's get a closer look. Use your mouse wheel or trackpad to zoom into any part of the map. Try zooming into one of the bright square blocks along the diagonal.",
+      "expectedAction": {
+        "type": "zoom"
+      },
+      "hint": "Scroll up to zoom in. Click and drag to pan around.",
+      "autoAdvance": true
+    },
+    {
+      "id": "understand-diagonal",
+      "title": "The Diagonal Line",
+      "instruction": "The bright diagonal line you see represents each genomic position interacting with itself. This is always the brightest signal because a DNA sequence is always closest to itself.\n\nThe square blocks along the diagonal are chromosome territories—regions that interact strongly within themselves but less with other regions.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Notice how the brightness decreases as you move away from the diagonal. This is because genomic regions that are far apart in the linear sequence are less likely to interact."
+    },
+    {
+      "id": "identify-blocks",
+      "title": "Chromosome Blocks",
+      "instruction": "Each bright square block along the diagonal typically represents a chromosome. Well-assembled chromosomes appear as clean, bright squares with clear boundaries.\n\nCan you count how many major blocks you see? Each one likely corresponds to a chromosome in the wrasse genome.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Look along the diagonal from top-left to bottom-right. Count the distinct bright square regions."
+    },
+    {
+      "id": "zoom-out",
+      "title": "Zoom Out for Overview",
+      "instruction": "Now zoom back out to see the entire genome at once. Use your scroll wheel in the opposite direction, or double-click on the map.",
+      "expectedAction": {
+        "type": "zoom"
+      },
+      "hint": "Scroll down or away to zoom out. Get the full genome view back.",
+      "autoAdvance": true
+    },
+    {
+      "id": "use-minimap",
+      "title": "Navigate with the Minimap",
+      "instruction": "Notice the small overview map in the corner? That's the minimap. It shows your current viewport as a white rectangle.\n\nClick anywhere in the minimap to jump to that region instantly. Try it now—click on different parts of the minimap.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": ".minimap-container"
+      },
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "The minimap is your quick navigation tool. Use it to jump between chromosomes without scrolling."
+    },
+    {
+      "id": "toggle-grid",
+      "title": "Toggle the Contig Grid",
+      "instruction": "Notice the faint grid lines on the map? These mark the boundaries between contigs (assembled DNA fragments).\n\nClick the grid toggle button to turn them on and off. See how it changes your view of the assembly structure.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#toggle-grid"
+      },
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "The grid helps you see where one contig ends and another begins. This is useful for spotting misassemblies."
+    },
+    {
+      "id": "free-explore",
+      "title": "Explore Freely",
+      "instruction": "Great work! You now know the basics of reading a Hi-C contact map. Take a moment to explore the wrasse genome freely:\n\n• Zoom in and out\n• Pan around with click-and-drag\n• Use the minimap to jump between regions\n• Toggle the grid on and off\n\nWhen you're ready, complete this lesson and move on to the next one!",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "There's no wrong way to explore. Get comfortable with the navigation tools."
+    }
+  ],
+  "assessment": null
+}

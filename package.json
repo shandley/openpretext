@@ -11,9 +11,11 @@
     "test:watch": "vitest",
     "test:visual": "playwright test",
     "lint": "eslint src/",
+    "test:coverage": "vitest run --coverage",
     "bench:acquire": "npx tsx bench/acquire/cli.ts",
     "bench:run": "npx tsx bench/cli.ts run",
-    "bench:sweep": "npx tsx bench/cli.ts sweep"
+    "bench:sweep": "npx tsx bench/cli.ts sweep",
+    "bench:regression": "npx tsx bench/cli.ts regression"
   },
   "dependencies": {
     "pako": "^2.1.0"

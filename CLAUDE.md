@@ -44,6 +44,10 @@ src/
     ContigExclusion.ts       Set-based contig hide/exclude management
     BatchOperations.ts       Batch select/cut/join/invert/sort operations
     QualityMetrics.ts        N50/L50/N90/L90 assembly statistics + tracking
+    OrderingMetrics.ts       Shared pure-math ordering metrics (kendallTau, ARI)
+  data/
+    SpecimenCatalog.ts       Types + loader for specimen-catalog.json
+    LessonSchema.ts          Types + loader for tutorial lesson JSON files
   scripting/
     ScriptParser.ts          Tokenizer + parser for 18-command DSL
     ScriptExecutor.ts        Executes parsed AST via ScriptContext DI
@@ -56,8 +60,23 @@ src/
     CurationLog.ts           JSON operation history export
   io/
     SessionManager.ts        Session save/load (JSON with undo stack)
+data/
+  specimen-catalog.json      Curated multi-specimen catalog (10 species)
+  lessons/                   Tutorial lesson JSON files (6 lessons)
+  pattern-gallery.json       Hi-C pattern reference gallery (8 patterns)
+bench/
+  cli.ts                     Benchmark CLI (run/sweep/report/regression)
+  runner.ts                  Benchmark pipeline orchestrator
+  regression.ts              Regression benchmark runner against baselines
+  baselines.json             Regression thresholds for CI
+  metrics/
+    autosort-metrics.ts      Sort metrics (re-exports from OrderingMetrics)
+    autocut-metrics.ts       Breakpoint precision/recall/F1
+    chromosome-metrics.ts    Per-chromosome completeness
+    summary.ts               Aggregate statistics
+  acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      716 unit tests (vitest)
+  unit/                      1418 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -77,6 +96,9 @@ tests/
     contig-exclusion.test.ts ContigExclusion manager
     batch-operations.test.ts Batch select/cut/join/invert/sort
     feature-integration.test.ts  Cross-module integration tests
+    specimen-catalog.test.ts Catalog loading, validation (15 tests)
+    ordering-metrics.test.ts kendallTau, ARI, longestCorrectRun (22 tests)
+    tutorial-manager.test.ts Lesson schema, step navigation (10 tests)
   e2e/                       22 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     tile-streaming.spec.ts   Tile LOD with real .pretext file
@@ -149,6 +171,21 @@ themselves. The undo stack is the source of truth for curation history.
   using contig pixel spans for coordinate mapping.
 - **BEDWriter/FASTAWriter**: Use `AppState` directly; FASTA needs a
   `Map<string, string>` of reference sequences loaded separately.
+- **SpecimenCatalog**: `data/specimen-catalog.json` is the single source of
+  truth for both benchmark and education systems. `loadSpecimenCatalog()`
+  fetches and caches it. `getTutorialSpecimens()` filters to app-loadable ones.
+- **TutorialManager**: State machine managing lesson lifecycle. Subscribes to
+  EventBus events to detect user actions and auto-advance steps.
+  `AppContext.tutorialManager` is set during init in `main.ts`.
+- **OrderingMetrics**: Pure-math functions (`kendallTau`, `adjustedRandIndex`,
+  `longestCorrectRun`) shared between browser (self-assessment) and bench
+  (regression tests). No DOM or Node dependencies.
+- **AssessmentPanel**: Triggered by TutorialManager when a lesson has
+  `assessment` data. Computes kendallTau and shows score card.
+- **PatternGallery**: Modal showing 8 Hi-C patterns from
+  `data/pattern-gallery.json`. Clicking a pattern navigates the camera.
+- **Benchmark regression**: `bench/cli.ts regression` downloads 2 small
+  specimens and validates metrics against `bench/baselines.json`.
 
 ## Conventions
 
@@ -157,7 +194,7 @@ themselves. The undo stack is the source of truth for curation history.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 716 tests must pass
+- Run `npm test` before committing; all 1418 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls

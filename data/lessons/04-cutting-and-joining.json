@@ -1,0 +1,106 @@
+{
+  "id": "04-cutting-and-joining",
+  "title": "Cutting and Joining Contigs",
+  "difficulty": "intermediate",
+  "estimatedMinutes": 20,
+  "specimenId": "quail",
+  "introduction": "Now that you can identify misassemblies, it's time to learn how to fix them. The two fundamental curation operations are cutting (splitting a contig at a misassembly point) and joining (merging two contigs that should be connected).\n\nIn this lesson, you'll practice these operations on the quail genome. You'll also learn about undo/redo—essential safety features that let you experiment without fear of breaking the assembly.",
+  "steps": [
+    {
+      "id": "enter-edit-mode",
+      "title": "Enter Edit Mode",
+      "instruction": "To modify the assembly, you need to switch from View mode to Edit mode. Click the \"Edit\" mode button in the toolbar.\n\nIn Edit mode, you can:\n• Cut contigs at misassembly points\n• Join adjacent contigs\n• Invert contig orientation\n• Reorder contigs\n\nLet's start with the basics: cutting and joining.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#mode-edit"
+      },
+      "expectedAction": {
+        "type": "mode-change"
+      },
+      "hint": "Look for the mode selector in the toolbar. Switch from 'View' to 'Edit'.",
+      "autoAdvance": true
+    },
+    {
+      "id": "understand-cut",
+      "title": "Understanding the Cut Tool",
+      "instruction": "The Cut tool splits a contig into two pieces at a specified position. Use this when you've identified a misassembly within a contig.\n\nTo cut a contig:\n1. Select the contig by clicking on it (it will highlight)\n2. Click the Cut button\n3. Choose where to split the contig\n\nThe cut creates two new contigs from the original one. The contact map updates immediately to reflect the new structure.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Find a contig on the map that looks suspicious—perhaps one with an inversion pattern inside it."
+    },
+    {
+      "id": "practice-cut",
+      "title": "Practice a Cut Operation",
+      "instruction": "Now try it yourself:\n\n1. Click on a contig in the map to select it\n2. Click the 'Cut' button in the toolbar\n3. Confirm the operation\n\nWatch how the contig splits and the map redraws. The sidebar will show two new contigs where there was one before.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#btn-cut"
+      },
+      "expectedAction": {
+        "type": "cut"
+      },
+      "hint": "Select any contig and use the Cut tool. Don't worry—you can undo this in the next step!",
+      "autoAdvance": true
+    },
+    {
+      "id": "understand-join",
+      "title": "Understanding the Join Tool",
+      "instruction": "The Join tool does the opposite—it merges two adjacent contigs into a single contig. Use this when the assembler incorrectly split a continuous sequence.\n\nTo join contigs:\n1. Select two adjacent contigs (hold Shift and click each one)\n2. Click the Join button\n3. Confirm the operation\n\nThe two contigs become one, and the boundary between them disappears.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Look for two adjacent contigs with strong contact signal between them—these are good candidates for joining."
+    },
+    {
+      "id": "practice-join",
+      "title": "Practice a Join Operation",
+      "instruction": "Try joining two contigs:\n\n1. Click on one contig to select it\n2. Hold Shift and click an adjacent contig (both should be highlighted)\n3. Click the 'Join' button in the toolbar\n4. Confirm the operation\n\nWatch the two contigs merge into one. The contact map will update to show the new unified sequence.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#btn-join"
+      },
+      "expectedAction": {
+        "type": "join"
+      },
+      "hint": "You need to select exactly two adjacent contigs before the Join button will activate.",
+      "autoAdvance": true
+    },
+    {
+      "id": "undo-operation",
+      "title": "Undo Your Changes",
+      "instruction": "Made a mistake? No problem! OpenPretext maintains a full undo history.\n\nClick the Undo button (or press Ctrl+Z / Cmd+Z) to reverse your last operation. The assembly will return to its previous state.\n\nUndo is unlimited—you can step backward through your entire curation session.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#btn-undo"
+      },
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "The undo button is typically in the toolbar. You can also use keyboard shortcuts: Ctrl+Z (Windows) or Cmd+Z (Mac)."
+    },
+    {
+      "id": "redo-operation",
+      "title": "Redo Operations",
+      "instruction": "Changed your mind? You can redo operations you've undone.\n\nClick the Redo button (or press Ctrl+Shift+Z / Cmd+Shift+Z) to step forward through your operation history.\n\nThis undo/redo system means you can experiment freely without worrying about breaking the assembly.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#btn-redo"
+      },
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Redo brings back operations you've undone. Try undoing and redoing a few times to see the full history."
+    },
+    {
+      "id": "free-practice",
+      "title": "Practice Freely",
+      "instruction": "Excellent! You now know the core curation operations:\n\n• Cut: Split a contig at a misassembly\n• Join: Merge two adjacent contigs\n• Undo: Reverse your last operation\n• Redo: Restore an undone operation\n\nSpend a few minutes practicing on the quail genome:\n• Try cutting different contigs\n• Join some adjacent pieces\n• Use undo/redo to experiment safely\n\nWhen you're comfortable with these tools, complete the lesson and move on to scaffold assignment!",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "The best way to learn is by doing. Don't be afraid to experiment—you can always undo!"
+    }
+  ],
+  "assessment": null
+}

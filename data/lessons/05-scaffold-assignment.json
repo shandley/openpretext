@@ -1,0 +1,79 @@
+{
+  "id": "05-scaffold-assignment",
+  "title": "Manual Scaffold Assignment",
+  "difficulty": "intermediate",
+  "estimatedMinutes": 20,
+  "specimenId": "crocodile",
+  "introduction": "After cutting and joining contigs, the next step is organizing them into scaffolds (chromosome-level assemblies). Scaffold assignment lets you group related contigs and assign them to specific chromosomes.\n\nIn this lesson, you'll work with the crocodile genome to learn scaffold management: creating scaffolds, assigning contigs, reordering sequences, and using visual color bands to track your organization. This is essential for producing a chromosome-level assembly.",
+  "steps": [
+    {
+      "id": "enter-scaffold-mode",
+      "title": "Enter Scaffold Mode",
+      "instruction": "To work with scaffolds, switch to Scaffold mode using the mode selector in the toolbar.\n\nIn Scaffold mode, you can:\n• Create new scaffolds (chromosomes)\n• Assign contigs to scaffolds\n• Rename and color-code scaffolds\n• Reorder contigs within scaffolds\n\nScaffold mode also displays colored bands on the contact map, helping you visualize which contigs belong to which chromosome.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#mode-scaffold"
+      },
+      "expectedAction": {
+        "type": "mode-change"
+      },
+      "hint": "Look for the 'Scaffold' option in the mode selector. It's typically next to 'View' and 'Edit' modes.",
+      "autoAdvance": true
+    },
+    {
+      "id": "create-scaffold",
+      "title": "Create a New Scaffold",
+      "instruction": "Let's create your first scaffold. In the scaffold panel (usually on the right side), click the 'New Scaffold' or '+' button.\n\nGive your scaffold a meaningful name like 'Chromosome 1' or 'Chr1'. You can also assign it a color to make it visually distinct on the map.\n\nScaffolds serve as containers for grouping related contigs into chromosome-level assemblies.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "The scaffold creation button is usually in the scaffold management panel. Look for a '+' or 'Add' button."
+    },
+    {
+      "id": "assign-contigs",
+      "title": "Assign Contigs to Scaffold",
+      "instruction": "Now assign contigs to your new scaffold. There are several ways to do this:\n\n1. Select contigs in the map (click or Shift+click for multiple)\n2. Click 'Assign to Scaffold' and choose your scaffold\n3. The contigs will be grouped and colored accordingly\n\nTry assigning a few contigs that clearly belong to the same chromosome (look for contigs within the same diagonal block).",
+      "expectedAction": {
+        "type": "select-contig"
+      },
+      "hint": "Start with contigs in one of the bright diagonal blocks. These likely form a complete chromosome."
+    },
+    {
+      "id": "drag-mode",
+      "title": "Use Drag Mode for Reordering",
+      "instruction": "You can reorder contigs within a scaffold using drag-and-drop. This is especially useful for fine-tuning the linear order to match the Hi-C signal.\n\nTo reorder:\n1. Make sure you're in a mode that allows dragging (Edit or Scaffold)\n2. Click and hold on a contig in the sidebar\n3. Drag it to a new position\n4. Release to drop it\n\nThe contact map updates immediately to show the new ordering.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Drag-and-drop works in the sidebar contig list. Try moving a contig up or down to see how the map changes."
+    },
+    {
+      "id": "reorder-contigs",
+      "title": "Reorder Contigs in the Assembly",
+      "instruction": "Practice reordering contigs to optimize the contact map. The goal is to maximize the bright signal along the diagonal.\n\nWhen contigs are in the correct order:\n• Strong signal stays on the diagonal\n• Off-diagonal artifacts decrease\n• Chromosome blocks look clean and square\n\nTry moving a few contigs around and observe how the contact pattern changes. Use undo if you make things worse!",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Watch the contact map as you reorder. The signal should become stronger on the diagonal when contigs are in the right order."
+    },
+    {
+      "id": "review-assignments",
+      "title": "Review Your Scaffold Assignments",
+      "instruction": "Take a moment to review your scaffold assignments:\n\n• Check the scaffold panel to see which contigs are assigned\n• Look at the colored bands on the contact map\n• Verify that each scaffold contains contigs from a single chromosome block\n\nYou can create multiple scaffolds and assign different chromosome blocks to each one. This organizational structure is what gets exported when you save the curated assembly.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Well-organized scaffolds make it easy to export chromosome-level assemblies in formats like AGP, BED, or FASTA."
+    },
+    {
+      "id": "summary",
+      "title": "Scaffold Management Summary",
+      "instruction": "Congratulations! You've learned scaffold assignment:\n\n• Creating new scaffolds (chromosomes)\n• Assigning contigs to scaffolds\n• Using drag-and-drop to reorder contigs\n• Visual feedback with colored bands\n• Reviewing and organizing your work\n\nScaffolds are the bridge between raw contigs and chromosome-level assemblies. In the next lesson, you'll put all your skills together in a full curation exercise.\n\nTip: Export your scaffolds to AGP format to use in other genomics tools!",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Scaffold mode is one of the most powerful features in OpenPretext. Practice organizing different genomes to build your expertise."
+    }
+  ],
+  "assessment": null
+}

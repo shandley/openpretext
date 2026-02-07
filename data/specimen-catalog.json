@@ -1,0 +1,195 @@
+{
+  "version": "1.0.0",
+  "specimens": [
+    {
+      "id": "koala",
+      "species": "Phascolarctos_cinereus",
+      "commonName": "Koala",
+      "taxon": "mammal",
+      "sizeMB": 109,
+      "chromosomeCount": 16,
+      "contigCount": 1235,
+      "difficulty": "beginner",
+      "patterns": ["clean-diagonal"],
+      "teachingNotes": "Clear diagonal, dramatic AutoSort transformation, tau=1.0. Good first genome to explore.",
+      "releaseAsset": "Phascolarctos_cinereus.pretext",
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Phascolarctos_cinereus/assembly_curated/Phascolarctos_cinereus.pretext",
+        "post": "species/Phascolarctos_cinereus/assembly_curated/Phascolarctos_cinereus_post.pretext"
+      },
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 1.0, "orientationAccuracy": 1.0 }
+    },
+    {
+      "id": "wrasse",
+      "species": "Thalassoma_bifasciatum",
+      "commonName": "Bluehead wrasse",
+      "taxon": "fish",
+      "sizeMB": 45,
+      "chromosomeCount": 24,
+      "contigCount": 52,
+      "difficulty": "beginner",
+      "patterns": ["clean-diagonal"],
+      "teachingNotes": "Only 52 contigs, near-perfect assembly. Good 'easy win' for beginners.",
+      "releaseAsset": "Thalassoma_bifasciatum.pretext",
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Thalassoma_bifasciatum/assembly_curated/Thalassoma_bifasciatum.pretext",
+        "post": "species/Thalassoma_bifasciatum/assembly_curated/Thalassoma_bifasciatum_post.pretext"
+      },
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 0.998, "orientationAccuracy": 0.981 }
+    },
+    {
+      "id": "quail",
+      "species": "Coturnix_chinensis",
+      "commonName": "King quail",
+      "taxon": "bird",
+      "sizeMB": 70,
+      "chromosomeCount": 30,
+      "contigCount": 424,
+      "difficulty": "intermediate",
+      "patterns": ["microchromosomes", "unplaced-contigs"],
+      "teachingNotes": "Bird karyotype with microchromosomes, 424 contigs, tau=0.995. Good for practicing cuts and joins.",
+      "releaseAsset": "Coturnix_chinensis.pretext",
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Coturnix_chinensis/assembly_curated/Coturnix_chinensis.pretext",
+        "post": "species/Coturnix_chinensis/assembly_curated/Coturnix_chinensis_post.pretext"
+      },
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 0.995, "orientationAccuracy": 0.984 }
+    },
+    {
+      "id": "finch",
+      "species": "Taeniopygia_guttata",
+      "commonName": "Zebra finch",
+      "taxon": "bird",
+      "sizeMB": 65,
+      "chromosomeCount": 32,
+      "contigCount": 134,
+      "difficulty": "intermediate",
+      "patterns": ["inversions", "microchromosomes"],
+      "teachingNotes": "Lower tau (0.939), shows sorting challenges with 134 contigs. Good for understanding ordering accuracy.",
+      "releaseAsset": "Taeniopygia_guttata.pretext",
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Taeniopygia_guttata/assembly_curated/Taeniopygia_guttata.pretext",
+        "post": "species/Taeniopygia_guttata/assembly_curated/Taeniopygia_guttata_post.pretext"
+      },
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 0.939, "orientationAccuracy": 0.970 }
+    },
+    {
+      "id": "crocodile",
+      "species": "Crocodylus_niloticus",
+      "commonName": "Nile crocodile",
+      "taxon": "reptile",
+      "sizeMB": 60,
+      "chromosomeCount": 16,
+      "contigCount": 200,
+      "difficulty": "advanced",
+      "patterns": ["inversions", "translocations"],
+      "teachingNotes": "Reptile chromosome structure with orientation challenges. Good for advanced scaffold assignment practice.",
+      "releaseAsset": "Crocodylus_niloticus.pretext",
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Crocodylus_niloticus/assembly_curated/Crocodylus_niloticus.pretext",
+        "post": "species/Crocodylus_niloticus/assembly_curated/Crocodylus_niloticus_post.pretext"
+      },
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 0.985, "orientationAccuracy": 0.960 }
+    },
+    {
+      "id": "spinyfin",
+      "species": "Diretmoides_argenteus",
+      "commonName": "Spinyfin",
+      "taxon": "fish",
+      "sizeMB": 150,
+      "chromosomeCount": 24,
+      "contigCount": 5506,
+      "difficulty": "advanced",
+      "patterns": ["unplaced-contigs", "sparse-signal"],
+      "teachingNotes": "5,506 contigs — scalability stress test for algorithms.",
+      "releaseAsset": null,
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Diretmoides_argenteus/assembly_curated/Diretmoides_argenteus.pretext",
+        "post": "species/Diretmoides_argenteus/assembly_curated/Diretmoides_argenteus_post.pretext"
+      },
+      "benchmarkBaseline": null
+    },
+    {
+      "id": "snake",
+      "species": "Acanthophis_waitii",
+      "commonName": "Pilbara death adder",
+      "taxon": "reptile",
+      "sizeMB": 80,
+      "chromosomeCount": null,
+      "contigCount": 300,
+      "difficulty": "advanced",
+      "patterns": ["misassembly"],
+      "teachingNotes": "AutoCut false positive case — useful for benchmarking precision.",
+      "releaseAsset": null,
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Acanthophis_waitii/assembly_curated/Acanthophis_waitii.pretext",
+        "post": "species/Acanthophis_waitii/assembly_curated/Acanthophis_waitii_post.pretext"
+      },
+      "benchmarkBaseline": null
+    },
+    {
+      "id": "toad",
+      "species": "Scaphiopus_couchii",
+      "commonName": "Couch's spadefoot toad",
+      "taxon": "amphibian",
+      "sizeMB": 90,
+      "chromosomeCount": null,
+      "contigCount": 400,
+      "difficulty": "advanced",
+      "patterns": ["misassembly"],
+      "teachingNotes": "AutoCut false positive case — useful for benchmarking precision.",
+      "releaseAsset": null,
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Scaphiopus_couchii/assembly_curated/Scaphiopus_couchii.pretext",
+        "post": "species/Scaphiopus_couchii/assembly_curated/Scaphiopus_couchii_post.pretext"
+      },
+      "benchmarkBaseline": null
+    },
+    {
+      "id": "lancelet",
+      "species": "Branchiostoma_lanceolatum_hap1",
+      "commonName": "European lancelet (hap1)",
+      "taxon": "invertebrate",
+      "sizeMB": 30,
+      "chromosomeCount": 19,
+      "contigCount": 180,
+      "difficulty": "advanced",
+      "patterns": ["sparse-signal", "inversions"],
+      "teachingNotes": "Lowest tau (0.903), non-vertebrate chordate. Challenging sorting case.",
+      "releaseAsset": null,
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Branchiostoma_lanceolatum/assembly_curated/Branchiostoma_lanceolatum_hap1.pretext",
+        "post": "species/Branchiostoma_lanceolatum/assembly_curated/Branchiostoma_lanceolatum_hap1_post.pretext"
+      },
+      "benchmarkBaseline": null
+    },
+    {
+      "id": "bat",
+      "species": "Artibeus_lituratus",
+      "commonName": "Great fruit-eating bat",
+      "taxon": "mammal",
+      "sizeMB": 85,
+      "chromosomeCount": null,
+      "contigCount": 350,
+      "difficulty": "advanced",
+      "patterns": ["haplotype-switch", "translocations"],
+      "teachingNotes": "Dual-haplotype assembly with complex inter-haplotype patterns.",
+      "releaseAsset": null,
+      "releaseTag": "v0.2.0-data",
+      "genomeArkKeys": {
+        "pre": "species/Artibeus_lituratus/assembly_curated/Artibeus_lituratus.pretext",
+        "post": "species/Artibeus_lituratus/assembly_curated/Artibeus_lituratus_post.pretext"
+      },
+      "benchmarkBaseline": null
+    }
+  ]
+}

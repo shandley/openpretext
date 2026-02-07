@@ -318,6 +318,8 @@
       align-items: center;
       color: var(--text-secondary);
       gap: 16px;
+      overflow-y: auto;
+      padding: 40px 20px;
     }
 
     #welcome h1 {
@@ -347,6 +349,92 @@
 
     #welcome .open-btn:hover {
       background: var(--accent-hover);
+    }
+
+    #welcome .specimen-section-title {
+      margin-top: 20px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+      width: 100%;
+      max-width: 520px;
+      text-align: center;
+    }
+
+    #specimen-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+      max-width: 520px;
+      width: 100%;
+    }
+
+    .specimen-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .specimen-card:hover {
+      border-color: var(--accent);
+      background: var(--bg-surface);
+    }
+
+    .specimen-card .specimen-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .specimen-card .specimen-species {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-style: italic;
+    }
+
+    .specimen-card .specimen-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .specimen-card .specimen-size {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .specimen-card .specimen-difficulty {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .specimen-difficulty.beginner {
+      background: #1a4a2a;
+      color: #4ade80;
+    }
+
+    .specimen-difficulty.intermediate {
+      background: #4a3a1a;
+      color: #fbbf24;
+    }
+
+    .specimen-difficulty.advanced {
+      background: #4a1a1a;
+      color: #f87171;
     }
 
     #welcome .shortcuts {
@@ -421,6 +509,342 @@
     .contig-badge.scaffold {
       background: #3498db;
       color: #fff;
+    }
+
+    /* Tutorial panel */
+    #tutorial-panel {
+      position: fixed;
+      top: 52px;
+      right: 12px;
+      width: 320px;
+      max-height: calc(100vh - 100px);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      z-index: 800;
+      display: none;
+      flex-direction: column;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    #tutorial-panel.visible {
+      display: flex;
+    }
+
+    .tutorial-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tutorial-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .tutorial-progress-text {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .tutorial-progress-track {
+      height: 4px;
+      background: var(--bg-surface);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .tutorial-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+      width: 0;
+    }
+
+    .tutorial-body {
+      padding: 14px;
+      flex: 1;
+    }
+
+    .tutorial-instruction {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-primary);
+    }
+
+    .tutorial-instruction code {
+      background: var(--bg-surface);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+
+    .tutorial-hint-btn {
+      margin-top: 10px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .tutorial-hint-btn:hover {
+      border-color: var(--accent);
+      color: var(--text-primary);
+    }
+
+    .tutorial-hint-text {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-style: italic;
+      padding: 8px;
+      background: var(--bg-surface);
+      border-radius: 4px;
+    }
+
+    .tutorial-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      gap: 8px;
+    }
+
+    .tutorial-footer button {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .tutorial-footer button:hover {
+      border-color: var(--accent);
+    }
+
+    .tutorial-next {
+      background: var(--accent) !important;
+      border-color: var(--accent) !important;
+      color: white !important;
+    }
+
+    .tutorial-end {
+      background: none !important;
+      border: none !important;
+      color: var(--text-secondary) !important;
+      font-size: 11px !important;
+    }
+
+    .tutorial-end:hover {
+      color: var(--accent) !important;
+    }
+
+    .tutorial-highlight {
+      outline: 2px solid var(--accent) !important;
+      outline-offset: 2px;
+      animation: tutorial-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes tutorial-pulse {
+      0%, 100% { outline-color: var(--accent); }
+      50% { outline-color: transparent; }
+    }
+
+    /* Assessment panel */
+    #assessment-panel {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 380px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      z-index: 850;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      padding: 24px;
+    }
+
+    #assessment-panel.visible {
+      display: flex;
+    }
+
+    .assessment-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+
+    .assessment-score {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .assessment-bar-track {
+      height: 8px;
+      background: var(--bg-surface);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .assessment-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .assessment-feedback {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+
+    .assessment-legend {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .assessment-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .assessment-actions button {
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+    }
+
+    .assessment-actions button:hover {
+      border-color: var(--accent);
+    }
+
+    .assessment-actions .primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    /* Pattern gallery modal */
+    #pattern-gallery-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 850;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0,0,0,0.5);
+    }
+
+    #pattern-gallery-modal.visible {
+      display: flex;
+    }
+
+    .pattern-gallery-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 600px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+
+    .pattern-gallery-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .pattern-gallery-header h2 {
+      font-size: 16px;
+      color: var(--text-primary);
+    }
+
+    .pattern-gallery-close {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .pattern-gallery-close:hover {
+      color: var(--text-primary);
+    }
+
+    .pattern-gallery-content {
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .pattern-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+
+    .pattern-card:hover {
+      border-color: var(--accent);
+    }
+
+    .pattern-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .pattern-card-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 6px;
+    }
+
+    .pattern-card-look {
+      font-size: 12px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .pattern-card-specimen {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-style: italic;
     }
 
     /* Toast notifications */
@@ -1046,8 +1470,13 @@
         <h1>OpenPretext</h1>
         <p>Modern Hi-C contact map viewer for genome assembly curation. Drop a .pretext file or click Open to begin.</p>
         <button class="open-btn" id="btn-welcome-open">Open .pretext file</button>
-        <button class="open-btn" id="btn-example" style="background: var(--bg-surface);">Load Example — Koala genome<br><span style="font-size: 0.8em; opacity: 0.7;">(109 MB download)</span></button>
-        <!-- Hidden demo button for E2E tests -->
+        <div class="specimen-section-title">Example Datasets</div>
+        <div id="specimen-grid">
+          <!-- Populated dynamically from specimen catalog -->
+        </div>
+        <button class="open-btn" id="btn-start-tutorial" style="background: var(--bg-surface); margin-top: 8px;">Start Tutorial</button>
+        <!-- Hidden buttons for backwards compatibility and E2E tests -->
+        <button id="btn-example" style="display:none;"></button>
         <button id="btn-demo" style="display:none;"></button>
         <div class="shortcuts">
           <kbd>⌘K</kbd> Command palette &nbsp;
@@ -1158,6 +1587,55 @@
           <div class="loading-bar-fill" id="loading-bar"></div>
         </div>
         <div class="loading-percent" id="loading-percent">0%</div>
+      </div>
+    </div>
+
+    <!-- Tutorial panel -->
+    <div id="tutorial-panel">
+      <div class="tutorial-header">
+        <div class="tutorial-title"></div>
+        <div class="tutorial-progress-text"></div>
+        <div class="tutorial-progress-track">
+          <div class="tutorial-progress-fill"></div>
+        </div>
+      </div>
+      <div class="tutorial-body">
+        <div class="tutorial-instruction"></div>
+        <button class="tutorial-hint-btn" style="display:none;">Show Hint</button>
+        <div class="tutorial-hint-text" style="display:none;"></div>
+      </div>
+      <div class="tutorial-footer">
+        <button class="tutorial-prev">Previous</button>
+        <button class="tutorial-next">Next</button>
+        <button class="tutorial-end">End Tutorial</button>
+      </div>
+    </div>
+
+    <!-- Assessment panel -->
+    <div id="assessment-panel">
+      <div class="assessment-title">Assessment Results</div>
+      <div class="assessment-score"></div>
+      <div class="assessment-bar-track">
+        <div class="assessment-bar-fill"></div>
+      </div>
+      <div class="assessment-feedback"></div>
+      <div class="assessment-legend"></div>
+      <div class="assessment-actions">
+        <button class="assessment-retry">Try Again</button>
+        <button class="assessment-done primary">Done</button>
+      </div>
+    </div>
+
+    <!-- Pattern gallery modal -->
+    <div id="pattern-gallery-modal">
+      <div class="pattern-gallery-card">
+        <div class="pattern-gallery-header">
+          <h2>Hi-C Pattern Gallery</h2>
+          <button class="pattern-gallery-close">&times;</button>
+        </div>
+        <div class="pattern-gallery-content">
+          <!-- Populated dynamically -->
+        </div>
       </div>
     </div>
 

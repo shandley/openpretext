@@ -1,0 +1,91 @@
+{
+  "id": "02-understanding-chromosomes",
+  "title": "Understanding Chromosome Structure",
+  "difficulty": "beginner",
+  "estimatedMinutes": 15,
+  "specimenId": "koala",
+  "introduction": "In this lesson, you'll learn how chromosomes appear on Hi-C contact maps and how genome assemblers organize DNA sequences into contigs.\n\nYou'll work with the koala genome, exploring how the assembly is structured and how to use the sidebar to inspect individual contigs. Understanding this organization is essential for manual curation work.",
+  "steps": [
+    {
+      "id": "intro-koala",
+      "title": "The Koala Genome",
+      "instruction": "You're now viewing the koala genome assembly. Koalas have a relatively simple genome organization, making this a great learning example.\n\nTake a moment to observe the overall structure. Notice the bright blocks along the diagonal—each represents a chromosome or a large scaffold.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "The koala genome should show several distinct chromosome blocks along the diagonal."
+    },
+    {
+      "id": "identify-chromosomes",
+      "title": "Identify the Chromosomes",
+      "instruction": "Chromosomes appear as bright, square blocks along the diagonal. Well-assembled chromosomes have:\n\n• Clear, sharp boundaries\n• Strong internal signal (bright yellow/white)\n• Minimal signal outside the block\n\nZoom in on one of the chromosome blocks to see its internal structure more clearly.",
+      "expectedAction": {
+        "type": "zoom"
+      },
+      "hint": "Use your scroll wheel to zoom into a bright diagonal block. Notice the fine detail within each chromosome."
+    },
+    {
+      "id": "count-blocks",
+      "title": "Count the Chromosome Blocks",
+      "instruction": "Zoom back out and try to count the number of major chromosome blocks you see along the diagonal.\n\nThis will give you an estimate of how many chromosomes have been successfully assembled. Compare this to what you know about koala biology—do the numbers match?",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Count from the top-left corner moving down toward the bottom-right. Some blocks may be larger or brighter than others."
+    },
+    {
+      "id": "open-sidebar",
+      "title": "Open the Sidebar",
+      "instruction": "Now let's look at the individual contigs that make up these chromosomes. Click the sidebar button (three horizontal lines) in the top-right corner to open the contig list.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#btn-sidebar"
+      },
+      "expectedAction": {
+        "type": "navigate"
+      },
+      "hint": "The sidebar button is typically in the top-right corner of the interface. It shows a list icon (☰)."
+    },
+    {
+      "id": "understand-contigs",
+      "title": "Understanding Contig Order",
+      "instruction": "The sidebar shows every contig (assembled DNA fragment) in the current order. Each contig has:\n\n• A name (often from the original assembly)\n• A length (in base pairs)\n• A position in the current ordering\n\nScroll through the list and notice how contigs are arranged. The order determines how they appear on the map from top-left to bottom-right.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Long contigs typically represent well-assembled regions. Short contigs might be gaps or uncertain regions."
+    },
+    {
+      "id": "minimap-navigation",
+      "title": "Navigate Between Chromosomes",
+      "instruction": "Use the minimap to quickly jump between different chromosomes. Click on different bright blocks in the minimap and watch the main view follow.\n\nThis is especially useful when working with large genomes with many chromosomes.",
+      "expectedAction": {
+        "type": "navigate"
+      },
+      "hint": "Each click in the minimap centers the main view on that region. Try clicking on several different chromosome blocks."
+    },
+    {
+      "id": "color-maps",
+      "title": "Explore Color Maps",
+      "instruction": "The color scheme affects how you perceive contact frequencies. Try switching between different color maps using the dropdown menu.\n\nEach color map emphasizes different aspects of the data. Find one that makes the chromosome boundaries most clear to you.",
+      "highlight": {
+        "type": "ui-element",
+        "selector": "#color-map-select"
+      },
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Common color maps include 'Viridis', 'Plasma', and 'Hot'. Try a few to see which you prefer."
+    },
+    {
+      "id": "summary",
+      "title": "Chromosome Structure Summary",
+      "instruction": "Excellent! You now understand:\n\n• How chromosomes appear as diagonal blocks\n• How contigs are ordered to form chromosomes\n• How to navigate between regions using the minimap\n• How to inspect individual contigs in the sidebar\n\nThese skills form the foundation for genome curation. In the next lessons, you'll learn to detect and fix assembly errors.",
+      "expectedAction": {
+        "type": "observe"
+      },
+      "hint": "Take a moment to review what you've learned. When ready, complete this lesson and move on."
+    }
+  ],
+  "assessment": null
+}

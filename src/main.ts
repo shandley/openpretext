@@ -18,6 +18,10 @@ import { ScaffoldManager } from './curation/ScaffoldManager';
 import { WaypointManager } from './curation/WaypointManager';
 import { CurationEngine } from './curation/CurationEngine';
 import { MetricsTracker } from './curation/QualityMetrics';
+import { TutorialManager } from './ui/TutorialManager';
+import { setupTutorialOverlay } from './ui/TutorialOverlay';
+import { setupAssessmentPanel } from './ui/AssessmentPanel';
+import { setupPatternGallery } from './ui/PatternGallery';
 
 import type { AppContext } from './ui/AppContext';
 import {
@@ -45,6 +49,7 @@ import {
   boot,
   setupEventListeners,
   refreshAfterCuration,
+  setupSpecimenPicker,
 } from './ui';
 
 class OpenPretextApp {
@@ -103,6 +108,7 @@ class OpenPretextApp {
       referenceSequences: null,
       comparisonSnapshot: null,
       comparisonVisible: false,
+      tutorialManager: null,
 
       // Cross-module callbacks
       showToast,
@@ -136,6 +142,14 @@ class OpenPretextApp {
     setupTrackUpload(ctx);
     setupFastaUpload(ctx);
     startRenderLoop(ctx);
+    setupSpecimenPicker(ctx);
+
+    // Tutorial system
+    const tutorialManager = new TutorialManager();
+    ctx.tutorialManager = tutorialManager;
+    setupTutorialOverlay(ctx, tutorialManager);
+    setupAssessmentPanel(ctx, tutorialManager);
+    setupPatternGallery();
 
     console.log('OpenPretext initialized');
   }

@@ -3,6 +3,7 @@
  */
 
 import type { AppContext } from './AppContext';
+import type { SpecimenEntry } from '../data/SpecimenCatalog';
 import { state } from '../core/State';
 import { events } from '../core/EventBus';
 import { parsePretextFile, isPretextFile, tileLinearIndex } from '../formats/PretextParser';
@@ -123,17 +124,22 @@ export async function loadPretextFile(ctx: AppContext, file: File): Promise<void
   document.getElementById('welcome')!.style.display = 'none';
 }
 
-export async function loadExampleDataset(ctx: AppContext): Promise<void> {
-  // Served same-origin from the deployed site (CI downloads the release asset
-  // into dist/data/ before deploying to GitHub Pages).
-  // Resolve relative to the document base (handles both / in dev and /openpretext/ on GH Pages)
-  const EXAMPLE_URL = new URL('data/Phascolarctos_cinereus.pretext', document.baseURI).href;
-  const EXAMPLE_FILENAME = 'Phascolarctos_cinereus.pretext';
+/**
+ * Download and load a specimen from the catalog.
+ * Resolves the asset URL relative to document.baseURI (same-origin).
+ */
+export async function loadSpecimen(ctx: AppContext, specimen: SpecimenEntry): Promise<void> {
+  if (!specimen.releaseAsset) {
+    ctx.showToast(`${specimen.commonName} is benchmark-only and not available for download`);
+    return;
+  }
 
-  showLoading('Loading example dataset', 'Downloading koala genome...');
+  const url = new URL(`data/${specimen.releaseAsset}`, document.baseURI).href;
+
+  showLoading(`Loading ${specimen.commonName}`, `Downloading ${specimen.commonName} genome...`);
 
   try {
-    const response = await fetch(EXAMPLE_URL);
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`Download failed: ${response.status}`);
 
     const contentLength = Number(response.headers.get('content-length')) || 0;
@@ -147,14 +153,13 @@ export async function loadExampleDataset(ctx: AppContext): Promise<void> {
       chunks.push(value);
       received += value.length;
       if (contentLength > 0) {
-        const pct = Math.round((received / contentLength) * 60); // 0-60% for download
+        const pct = Math.round((received / contentLength) * 60);
         const mb = (received / 1048576).toFixed(0);
         const totalMb = (contentLength / 1048576).toFixed(0);
-        updateLoading(`Downloading... ${mb}/${totalMb} MB`, pct);
+        updateLoading(`Downloading ${specimen.commonName}... ${mb}/${totalMb} MB`, pct);
       }
     }
 
-    // Concatenate chunks into single ArrayBuffer
     const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
     const combined = new Uint8Array(totalLength);
     let offset = 0;
@@ -163,15 +168,36 @@ export async function loadExampleDataset(ctx: AppContext): Promise<void> {
       offset += chunk.length;
     }
 
-    await loadPretextFromBuffer(ctx, combined.buffer, EXAMPLE_FILENAME);
+    await loadPretextFromBuffer(ctx, combined.buffer, specimen.releaseAsset);
   } catch (err) {
-    console.error('Error loading example dataset:', err);
-    document.getElementById('status-file')!.textContent = 'Error loading example';
-    ctx.showToast(`Error: ${err instanceof Error ? err.message : 'Failed to download example dataset'}`);
+    console.error(`Error loading specimen ${specimen.id}:`, err);
+    document.getElementById('status-file')!.textContent = 'Error loading specimen';
+    ctx.showToast(`Error: ${err instanceof Error ? err.message : `Failed to download ${specimen.commonName}`}`);
   }
 
   hideLoading();
   document.getElementById('welcome')!.style.display = 'none';
+}
+
+/** Backwards-compatible wrapper that loads the koala specimen. */
+export async function loadExampleDataset(ctx: AppContext): Promise<void> {
+  const koala: SpecimenEntry = {
+    id: 'koala',
+    species: 'Phascolarctos_cinereus',
+    commonName: 'Koala',
+    taxon: 'mammal',
+    sizeMB: 109,
+    chromosomeCount: 16,
+    contigCount: 1235,
+    difficulty: 'beginner',
+    patterns: ['clean-diagonal'],
+    teachingNotes: '',
+    releaseAsset: 'Phascolarctos_cinereus.pretext',
+    releaseTag: 'v0.2.0-data',
+    genomeArkKeys: null,
+    benchmarkBaseline: null,
+  };
+  await loadSpecimen(ctx, koala);
 }
 
 export function loadDemoData(ctx: AppContext): void {

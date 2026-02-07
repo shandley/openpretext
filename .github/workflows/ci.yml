@@ -44,11 +44,14 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Download example dataset into dist
+      - name: Download example datasets into dist
         if: github.ref == 'refs/heads/master' && github.event_name == 'push'
         run: |
           mkdir -p dist/data
-          gh release download v0.1.0 --pattern 'Phascolarctos_cinereus.pretext' --dir dist/data
+          gh release download v0.2.0-data \
+            --pattern '*.pretext' \
+            --dir dist/data
+          cp data/specimen-catalog.json dist/data/
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -57,6 +60,34 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
+
+  bench-regression:
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download regression specimens
+        run: |
+          mkdir -p bench/data/regression
+          gh release download v0.2.0-data \
+            --pattern 'Thalassoma_bifasciatum*.pretext' \
+            --pattern 'Branchiostoma_lanceolatum_hap2*.pretext' \
+            --dir bench/data/regression
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Run regression benchmarks
+        run: npx tsx bench/cli.ts regression --data-dir bench/data/regression
 
   deploy:
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'

@@ -7,7 +7,8 @@
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { SelectionManager } from '../curation/SelectionManager';
-import { loadExampleDataset, loadDemoData } from './FileLoading';
+import { loadExampleDataset, loadDemoData, loadSpecimen } from './FileLoading';
+import { loadSpecimenCatalog, getTutorialSpecimens } from '../data/SpecimenCatalog';
 import { performUndo, performRedo, invertSelectedContigs, cutAtCursorPosition, joinSelectedContigs, toggleContigExclusion } from './CurationActions';
 import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession } from './ExportSession';
 import { cycleColorMap } from './ColorMapControls';
@@ -15,6 +16,22 @@ import { toggleComparisonMode } from './ComparisonMode';
 import { toggleScriptConsole } from './ScriptConsole';
 import { toggleShortcutsModal } from './ShortcutsModal';
 import { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoin, runBatchInvert, runSortByLength, runAutoSort, runAutoCut, undoLastBatch } from './BatchActions';
+import { togglePatternGallery } from './PatternGallery';
+
+import type { SpecimenEntry } from '../data/SpecimenCatalog';
+
+let cachedSpecimens: SpecimenEntry[] | null = null;
+
+async function ensureSpecimens(): Promise<SpecimenEntry[]> {
+  if (cachedSpecimens) return cachedSpecimens;
+  try {
+    const catalog = await loadSpecimenCatalog();
+    cachedSpecimens = getTutorialSpecimens(catalog);
+  } catch {
+    cachedSpecimens = [];
+  }
+  return cachedSpecimens;
+}
 
 let commandPaletteVisible = false;
 let selectedCommandIndex = 0;
@@ -36,9 +53,16 @@ export function toggleCommandPalette(ctx: AppContext): void {
 }
 
 function getCommands(ctx: AppContext) {
+  const specimenCommands = (cachedSpecimens ?? []).map(s => ({
+    name: `Load specimen: ${s.commonName} (${s.sizeMB} MB)`,
+    shortcut: '',
+    action: () => loadSpecimen(ctx, s),
+  }));
+
   return [
     { name: 'Open file', shortcut: '\u2318O', action: () => document.getElementById('file-input')?.click() },
     { name: 'Load example dataset (Koala)', shortcut: '', action: () => loadExampleDataset(ctx) },
+    ...specimenCommands,
     { name: 'Load synthetic demo', shortcut: '', action: () => loadDemoData(ctx) },
     { name: 'Navigate mode', shortcut: 'Esc', action: () => ctx.setMode('navigate') },
     { name: 'Edit mode', shortcut: 'E', action: () => ctx.setMode('edit') },
@@ -85,6 +109,13 @@ function getCommands(ctx: AppContext) {
     { name: 'Auto cut: detect breakpoints', shortcut: '', action: () => runAutoCut(ctx) },
     { name: 'Undo all auto-cut', shortcut: '', action: () => undoLastBatch(ctx, 'autocut') },
     { name: 'Undo all auto-sort', shortcut: '', action: () => undoLastBatch(ctx, 'autosort') },
+    { name: 'Tutorial: Reading a Hi-C Contact Map', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '01-reading-the-map') },
+    { name: 'Tutorial: Understanding Chromosome Structure', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '02-understanding-chromosomes') },
+    { name: 'Tutorial: Detecting Misassembly Patterns', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '03-detecting-misassembly') },
+    { name: 'Tutorial: Cutting and Joining Contigs', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '04-cutting-and-joining') },
+    { name: 'Tutorial: Manual Scaffold Assignment', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '05-scaffold-assignment') },
+    { name: 'Tutorial: Full Curation Exercise', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '06-full-curation-exercise') },
+    { name: 'Pattern Gallery', shortcut: '', action: () => togglePatternGallery(ctx) },
   ];
 }
 
@@ -136,6 +167,9 @@ function executeSelectedCommand(ctx: AppContext): void {
 
 export function setupCommandPalette(ctx: AppContext): void {
   const input = document.getElementById('command-input') as HTMLInputElement;
+
+  // Pre-load specimen catalog for command palette commands
+  ensureSpecimens();
 
   input.addEventListener('input', () => {
     updateCommandResults(ctx, input.value);
