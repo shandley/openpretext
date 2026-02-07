@@ -6,6 +6,7 @@ import {
   computeLinkScore,
   unionFindSort,
   mergeSmallChains,
+  hierarchicalChainMerge,
   autoSort,
   type ContigRange,
   type ContigLink,
@@ -283,10 +284,9 @@ describe('AutoSort', () => {
   // autoSort (integration)
   // -----------------------------------------------------------------------
   describe('autoSort', () => {
-    it('should group contigs from same chromosome together', () => {
+    it('should return trivial chains for small assembly (< 60 contigs)', () => {
       const size = 128;
-      // 4 contigs: chr1_a, chr1_b, chr2_a, chr2_b
-      // Shuffled order: [chr2_b, chr1_a, chr2_a, chr1_b]
+      // 4 contigs — well below the 60-contig threshold
       const contigs = [
         makeContig('chr2_b', 0, 0, 32, 32000),
         makeContig('chr1_a', 1, 32, 64, 32000),
@@ -302,8 +302,6 @@ describe('AutoSort', () => {
         { start: 96, end: 128, orderIndex: 3 },
       ];
 
-      // chr1_a (order 1) should link with chr1_b (order 3)
-      // chr2_a (order 2) should link with chr2_b (order 0)
       const contactMap = makeMapWithAdjacencies(size, ranges, [[1, 3], [0, 2]]);
 
       const result = autoSort(
@@ -311,19 +309,76 @@ describe('AutoSort', () => {
         { maxDiagonalDistance: 20, signalCutoff: 0.01, hardThreshold: 0.8 },
       );
 
-      // Should produce chains. At minimum, linked pairs should be in same chains.
-      expect(result.chains.length).toBeGreaterThanOrEqual(1);
+      // Low-contig detection: should return trivial single-element chains
+      expect(result.chains.length).toBe(4);
+      for (let i = 0; i < 4; i++) {
+        expect(result.chains[i].length).toBe(1);
+        expect(result.chains[i][0].orderIndex).toBe(i);
+        expect(result.chains[i][0].inverted).toBe(false);
+      }
+      expect(result.links).toEqual([]);
+      expect(result.threshold).toBe(0);
+    });
 
-      // Check that linked contigs end up in the same chain
-      const chainForContig = new Map<number, number>();
-      result.chains.forEach((chain, chainIdx) => {
-        chain.forEach(entry => chainForContig.set(entry.orderIndex, chainIdx));
+    it('should return trivial chains for assemblies with < 60 contigs', () => {
+      const numContigs = 10;
+      const pixelsPerContig = 8;
+      const size = numContigs * pixelsPerContig;
+      const contigs: ContigInfo[] = [];
+      for (let i = 0; i < numContigs; i++) {
+        contigs.push(
+          makeContig(`ctg${i}`, i, i * pixelsPerContig, (i + 1) * pixelsPerContig, 10000),
+        );
+      }
+      const contigOrder = contigs.map((_, i) => i);
+      const contactMap = new Float32Array(size * size);
+
+      const result = autoSort(contactMap, size, contigs, contigOrder, size);
+
+      // Should return one chain per contig (trivial identity mapping)
+      expect(result.chains.length).toBe(numContigs);
+      for (let i = 0; i < numContigs; i++) {
+        expect(result.chains[i].length).toBe(1);
+        expect(result.chains[i][0].orderIndex).toBe(i);
+        expect(result.chains[i][0].inverted).toBe(false);
+      }
+      // Links should be empty (no computation performed)
+      expect(result.links).toEqual([]);
+      expect(result.threshold).toBe(0);
+    });
+
+    it('should still process assemblies with >= 60 contigs', () => {
+      const numContigs = 60;
+      const pixelsPerContig = 4;
+      const size = numContigs * pixelsPerContig;
+      const contigs: ContigInfo[] = [];
+      const ranges: ContigRange[] = [];
+      for (let i = 0; i < numContigs; i++) {
+        contigs.push(
+          makeContig(`ctg${i}`, i, i * pixelsPerContig, (i + 1) * pixelsPerContig, 10000),
+        );
+        ranges.push({ start: i * pixelsPerContig, end: (i + 1) * pixelsPerContig, orderIndex: i });
+      }
+      const contigOrder = contigs.map((_, i) => i);
+
+      // Create a contact map with adjacency signal between pairs of contigs
+      const adjacencies: Array<[number, number]> = [];
+      for (let i = 0; i < numContigs - 1; i += 2) {
+        adjacencies.push([i, i + 1]);
+      }
+      const contactMap = makeMapWithAdjacencies(size, ranges, adjacencies, 2.0);
+
+      const result = autoSort(contactMap, size, contigs, contigOrder, size, {
+        maxDiagonalDistance: 10,
+        signalCutoff: 0.01,
+        hardThreshold: 0.2,
       });
 
-      // chr1_a (1) and chr1_b (3) should be in the same chain
-      if (chainForContig.has(1) && chainForContig.has(3)) {
-        expect(chainForContig.get(1)).toBe(chainForContig.get(3));
-      }
+      // Should have computed links (non-trivial processing)
+      expect(result.links.length).toBeGreaterThan(0);
+      // Should have some multi-element chains from the adjacency signal
+      const multiElementChains = result.chains.filter(c => c.length > 1);
+      expect(multiElementChains.length).toBeGreaterThan(0);
     });
   });
 
@@ -526,6 +581,250 @@ describe('AutoSort', () => {
 
       // The largest chain should now have 3 elements
       expect(withMerge.chains[0].length).toBe(3);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // hierarchicalChainMerge
+  // -----------------------------------------------------------------------
+  describe('hierarchicalChainMerge', () => {
+    it('should merge two medium chains (both >= 3 contigs) from the same chromosome', () => {
+      // Two 3-element chains that the old mergeSmallChains would NOT merge
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }, { orderIndex: 1, inverted: false }, { orderIndex: 2, inverted: false }],
+          [{ orderIndex: 3, inverted: false }, { orderIndex: 4, inverted: false }, { orderIndex: 5, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      // Strong inter-chain link and strong intra-chain links
+      const links: ContigLink[] = [
+        // Intra-chain A links
+        { i: 0, j: 1, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+        { i: 1, j: 2, score: 0.85, orientation: 'HH', allScores: [0.85, 0.1, 0.1, 0.1] },
+        // Intra-chain B links
+        { i: 3, j: 4, score: 0.88, orientation: 'HH', allScores: [0.88, 0.1, 0.1, 0.1] },
+        { i: 4, j: 5, score: 0.82, orientation: 'HH', allScores: [0.82, 0.1, 0.1, 0.1] },
+        // Inter-chain link: strong enough to merge (> 50% of intra-chain averages)
+        { i: 2, j: 3, score: 0.7, orientation: 'HH', allScores: [0.7, 0.1, 0.1, 0.1] },
+      ];
+
+      const merged = hierarchicalChainMerge(initialResult, links, 0.05, 0.5);
+
+      // Should merge into a single chain of 6
+      expect(merged.chains.length).toBe(1);
+      expect(merged.chains[0].length).toBe(6);
+
+      // All contigs should be present
+      const indices = merged.chains[0].map(e => e.orderIndex).sort();
+      expect(indices).toEqual([0, 1, 2, 3, 4, 5]);
+    });
+
+    it('should NOT merge chains from different chromosomes (low inter-chain signal)', () => {
+      // Two 3-element chains with strong intra-chain links but very weak inter-chain link
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }, { orderIndex: 1, inverted: false }, { orderIndex: 2, inverted: false }],
+          [{ orderIndex: 3, inverted: false }, { orderIndex: 4, inverted: false }, { orderIndex: 5, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      const links: ContigLink[] = [
+        // Strong intra-chain links
+        { i: 0, j: 1, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+        { i: 1, j: 2, score: 0.85, orientation: 'HH', allScores: [0.85, 0.1, 0.1, 0.1] },
+        { i: 3, j: 4, score: 0.88, orientation: 'HH', allScores: [0.88, 0.1, 0.1, 0.1] },
+        { i: 4, j: 5, score: 0.82, orientation: 'HH', allScores: [0.82, 0.1, 0.1, 0.1] },
+        // Very weak inter-chain link: below 50% of intra-chain avg (safety guard)
+        // Avg intra A = (0.9+0.85)/2 = 0.875; Avg intra B = (0.88+0.82)/2 = 0.85
+        // Min = 0.85; 50% = 0.425. Link score 0.1 < 0.425 => blocked
+        { i: 2, j: 3, score: 0.1, orientation: 'HH', allScores: [0.1, 0.05, 0.05, 0.05] },
+      ];
+
+      const merged = hierarchicalChainMerge(initialResult, links, 0.05, 0.5);
+
+      // Should remain 2 separate chains (safety guard prevents merge)
+      expect(merged.chains.length).toBe(2);
+    });
+
+    it('should perform orientation-aware merge with HT orientation', () => {
+      // Chain A: [0, 1] with contig 1 at the tail
+      // Chain B: [2, 3] with contig 2 at the head
+      // HT link from contig 1 (tail of A) to contig 3 (tail of B)
+      // This should reverse chain B to connect properly
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }, { orderIndex: 1, inverted: false }],
+          [{ orderIndex: 2, inverted: false }, { orderIndex: 3, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      const links: ContigLink[] = [
+        // Intra-chain links (needed for safety guard computation with >= 2 contigs)
+        { i: 0, j: 1, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+        { i: 2, j: 3, score: 0.85, orientation: 'HH', allScores: [0.85, 0.1, 0.1, 0.1] },
+        // HT link: tail of I(1) connects to tail of J(3)
+        { i: 1, j: 3, score: 0.7, orientation: 'HT', allScores: [0.1, 0.7, 0.1, 0.1] },
+      ];
+
+      const merged = hierarchicalChainMerge(initialResult, links, 0.05, 0.5);
+
+      // Should merge into one chain
+      expect(merged.chains.length).toBe(1);
+      expect(merged.chains[0].length).toBe(4);
+
+      // All contigs present
+      const indices = merged.chains[0].map(e => e.orderIndex).sort();
+      expect(indices).toEqual([0, 1, 2, 3]);
+
+      // With HT orientation, chain B should have been reversed/inverted
+      // Check that at least some entries have inverted=true (orientation was applied)
+      const invertedCount = merged.chains[0].filter(e => e.inverted).length;
+      expect(invertedCount).toBeGreaterThan(0);
+    });
+
+    it('should progressively merge 3 chains from one chromosome into 1 (multi-pass)', () => {
+      // Three 2-element chains: [0,1], [2,3], [4,5]
+      // Links: A-B has score 0.7, B-C has score 0.6
+      // Should merge all into one chain across multiple passes
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }, { orderIndex: 1, inverted: false }],
+          [{ orderIndex: 2, inverted: false }, { orderIndex: 3, inverted: false }],
+          [{ orderIndex: 4, inverted: false }, { orderIndex: 5, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      const links: ContigLink[] = [
+        // Intra-chain links
+        { i: 0, j: 1, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+        { i: 2, j: 3, score: 0.88, orientation: 'HH', allScores: [0.88, 0.1, 0.1, 0.1] },
+        { i: 4, j: 5, score: 0.85, orientation: 'HH', allScores: [0.85, 0.1, 0.1, 0.1] },
+        // Inter-chain links
+        { i: 1, j: 2, score: 0.7, orientation: 'HH', allScores: [0.7, 0.1, 0.1, 0.1] },
+        { i: 3, j: 4, score: 0.6, orientation: 'HH', allScores: [0.6, 0.1, 0.1, 0.1] },
+      ];
+
+      const merged = hierarchicalChainMerge(initialResult, links, 0.05, 0.5);
+
+      // All 3 chains should merge into 1 across two passes
+      expect(merged.chains.length).toBe(1);
+      expect(merged.chains[0].length).toBe(6);
+
+      const indices = merged.chains[0].map(e => e.orderIndex).sort();
+      expect(indices).toEqual([0, 1, 2, 3, 4, 5]);
+    });
+
+    it('safety guard prevents merge when affinity is very low relative to intra-chain signal', () => {
+      // Two chains with very strong intra-chain signal but very weak inter-chain link
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }, { orderIndex: 1, inverted: false }],
+          [{ orderIndex: 2, inverted: false }, { orderIndex: 3, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      const links: ContigLink[] = [
+        // Very strong intra-chain links
+        { i: 0, j: 1, score: 0.95, orientation: 'HH', allScores: [0.95, 0.1, 0.1, 0.1] },
+        { i: 2, j: 3, score: 0.92, orientation: 'HH', allScores: [0.92, 0.1, 0.1, 0.1] },
+        // Inter-chain link is above the effective threshold but below 50% of min intra-chain avg
+        // Min intra = min(0.95, 0.92) = 0.92; 50% = 0.46
+        // Link score 0.2 < 0.46 => safety guard blocks
+        { i: 1, j: 2, score: 0.2, orientation: 'HH', allScores: [0.2, 0.1, 0.1, 0.1] },
+      ];
+
+      const merged = hierarchicalChainMerge(initialResult, links, 0.05, 0.5);
+
+      // Safety guard should prevent the merge
+      expect(merged.chains.length).toBe(2);
+    });
+
+    it('should merge singleton chains (no safety guard for singletons)', () => {
+      // Two singleton chains with a moderate link between them
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }],
+          [{ orderIndex: 1, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      const links: ContigLink[] = [
+        { i: 0, j: 1, score: 0.3, orientation: 'HH', allScores: [0.3, 0.1, 0.1, 0.1] },
+      ];
+
+      // effectiveThreshold = max(0.05, 0.5*0.3) = 0.15; 0.3 > 0.15 => should merge
+      const merged = hierarchicalChainMerge(initialResult, links, 0.05, 0.5);
+
+      expect(merged.chains.length).toBe(1);
+      expect(merged.chains[0].length).toBe(2);
+    });
+
+    it('should NOT merge when all inter-chain scores are below effective threshold', () => {
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }],
+          [{ orderIndex: 1, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      const links: ContigLink[] = [
+        // Score below effective threshold of max(0.05, 0.5*0.3) = 0.15
+        { i: 0, j: 1, score: 0.1, orientation: 'HH', allScores: [0.1, 0.05, 0.05, 0.05] },
+      ];
+
+      const merged = hierarchicalChainMerge(initialResult, links, 0.05, 0.5);
+
+      expect(merged.chains.length).toBe(2);
+    });
+
+    it('end-to-end: hierarchical merge produces fewer chains than legacy mergeSmallChains', () => {
+      // Setup: union-find with threshold 0.7 creates [0,1,2], [3,4,5], [6]
+      // The inter-chain link (0.6) is below UF threshold so UF won't merge the big chains.
+      // mergeSmallChains won't merge them either (both >= 3).
+      // hierarchicalChainMerge should merge [0,1,2] with [3,4,5] because 0.6 passes its threshold.
+      const links: ContigLink[] = [
+        { i: 0, j: 1, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+        { i: 1, j: 2, score: 0.85, orientation: 'HH', allScores: [0.85, 0.1, 0.1, 0.1] },
+        { i: 3, j: 4, score: 0.88, orientation: 'HH', allScores: [0.88, 0.1, 0.1, 0.1] },
+        { i: 4, j: 5, score: 0.82, orientation: 'HH', allScores: [0.82, 0.1, 0.1, 0.1] },
+        // Inter-chain link: below UF threshold 0.7, but above hierarchical threshold
+        { i: 2, j: 3, score: 0.6, orientation: 'HH', allScores: [0.6, 0.1, 0.1, 0.1] },
+        // Weak link to singleton
+        { i: 5, j: 6, score: 0.15, orientation: 'HH', allScores: [0.15, 0.05, 0.05, 0.05] },
+      ];
+
+      const ufThreshold = 0.7;
+
+      const initial = unionFindSort(links, 7, ufThreshold);
+      expect(initial.chains.length).toBe(3); // [0,1,2], [3,4,5], [6]
+
+      // Legacy: can only merge singleton [6] (since both big chains >= 3)
+      const legacyMerged = mergeSmallChains(initial, links, 3, 0.05);
+      // The 0.15 link for [6] is above 0.05, so [6] merges. But big chains stay separate.
+      expect(legacyMerged.chains.length).toBe(2);
+
+      // Hierarchical: merges [0,1,2] + [3,4,5] via the 0.6 inter-chain link
+      const initial2 = unionFindSort(links, 7, ufThreshold);
+      const hierarchicalMerged = hierarchicalChainMerge(initial2, links, 0.05, ufThreshold);
+      // Should produce fewer chains than legacy
+      expect(hierarchicalMerged.chains.length).toBeLessThanOrEqual(legacyMerged.chains.length);
+      // The two large chains should have merged
+      expect(hierarchicalMerged.chains[0].length).toBeGreaterThanOrEqual(6);
     });
   });
 

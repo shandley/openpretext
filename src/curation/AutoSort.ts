@@ -449,16 +449,9 @@ export function unionFindSort(
 // ---------------------------------------------------------------------------
 
 /**
- * Second-pass chain merge: join small chains that likely belong to
- * the same chromosome using weaker inter-chain Hi-C signal.
- *
- * After the initial union-find chaining, some chromosomes are split
- * across multiple chains. This pass merges chain pairs where:
- * 1. At least one chain has fewer contigs than `minChainSize`
- * 2. The best inter-chain link score exceeds `mergeThreshold`
- *
- * Chains are merged by appending the smaller chain to the end of
- * the larger chain (no orientation adjustment in this pass).
+ * Legacy second-pass chain merge (kept for backward compatibility).
+ * Only merges chains where at least one has fewer than `minChainSize` contigs.
+ * @deprecated Use hierarchicalChainMerge instead.
  */
 export function mergeSmallChains(
   result: AutoSortResult,
@@ -531,6 +524,259 @@ export function mergeSmallChains(
 }
 
 // ---------------------------------------------------------------------------
+// Hierarchical / agglomerative chain merge
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the average intra-chain link score for a given chain.
+ *
+ * Measures how strongly the contigs within a chain are linked to each other.
+ * Used as a baseline for the safety guard that prevents merging chains from
+ * different chromosomes.
+ */
+function computeIntraChainScore(
+  chain: ChainEntry[],
+  links: ContigLink[],
+): number {
+  const members = new Set(chain.map(e => e.orderIndex));
+  let sum = 0;
+  let count = 0;
+  for (const link of links) {
+    if (members.has(link.i) && members.has(link.j)) {
+      sum += link.score;
+      count++;
+    }
+  }
+  return count > 0 ? sum / count : 0;
+}
+
+/**
+ * Information about the best inter-chain link between two chains.
+ */
+interface InterChainLink {
+  /** Index of chain A in the chains array. */
+  chainIdxA: number;
+  /** Index of chain B in the chains array. */
+  chainIdxB: number;
+  /** Best inter-chain link score (max over all contig pairs). */
+  score: number;
+  /** The actual best link (for orientation info). */
+  bestLink: ContigLink;
+}
+
+/**
+ * Hierarchical (agglomerative) chain merge: iteratively merge the most
+ * similar chain pair until no pair exceeds the merge threshold.
+ *
+ * Improvements over mergeSmallChains:
+ * 1. No minimum chain size restriction -- any two chains can merge
+ * 2. Orientation-aware: uses link orientation to correctly orient chains
+ * 3. Multi-pass: repeatedly finds and merges the best pair
+ * 4. Safety guard: won't merge if inter-chain affinity is < 50% of
+ *    the average intra-chain score of either chain
+ * 5. Adaptive threshold: uses max(mergeThreshold, threshold * 0.3)
+ *
+ * @param result - Initial AutoSortResult from unionFindSort.
+ * @param links - All computed links (sorted by score descending).
+ * @param mergeThreshold - Floor for the merge threshold.
+ * @param unionFindThreshold - The threshold used by unionFindSort.
+ * @returns AutoSortResult with merged chains.
+ */
+export function hierarchicalChainMerge(
+  result: AutoSortResult,
+  links: ContigLink[],
+  mergeThreshold: number = 0.05,
+  unionFindThreshold: number = 0.2,
+): AutoSortResult {
+  // Adaptive threshold: higher of mergeThreshold and 30% of UF threshold
+  const effectiveThreshold = Math.max(mergeThreshold, unionFindThreshold * 0.3);
+
+  // Build working copy of chains (filter out empties, deep copy entries)
+  let chains: ChainEntry[][] = result.chains
+    .filter(c => c.length > 0)
+    .map(c => c.map(e => ({ ...e })));
+
+  // Build index: orderIndex -> chain array index
+  function rebuildIndex(): Map<number, number> {
+    const idx = new Map<number, number>();
+    for (let ci = 0; ci < chains.length; ci++) {
+      for (const entry of chains[ci]) {
+        idx.set(entry.orderIndex, ci);
+      }
+    }
+    return idx;
+  }
+
+  /**
+   * Find the best chain pair to merge (highest inter-chain affinity
+   * above the effective threshold, passing the safety guard).
+   */
+  function findBestMerge(chainIndex: Map<number, number>): InterChainLink | null {
+    // For each pair of distinct chains, find the maximum link score
+    const pairBest = new Map<string, InterChainLink>();
+
+    for (const link of links) {
+      const ciA = chainIndex.get(link.i);
+      const ciB = chainIndex.get(link.j);
+      if (ciA === undefined || ciB === undefined) continue;
+      if (ciA === ciB) continue;
+
+      // Canonical key: smaller index first
+      const lo = Math.min(ciA, ciB);
+      const hi = Math.max(ciA, ciB);
+      const key = `${lo}:${hi}`;
+
+      const existing = pairBest.get(key);
+      if (!existing || link.score > existing.score) {
+        pairBest.set(key, {
+          chainIdxA: ciA,
+          chainIdxB: ciB,
+          score: link.score,
+          bestLink: link,
+        });
+      }
+    }
+
+    // Find the pair with the highest score that passes all guards
+    let best: InterChainLink | null = null;
+    for (const candidate of pairBest.values()) {
+      if (candidate.score < effectiveThreshold) continue;
+
+      const chainA = chains[candidate.chainIdxA];
+      const chainB = chains[candidate.chainIdxB];
+
+      // Safety guard: only apply when both chains have >= 2 contigs
+      // (singletons have no intra-chain links so guard is not applicable)
+      if (chainA.length >= 2 && chainB.length >= 2) {
+        const intraA = computeIntraChainScore(chainA, links);
+        const intraB = computeIntraChainScore(chainB, links);
+        const minIntra = Math.min(intraA, intraB);
+
+        if (minIntra > 0 && candidate.score < 0.5 * minIntra) {
+          continue; // Safety guard: inter-chain affinity too weak
+        }
+      }
+
+      if (!best || candidate.score > best.score) {
+        best = candidate;
+      }
+    }
+
+    return best;
+  }
+
+  // Iterative merging loop
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const chainIndex = rebuildIndex();
+    const best = findBestMerge(chainIndex);
+    if (!best) break;
+
+    const chainA = chains[best.chainIdxA];
+    const chainB = chains[best.chainIdxB];
+    if (!chainA || !chainB || chainA.length === 0 || chainB.length === 0) break;
+
+    // Determine which chain is larger (keep) and smaller (merge into it)
+    let keepIdx: number;
+    let mergeIdx: number;
+    let keepIsI: boolean;
+
+    if (chainA.length >= chainB.length) {
+      keepIdx = best.chainIdxA;
+      mergeIdx = best.chainIdxB;
+      keepIsI = chainA.some(e => e.orderIndex === best.bestLink.i);
+    } else {
+      keepIdx = best.chainIdxB;
+      mergeIdx = best.chainIdxA;
+      keepIsI = chainB.some(e => e.orderIndex === best.bestLink.i);
+    }
+
+    const keepChain = chains[keepIdx];
+    const mergeChain = chains[mergeIdx];
+
+    // Orientation-aware merging using the best link's orientation
+    const link = best.bestLink;
+    const orientation = link.orientation;
+
+    const iContig = link.i;
+    const jContig = link.j;
+
+    // Identify which working chain contains i and which contains j
+    const iChain = keepIsI ? keepChain : mergeChain;
+    const jChain = keepIsI ? mergeChain : keepChain;
+
+    const iPosInChain = iChain.findIndex(e => e.orderIndex === iContig);
+    const jPosInChain = jChain.findIndex(e => e.orderIndex === jContig);
+
+    const iIsHead = iPosInChain === 0;
+    const iIsTail = iPosInChain === iChain.length - 1;
+    const jIsHead = jPosInChain === 0;
+    const jIsTail = jPosInChain === jChain.length - 1;
+
+    const iAtEndpoint = iIsHead || iIsTail;
+    const jAtEndpoint = jIsHead || jIsTail;
+
+    if (iAtEndpoint && jAtEndpoint) {
+      // Orientation-aware merge: arrange chains so the connecting ends meet
+
+      // Step 1: Position i at the correct end of iChain
+      const iShouldBeTail = orientation === 'HH' || orientation === 'HT';
+      if (iShouldBeTail && iIsHead && !iIsTail) {
+        iChain.reverse();
+        iChain.forEach(e => e.inverted = !e.inverted);
+      } else if (!iShouldBeTail && iIsTail && !iIsHead) {
+        iChain.reverse();
+        iChain.forEach(e => e.inverted = !e.inverted);
+      }
+
+      // Step 2: Position j at the correct end of jChain
+      const jShouldBeHead = orientation === 'HH' || orientation === 'TH';
+      if (jShouldBeHead && jIsTail && !jIsHead) {
+        jChain.reverse();
+        jChain.forEach(e => e.inverted = !e.inverted);
+      } else if (!jShouldBeHead && jIsHead && !jIsTail) {
+        jChain.reverse();
+        jChain.forEach(e => e.inverted = !e.inverted);
+      }
+
+      // Step 3: Handle inversion for non-HH orientations
+      if (orientation === 'HT') {
+        jChain.reverse();
+        jChain.forEach(e => e.inverted = !e.inverted);
+      } else if (orientation === 'TH') {
+        iChain.reverse();
+        iChain.forEach(e => e.inverted = !e.inverted);
+      } else if (orientation === 'TT') {
+        iChain.reverse();
+        iChain.forEach(e => e.inverted = !e.inverted);
+      }
+
+      // Step 4: Concatenate iChain + jChain
+      const merged = [...iChain, ...jChain];
+      chains[keepIdx] = merged;
+      chains[mergeIdx] = [];
+    } else {
+      // Fallback: simple append when linking contigs are not at endpoints
+      const merged = [...keepChain, ...mergeChain];
+      chains[keepIdx] = merged;
+      chains[mergeIdx] = [];
+    }
+
+    // Remove empty chains to keep array compact
+    chains = chains.filter(c => c.length > 0);
+  }
+
+  // Final sort: largest chains first
+  chains.sort((a, b) => b.length - a.length);
+
+  return {
+    chains,
+    links: result.links,
+    threshold: result.threshold,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Top-level autoSort
 // ---------------------------------------------------------------------------
 
@@ -556,6 +802,19 @@ export function autoSort(
 ): AutoSortResult {
   const p = { ...DEFAULT_PARAMS, ...params };
 
+  // If there are very few contigs, the assembly is already near-chromosome-scale.
+  // AutoSort produces noise in this case — return each contig as its own chain.
+  if (contigOrder.length < 60) {
+    const trivialChains: ChainEntry[][] = contigOrder.map((_, idx) => [
+      { orderIndex: idx, inverted: false }
+    ]);
+    return {
+      chains: trivialChains,
+      links: [],
+      threshold: 0,
+    };
+  }
+
   // Compute all pairwise link scores
   const links = computeAllLinkScores(contactMap, size, contigs, contigOrder, textureSize, p);
 
@@ -569,5 +828,7 @@ export function autoSort(
 
   // Run Union Find chaining
   const initial = unionFindSort(links, contigOrder.length, threshold);
-  return mergeSmallChains(initial, links, p.minChainSize ?? 3, p.mergeThreshold ?? 0.05);
+
+  // Hierarchical chain merge replaces the old mergeSmallChains
+  return hierarchicalChainMerge(initial, links, p.mergeThreshold ?? 0.05, threshold);
 }
