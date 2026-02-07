@@ -1,5 +1,22 @@
 /**
  * Benchmark runner — orchestrates load -> autoCut -> autoSort -> compare.
+ *
+ * Evaluates AutoCut and AutoSort on the **curated** assembly where ground
+ * truth is known from contig names (SUPER_N, Super_Scaffold_N, chrN).
+ *
+ * Pre and post-curation .pretext files use completely different contig
+ * naming systems (e.g., scaffold_1.H1 vs SUPER_2), making cross-file
+ * contig mapping impossible. Instead, we:
+ *
+ * 1. Load the curated assembly (known-good ordering + chromosome labels)
+ * 2. Run AutoCut on the curated contact map (should find few breakpoints
+ *    since contigs are already at correct boundaries)
+ * 3. Run AutoSort on the curated contact map (should recover the curated
+ *    chromosome groupings from the Hi-C signal)
+ * 4. Compare predictions against name-derived ground truth
+ *
+ * The pre-curation file is loaded for supplementary stats (contig count,
+ * fragmentation level) but not used in metric computation.
  */
 
 import type { ContigInfo } from '../src/core/State';
@@ -99,7 +116,11 @@ export function applyBreakpoints(
 /**
  * Run the full benchmark pipeline for a single specimen.
  *
- * @param preCurationPath - Path to the pre-curation .pretext file.
+ * Evaluates algorithms on the curated assembly where chromosome ground
+ * truth is known from contig names. The pre-curation file provides
+ * supplementary stats only.
+ *
+ * @param preCurationPath - Path to the pre-curation .pretext file (for stats).
  * @param postCurationPath - Path to the post-curation (curated) .pretext file.
  * @param species - Species name for labeling.
  * @param options - Optional algorithm parameters.
@@ -112,46 +133,46 @@ export async function runBenchmark(
 ): Promise<BenchmarkResult> {
   const t0 = performance.now();
 
-  // Step 1: Load pre-curation assembly
+  // Load pre-curation assembly (for supplementary stats)
   const preAssembly = await loadPretextFromDisk(preCurationPath);
+
+  // Load curated assembly — this is both input and ground truth source
+  const curatedAssembly = await loadPretextFromDisk(postCurationPath);
+  const groundTruth = extractGroundTruth(curatedAssembly);
   const tLoad = performance.now();
 
-  // Step 2: Load post-curation assembly and extract ground truth
-  const postAssembly = await loadPretextFromDisk(postCurationPath);
-  const groundTruth = extractGroundTruth(postAssembly);
-
-  // Step 3: Run autoCut on pre-curation map
+  // Run AutoCut on the curated contact map
   const cutResult = autoCut(
-    preAssembly.contactMap,
-    preAssembly.overviewSize,
-    preAssembly.contigs,
-    preAssembly.contigOrder,
-    preAssembly.textureSize,
+    curatedAssembly.contactMap,
+    curatedAssembly.overviewSize,
+    curatedAssembly.contigs,
+    curatedAssembly.contigOrder,
+    curatedAssembly.textureSize,
     options.autoCutParams,
   );
   const tCut = performance.now();
 
-  // Step 4: Apply breakpoints to get post-cut state
+  // Apply breakpoints to get post-cut state
   const postCut = applyBreakpoints(
-    preAssembly.contigs,
-    preAssembly.contigOrder,
+    curatedAssembly.contigs,
+    curatedAssembly.contigOrder,
     cutResult,
   );
 
-  // Step 5: Run autoSort on post-cut state
+  // Run AutoSort on the curated contact map with post-cut contigs
   const sortResult = autoSort(
-    preAssembly.contactMap,
-    preAssembly.overviewSize,
+    curatedAssembly.contactMap,
+    curatedAssembly.overviewSize,
     postCut.contigs,
     postCut.contigOrder,
-    preAssembly.textureSize,
+    curatedAssembly.textureSize,
     options.autoSortParams,
   );
   const tSort = performance.now();
 
-  // Step 6: Compute metrics
+  // ---- Compute metrics ----
 
-  // Build ground truth breakpoint positions from splits
+  // Breakpoint metrics: compare detected breakpoints against ground truth splits
   const gtBreakpoints: number[] = [];
   for (const [baseName, split] of groundTruth.splits) {
     const leftContig = groundTruth.contigs.find(c => c.name === split.leftName);
@@ -160,7 +181,6 @@ export async function runBenchmark(
     }
   }
 
-  // Flatten detected breakpoints
   const detectedBreakpoints: number[] = [];
   for (const bps of cutResult.breakpoints.values()) {
     for (const bp of bps) {
@@ -171,35 +191,78 @@ export async function runBenchmark(
   const breakpointMetrics = computeBreakpointMetrics(
     detectedBreakpoints,
     gtBreakpoints,
-    preAssembly.textureSize,
+    curatedAssembly.textureSize,
   );
 
-  // Build ground truth inversions map
-  const gtInversions = new Map<number, boolean>();
-  // In ground truth, all contigs in the curated file are in their correct orientation
-  for (let i = 0; i < groundTruth.contigOrder.length; i++) {
-    gtInversions.set(i, false);
+  // ---- Sort metrics via name-based ground truth ----
+  //
+  // Map each post-cut contig back to its ground truth chromosome and rank
+  // using contig names (which are preserved or predictably derived via _L/_R).
+
+  const gtNameMap = new Map<string, { rank: number; chromIdx: number }>();
+  for (let pos = 0; pos < groundTruth.contigOrder.length; pos++) {
+    const contigIdx = groundTruth.contigOrder[pos];
+    const name = groundTruth.contigs[contigIdx].name;
+    gtNameMap.set(name, {
+      rank: pos,
+      chromIdx: groundTruth.chromosomeAssignments[pos],
+    });
   }
+
+  // For post-cut contigs, map names back to ground truth.
+  // If a contig was split (X -> X_L, X_R), look up the parent name.
+  const mappedChromAssignments: number[] = [];
+  const mappedGtRanks: number[] = [];
+  const mappedInversions = new Map<number, boolean>();
+  const unmappedChromIdx = new Set(groundTruth.chromosomeAssignments).size;
+
+  for (let orderPos = 0; orderPos < postCut.contigOrder.length; orderPos++) {
+    const contigId = postCut.contigOrder[orderPos];
+    const contigName = postCut.contigs[contigId].name;
+
+    // Try exact name match first, then parent name (strip _L/_R from autocut splits)
+    let gt = gtNameMap.get(contigName);
+    if (!gt) {
+      const parentName = contigName.replace(/_[LR]$/, '');
+      gt = gtNameMap.get(parentName);
+    }
+
+    if (gt) {
+      mappedChromAssignments.push(gt.chromIdx);
+      mappedGtRanks.push(gt.rank);
+      mappedInversions.set(orderPos, false);
+    } else {
+      mappedChromAssignments.push(unmappedChromIdx);
+      mappedGtRanks.push(-1);
+      mappedInversions.set(orderPos, false);
+    }
+  }
+
+  // Build ground truth ordering in post-cut index space
+  const groundTruthOrderMapped = postCut.contigOrder
+    .map((_, orderPos) => orderPos)
+    .filter(orderPos => mappedGtRanks[orderPos] >= 0)
+    .sort((a, b) => mappedGtRanks[a] - mappedGtRanks[b]);
 
   const sortMetrics = computeSortMetrics(
     sortResult.chains,
-    groundTruth.contigOrder,
-    groundTruth.chromosomeAssignments,
-    gtInversions,
+    groundTruthOrderMapped,
+    mappedChromAssignments,
+    mappedInversions,
   );
 
   const chromosomeCompleteness = computeChromosomeCompleteness(
     sortResult.chains,
     postCut.contigs,
     postCut.contigOrder,
-    groundTruth.chromosomeAssignments,
+    mappedChromAssignments,
   );
 
   const tEnd = performance.now();
 
   return {
     species,
-    numContigs: preAssembly.contigs.length,
+    numContigs: curatedAssembly.contigs.length,
     breakpointMetrics,
     sortMetrics,
     chromosomeCompleteness,

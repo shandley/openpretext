@@ -55,6 +55,10 @@ export interface AutoSortParams {
   signalCutoff: number;
   /** Hard ceiling on threshold. */
   hardThreshold: number;
+  /** Chains smaller than this are candidates for merging. */
+  minChainSize: number;
+  /** Minimum link score to merge chains. */
+  mergeThreshold: number;
 }
 
 /** Contig range in overview pixels. */
@@ -68,6 +72,8 @@ const DEFAULT_PARAMS: AutoSortParams = {
   maxDiagonalDistance: 50,
   signalCutoff: 0.05,
   hardThreshold: 0.2,
+  minChainSize: 3,
+  mergeThreshold: 0.05,
 };
 
 // ---------------------------------------------------------------------------
@@ -148,6 +154,13 @@ export function computeLinkScore(
   profile: Float64Array,
   maxD: number,
 ): number {
+  // Corner anchor points
+  const iLen = rangeI.end - rangeI.start;
+  const jLen = rangeJ.end - rangeJ.start;
+
+  // Too few pixels for reliable orientation scoring
+  if (iLen < 4 || jLen < 4) return 0;
+
   // Determine which corners to sample based on orientation.
   // The "relevant corner" is where the two contig ends are closest
   // on the diagonal — this is where Hi-C signal should be strongest
@@ -158,10 +171,6 @@ export function computeLinkScore(
   // - HT: tail of I, tail of J → bottom-right corner
   // - TH: head of I, head of J → top-left corner
   // - TT: head of I, tail of J → top-right corner
-
-  // Corner anchor points
-  const iLen = rangeI.end - rangeI.start;
-  const jLen = rangeJ.end - rangeJ.start;
 
   // The anchor pixel in I's range (row)
   const anchorI = invertI ? rangeI.start : rangeI.end - 1;
@@ -373,7 +382,7 @@ export function unionFindSort(
     // If J is at the tail but should be at the head, reverse chain B
     if (jShouldBeHead && nodeJ.isTail && !nodeJ.isHead) {
       needsReverseB = true;
-    } else if (!jShouldBeHead && nodeJ.isHead && !nodeJ.isHead) {
+    } else if (!jShouldBeHead && nodeJ.isHead && !nodeJ.isTail) {
       needsReverseB = true;
     }
 
@@ -436,6 +445,92 @@ export function unionFindSort(
 }
 
 // ---------------------------------------------------------------------------
+// Chain merge post-processing
+// ---------------------------------------------------------------------------
+
+/**
+ * Second-pass chain merge: join small chains that likely belong to
+ * the same chromosome using weaker inter-chain Hi-C signal.
+ *
+ * After the initial union-find chaining, some chromosomes are split
+ * across multiple chains. This pass merges chain pairs where:
+ * 1. At least one chain has fewer contigs than `minChainSize`
+ * 2. The best inter-chain link score exceeds `mergeThreshold`
+ *
+ * Chains are merged by appending the smaller chain to the end of
+ * the larger chain (no orientation adjustment in this pass).
+ */
+export function mergeSmallChains(
+  result: AutoSortResult,
+  links: ContigLink[],
+  minChainSize: number = 3,
+  mergeThreshold: number = 0.05,
+): AutoSortResult {
+  // Build a working copy of chains
+  const chains: ChainEntry[][] = result.chains.map(c => [...c]);
+
+  // Build a map from orderIndex -> index in chains array
+  const chainIndexOf = new Map<number, number>();
+  for (let ci = 0; ci < chains.length; ci++) {
+    for (const entry of chains[ci]) {
+      chainIndexOf.set(entry.orderIndex, ci);
+    }
+  }
+
+  // Links are already sorted by score descending
+  for (const link of links) {
+    if (link.score < mergeThreshold) break;
+
+    const ciA = chainIndexOf.get(link.i);
+    const ciB = chainIndexOf.get(link.j);
+
+    // Both must be found and in different chains
+    if (ciA === undefined || ciB === undefined) continue;
+    if (ciA === ciB) continue;
+
+    const chainA = chains[ciA];
+    const chainB = chains[ciB];
+
+    // At least one chain must be small
+    if (chainA.length >= minChainSize && chainB.length >= minChainSize) continue;
+
+    // Merge smaller into larger (append smaller to end of larger)
+    let keepIdx: number;
+    let mergeIdx: number;
+    if (chainA.length >= chainB.length) {
+      keepIdx = ciA;
+      mergeIdx = ciB;
+    } else {
+      keepIdx = ciB;
+      mergeIdx = ciA;
+    }
+
+    const kept = chains[keepIdx];
+    const merged = chains[mergeIdx];
+
+    // Append merged chain entries to kept chain
+    for (const entry of merged) {
+      kept.push(entry);
+      chainIndexOf.set(entry.orderIndex, keepIdx);
+    }
+
+    // Empty the merged chain
+    chains[mergeIdx] = [];
+  }
+
+  // Collect non-empty chains, sorted by length descending
+  const resultChains = chains
+    .filter(c => c.length > 0)
+    .sort((a, b) => b.length - a.length);
+
+  return {
+    chains: resultChains,
+    links: result.links,
+    threshold: result.threshold,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Top-level autoSort
 // ---------------------------------------------------------------------------
 
@@ -473,5 +568,6 @@ export function autoSort(
   }
 
   // Run Union Find chaining
-  return unionFindSort(links, contigOrder.length, threshold);
+  const initial = unionFindSort(links, contigOrder.length, threshold);
+  return mergeSmallChains(initial, links, p.minChainSize ?? 3, p.mergeThreshold ?? 0.05);
 }

@@ -39,7 +39,7 @@ export interface AutoCutResult {
 }
 
 const DEFAULT_PARAMS: AutoCutParams = {
-  cutThreshold: 0.20,
+  cutThreshold: 0.30,
   windowSize: 8,
   minFragmentSize: 16,
 };
@@ -128,22 +128,32 @@ export function detectBreakpoints(
   const len = density.length;
   if (len < minFragmentSize * 2) return [];
 
-  // Compute overall average density (excluding zeros for robustness)
-  let totalSum = 0;
-  let totalCount = 0;
+  // Compute local baseline using a wide sliding window (4x windowSize)
+  const baselineWindow = windowSize * 4;
+  const localBaseline = new Float64Array(len);
   for (let i = 0; i < len; i++) {
-    if (density[i] > 0) {
-      totalSum += density[i];
-      totalCount++;
+    let sum = 0;
+    let count = 0;
+    const lo = Math.max(0, i - baselineWindow);
+    const hi = Math.min(len, i + baselineWindow + 1);
+    for (let j = lo; j < hi; j++) {
+      if (density[j] > 0) {
+        sum += density[j];
+        count++;
+      }
     }
+    localBaseline[i] = count > 0 ? sum / count : 0;
   }
-  const baseline = totalCount > 0 ? totalSum / totalCount : 0;
-  if (baseline <= 0) return [];
 
-  // Mark positions that are significantly below baseline
+  // Check if there's any signal at all
+  const hasSignal = localBaseline.some(v => v > 0);
+  if (!hasSignal) return [];
+
+  // Mark positions that are significantly below local baseline
   const isLow = new Uint8Array(len);
   for (let i = 0; i < len; i++) {
-    const drop = (baseline - density[i]) / baseline;
+    if (localBaseline[i] <= 0) continue;
+    const drop = (localBaseline[i] - density[i]) / localBaseline[i];
     if (drop > cutThreshold) {
       isLow[i] = 1;
     }
@@ -166,17 +176,22 @@ export function detectBreakpoints(
     regions.push({ start: regionStart, end: len });
   }
 
+  // Filter out narrow regions — real misassemblies create wider disruptions
+  const minRegionWidth = Math.max(3, Math.floor(windowSize / 2));
+  const wideRegions = regions.filter(r => (r.end - r.start) >= minRegionWidth);
+
   // For each region, pick the midpoint as the breakpoint
   const candidates: Breakpoint[] = [];
-  for (const region of regions) {
+  for (const region of wideRegions) {
     const mid = Math.floor((region.start + region.end) / 2);
-    // Confidence: how much the region density drops relative to baseline
+    const regionBaseline = localBaseline[mid];
+    // Confidence: how much the region density drops relative to local baseline
     let regionSum = 0;
     for (let i = region.start; i < region.end; i++) {
       regionSum += density[i];
     }
     const regionAvg = regionSum / (region.end - region.start);
-    const confidence = Math.max(0, (baseline - regionAvg) / baseline);
+    const confidence = regionBaseline > 0 ? Math.max(0, (regionBaseline - regionAvg) / regionBaseline) : 0;
     candidates.push({ offset: mid, confidence });
   }
 
@@ -294,7 +309,7 @@ export function autoCut(
       const textureBreakpoints = bps.map(bp => ({
         offset: Math.round(bp.offset * scale),
         confidence: bp.confidence,
-      })).filter(bp => bp.offset > 0 && bp.offset < contigPixelLength && bp.confidence > 0.3);
+      })).filter(bp => bp.offset > 0 && bp.offset < contigPixelLength && bp.confidence > 0.5);
 
       if (textureBreakpoints.length > 0) {
         breakpoints.set(orderIdx, textureBreakpoints);

@@ -5,10 +5,12 @@ import {
   computeIntraDiagonalProfile,
   computeLinkScore,
   unionFindSort,
+  mergeSmallChains,
   autoSort,
   type ContigRange,
   type ContigLink,
   type ChainEntry,
+  type AutoSortResult,
 } from '../../src/curation/AutoSort';
 
 // ---------------------------------------------------------------------------
@@ -385,6 +387,206 @@ describe('AutoSort', () => {
         // Should be back to original
         expect(state.get().contigOrder).toEqual(originalOrder);
       }
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Bug fix: chain reversal condition (line 376)
+  // -----------------------------------------------------------------------
+  describe('chain reversal bug fix', () => {
+    it('should reverse chain B when J is at the head and should not be', () => {
+      // Set up scenario: 3 contigs where a chain [2, 1] already exists
+      // (contig 2 is head, contig 1 is tail).
+      // Then a TT link between contig 0 and contig 2 arrives.
+      // TT means: head of I connects to tail of J.
+      // So J (contig 2) should be at the TAIL of its chain (jShouldBeHead = false).
+      // But contig 2 IS the head of chain [2, 1].
+      // The fix ensures the chain gets reversed to [1, 2] so contig 2 is at the tail.
+
+      // First link: chain contigs 2 and 1 together with HH orientation
+      // This creates chain [2, 1] (contig 2 at head, contig 1 at tail)
+      const links: ContigLink[] = [
+        { i: 2, j: 1, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+        // TT link: head of 0 connects to tail of 2
+        // jShouldBeHead = false (TT), so J (contig 2) should be at the TAIL
+        // But contig 2 is at the HEAD of its chain -> needs reversal
+        { i: 0, j: 2, score: 0.8, orientation: 'TT', allScores: [0.1, 0.1, 0.1, 0.8] },
+      ];
+
+      const result = unionFindSort(links, 3, 0.5);
+
+      // All 3 contigs should be in one chain (the bug would prevent the merge)
+      expect(result.chains.length).toBe(1);
+      expect(result.chains[0].length).toBe(3);
+
+      // Verify all contigs are present
+      const indices = result.chains[0].map(e => e.orderIndex).sort();
+      expect(indices).toEqual([0, 1, 2]);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // mergeSmallChains
+  // -----------------------------------------------------------------------
+  describe('mergeSmallChains', () => {
+    it('should merge singleton chains when link exceeds mergeThreshold', () => {
+      // Two singleton chains and one 2-element chain
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }, { orderIndex: 1, inverted: false }],
+          [{ orderIndex: 2, inverted: false }],
+          [{ orderIndex: 3, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      // Link between contig 2 and contig 3 (both singletons) with score above threshold
+      const links: ContigLink[] = [
+        { i: 2, j: 3, score: 0.3, orientation: 'HH', allScores: [0.3, 0.1, 0.1, 0.1] },
+      ];
+
+      const merged = mergeSmallChains(initialResult, links, 3, 0.05);
+
+      // Singletons 2 and 3 should be merged; chain [0,1] stays separate
+      expect(merged.chains.length).toBe(2);
+
+      // The larger chain should have 2 entries (the merged singletons)
+      // and the original 2-element chain
+      const chainLengths = merged.chains.map(c => c.length).sort();
+      expect(chainLengths).toEqual([2, 2]);
+
+      // Verify that contigs 2 and 3 are in the same chain
+      const chainWith2 = merged.chains.find(c => c.some(e => e.orderIndex === 2));
+      const chainWith3 = merged.chains.find(c => c.some(e => e.orderIndex === 3));
+      expect(chainWith2).toBe(chainWith3);
+    });
+
+    it('should NOT merge chains when both are at or above minChainSize', () => {
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }, { orderIndex: 1, inverted: false }, { orderIndex: 2, inverted: false }],
+          [{ orderIndex: 3, inverted: false }, { orderIndex: 4, inverted: false }, { orderIndex: 5, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      // Strong link between the two chains, but both have length >= minChainSize=3
+      const links: ContigLink[] = [
+        { i: 0, j: 3, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+      ];
+
+      const merged = mergeSmallChains(initialResult, links, 3, 0.05);
+
+      // Should still have 2 separate chains
+      expect(merged.chains.length).toBe(2);
+    });
+
+    it('should NOT merge chains when link score is below mergeThreshold', () => {
+      const initialResult: AutoSortResult = {
+        chains: [
+          [{ orderIndex: 0, inverted: false }],
+          [{ orderIndex: 1, inverted: false }],
+        ],
+        links: [],
+        threshold: 0.5,
+      };
+
+      // Link score below mergeThreshold
+      const links: ContigLink[] = [
+        { i: 0, j: 1, score: 0.02, orientation: 'HH', allScores: [0.02, 0.01, 0.01, 0.01] },
+      ];
+
+      const merged = mergeSmallChains(initialResult, links, 3, 0.05);
+
+      // Should still have 2 separate chains
+      expect(merged.chains.length).toBe(2);
+    });
+
+    it('end-to-end autoSort should produce fewer chains with merge than without', () => {
+      // 5 contigs: union-find will create some small chains,
+      // merge should reduce the count
+      const links: ContigLink[] = [
+        // Strong link chains 0-1
+        { i: 0, j: 1, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+        // Strong link chains 2-3
+        { i: 2, j: 3, score: 0.85, orientation: 'HH', allScores: [0.85, 0.1, 0.1, 0.1] },
+        // Weak link between chain [0,1] and singleton 4 (above merge threshold but below union-find threshold)
+        { i: 1, j: 4, score: 0.1, orientation: 'HH', allScores: [0.1, 0.05, 0.05, 0.05] },
+      ];
+
+      // Without merge: threshold 0.5 -> chains: [0,1], [2,3], [4]
+      const withoutMerge = unionFindSort(links, 5, 0.5);
+      expect(withoutMerge.chains.length).toBe(3);
+
+      // With merge: singleton [4] should merge with [0,1] via the 0.1 score link
+      const withMerge = mergeSmallChains(withoutMerge, links, 3, 0.05);
+      expect(withMerge.chains.length).toBe(2);
+
+      // The largest chain should now have 3 elements
+      expect(withMerge.chains[0].length).toBe(3);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Small contig orientation (computeLinkScore minimum pixel width)
+  // -----------------------------------------------------------------------
+  describe('computeLinkScore small contig guard', () => {
+    it('should return 0 when a contig has fewer than 4 pixels', () => {
+      const size = 64;
+      // rangeI has only 3 pixels wide (< 4)
+      const rangeSmall: ContigRange = { start: 0, end: 3, orderIndex: 0 };
+      const rangeNormal: ContigRange = { start: 10, end: 40, orderIndex: 1 };
+
+      // Create a map with some signal
+      const map = new Float32Array(size * size);
+      for (let p = 0; p < size; p++) {
+        for (let d = 1; d <= 10 && p + d < size; d++) {
+          const val = 2.0 / Math.sqrt(d);
+          map[(p + d) * size + p] = val;
+          map[p * size + (p + d)] = val;
+        }
+      }
+
+      const profile = computeIntraDiagonalProfile(map, size, [rangeSmall, rangeNormal], 20);
+
+      // Score with the small contig should be 0
+      const score = computeLinkScore(map, size, rangeSmall, rangeNormal, false, false, profile, 20);
+      expect(score).toBe(0);
+    });
+
+    it('should return 0 when J contig has fewer than 4 pixels', () => {
+      const size = 64;
+      const rangeNormal: ContigRange = { start: 0, end: 30, orderIndex: 0 };
+      // rangeJ has only 2 pixels wide (< 4)
+      const rangeSmall: ContigRange = { start: 30, end: 32, orderIndex: 1 };
+
+      const map = new Float32Array(size * size);
+      for (let p = 0; p < size; p++) {
+        for (let d = 1; d <= 10 && p + d < size; d++) {
+          const val = 2.0 / Math.sqrt(d);
+          map[(p + d) * size + p] = val;
+          map[p * size + (p + d)] = val;
+        }
+      }
+
+      const profile = computeIntraDiagonalProfile(map, size, [rangeNormal, rangeSmall], 20);
+
+      const score = computeLinkScore(map, size, rangeNormal, rangeSmall, false, false, profile, 20);
+      expect(score).toBe(0);
+    });
+
+    it('should return non-zero when both contigs have >= 4 pixels', () => {
+      const size = 64;
+      const rangeI: ContigRange = { start: 0, end: 30, orderIndex: 0 };
+      const rangeJ: ContigRange = { start: 30, end: 60, orderIndex: 1 };
+
+      const map = makeMapWithAdjacencies(size, [rangeI, rangeJ], [[0, 1]]);
+      const profile = computeIntraDiagonalProfile(map, size, [rangeI, rangeJ], 20);
+
+      const score = computeLinkScore(map, size, rangeI, rangeJ, false, false, profile, 20);
+      expect(score).toBeGreaterThan(0);
     });
   });
 

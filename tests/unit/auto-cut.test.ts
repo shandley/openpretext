@@ -347,15 +347,28 @@ describe('AutoCut', () => {
   // New default tuning tests
   // -----------------------------------------------------------------------
   describe('tuned defaults', () => {
-    it('cutThreshold=0.20 should NOT detect a 15% drop', () => {
+    it('cutThreshold=0.30 should NOT detect a 25% drop', () => {
       const len = 100;
       const density = new Float64Array(len);
       for (let i = 0; i < len; i++) density[i] = 1.0;
-      // 15% drop at position 50 — below the 20% threshold
-      for (let i = 47; i <= 53; i++) density[i] = 0.85;
+      // 25% drop at position 50 — below the 0.30 threshold
+      for (let i = 45; i <= 55; i++) density[i] = 0.75;
 
-      const bps = detectBreakpoints(density, 8, 0.20, 16);
+      const bps = detectBreakpoints(density, 8, 0.30, 16);
       expect(bps.length).toBe(0);
+    });
+
+    it('cutThreshold=0.30 SHOULD detect a 35% drop', () => {
+      const len = 100;
+      const density = new Float64Array(len);
+      for (let i = 0; i < len; i++) density[i] = 1.0;
+      // 35% drop at position 50 — above the 0.30 threshold
+      for (let i = 45; i <= 55; i++) density[i] = 0.65;
+
+      const bps = detectBreakpoints(density, 8, 0.30, 16);
+      expect(bps.length).toBeGreaterThan(0);
+      const nearCenter = bps.some(bp => Math.abs(bp.offset - 50) <= 10);
+      expect(nearCenter).toBe(true);
     });
 
     it('minFragmentSize=16 should filter breakpoints near edges', () => {
@@ -365,12 +378,12 @@ describe('AutoCut', () => {
       // Clear dip at position 10 — too close to start for minFragmentSize=16
       for (let i = 8; i <= 12; i++) density[i] = 0.0;
 
-      const bps = detectBreakpoints(density, 4, 0.20, 16);
+      const bps = detectBreakpoints(density, 4, 0.30, 16);
       const tooClose = bps.some(bp => bp.offset < 16);
       expect(tooClose).toBe(false);
     });
 
-    it('confidence floor: breakpoints with confidence <= 0.3 are excluded from autoCut', () => {
+    it('confidence floor: breakpoints with confidence <= 0.5 are excluded from autoCut', () => {
       const size = 256;
       const contigs = [makeContig('chr1', 0, 0, 256, 256000)];
 
@@ -393,10 +406,93 @@ describe('AutoCut', () => {
         { cutThreshold: 0.05, windowSize: 6, minFragmentSize: 8 },
       );
 
-      // Any detected breakpoints should have confidence > 0.3
+      // Any detected breakpoints should have confidence > 0.5
       for (const [, bps] of result.breakpoints) {
         for (const bp of bps) {
-          expect(bp.confidence).toBeGreaterThan(0.3);
+          expect(bp.confidence).toBeGreaterThan(0.5);
+        }
+      }
+    });
+
+    it('narrow region filtering: 1-2 pixel dips should NOT be detected', () => {
+      const len = 100;
+      const density = new Float64Array(len);
+      for (let i = 0; i < len; i++) density[i] = 1.0;
+      // Create a very narrow dip (2 pixels) at position 50
+      density[49] = 0.0;
+      density[50] = 0.0;
+
+      // windowSize=8 -> minRegionWidth = max(3, floor(8/2)) = 4
+      // A 2-pixel dip is narrower than 4, so it should be filtered out
+      const bps = detectBreakpoints(density, 8, 0.05, 16);
+      expect(bps.length).toBe(0);
+    });
+
+    it('local baseline: gradual transition between signal levels is NOT a breakpoint', () => {
+      // Create a density array with two distinct signal levels connected by
+      // a smooth ramp, so the local baseline adapts gradually.
+      // Strong region (1.0), gradual ramp down over 80 pixels, weak region (0.4)
+      const len = 300;
+      const density = new Float64Array(len);
+      // Strong signal in first third
+      for (let i = 0; i < 100; i++) density[i] = 1.0;
+      // Gradual transition over 80 pixels (positions 100-179)
+      for (let i = 100; i < 180; i++) {
+        const t = (i - 100) / 80; // 0 to 1
+        density[i] = 1.0 - t * 0.6; // 1.0 down to 0.4
+      }
+      // Weak signal in last portion
+      for (let i = 180; i < 300; i++) density[i] = 0.4;
+
+      // With local baseline, a gradual transition should NOT produce a breakpoint
+      // because the local baseline tracks the gradual change
+      const bps = detectBreakpoints(density, 8, 0.30, 16);
+
+      // There should be no breakpoints — the transition is gradual
+      expect(bps.length).toBe(0);
+    });
+
+    it('local baseline: a 35% drop within a strong region IS detected', () => {
+      const len = 200;
+      const density = new Float64Array(len);
+      for (let i = 0; i < len; i++) density[i] = 1.0;
+      // Clear dip in the strong region around position 50
+      for (let i = 45; i <= 55; i++) density[i] = 0.1;
+
+      const bps = detectBreakpoints(density, 8, 0.30, 16);
+      expect(bps.length).toBeGreaterThan(0);
+      const nearDip = bps.some(bp => Math.abs(bp.offset - 50) <= 10);
+      expect(nearDip).toBe(true);
+    });
+
+    it('high confidence threshold: shallow dip with ~0.4 confidence excluded from autoCut', () => {
+      const size = 256;
+      const contigs = [makeContig('chr1', 0, 0, 256, 256000)];
+
+      // Create a map with a moderate dip that produces ~0.4 confidence
+      // Signal of 1.0 everywhere except at the dip where signal is 0.6
+      // This gives a ~40% drop in the dip region, confidence ~0.4
+      const contactMap = new Float32Array(size * size);
+      for (let i = 0; i < size; i++) {
+        for (let d = 1; d <= 10; d++) {
+          if (i + d < size) {
+            const inDip = (i >= 120 && i <= 136) || (i + d >= 120 && i + d <= 136);
+            const val = inDip ? 0.6 : 1.0;
+            contactMap[(i + d) * size + i] = val;
+            contactMap[i * size + (i + d)] = val;
+          }
+        }
+      }
+
+      const result = autoCut(
+        contactMap, size, contigs, [0], 256,
+        { cutThreshold: 0.05, windowSize: 6, minFragmentSize: 8 },
+      );
+
+      // All breakpoints that pass the filter must have confidence > 0.5
+      for (const [, bps] of result.breakpoints) {
+        for (const bp of bps) {
+          expect(bp.confidence).toBeGreaterThan(0.5);
         }
       }
     });
