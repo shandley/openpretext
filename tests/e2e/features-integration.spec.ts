@@ -18,7 +18,7 @@ import { test, expect } from '@playwright/test';
 async function loadDemo(page: import('@playwright/test').Page) {
   await page.goto('/');
   await expect(page.locator('#welcome')).toBeVisible();
-  await page.locator('#btn-demo').click({ force: true });
+  await page.evaluate(() => document.getElementById('btn-demo')?.click());
   await expect(page.locator('#welcome')).toBeHidden({ timeout: 5_000 });
   await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
 }

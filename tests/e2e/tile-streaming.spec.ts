@@ -159,7 +159,7 @@ test.describe('Tile streaming with real .pretext file', () => {
     await page.waitForTimeout(1000);
 
     // Load demo data — should clean up tile manager
-    await page.locator('#btn-demo').click({ force: true });
+    await page.evaluate(() => document.getElementById('btn-demo')?.click());
     await page.waitForTimeout(500);
 
     // Verify demo data loaded
