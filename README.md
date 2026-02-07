@@ -212,7 +212,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev        # Start development server with hot reload
-npm test           # Run the test suite (1,395 tests)
+npm test           # Run the test suite (1,418 tests)
 npm run build      # Production build to dist/
 npm run preview    # Preview the production build
 ```
@@ -266,7 +266,7 @@ src/
   io/
     SessionManager.ts        Session save/load (JSON persistence)
 tests/
-  unit/                      1,395 unit tests across 45 test files
+  unit/                      1,418 unit tests across 47 test files
   e2e/                       E2E tests (Playwright + Chromium)
 ```
 
