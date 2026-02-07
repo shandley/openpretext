@@ -12,6 +12,7 @@ import { extractGroundTruth, detectSplits, buildChromosomeAssignments, extractCh
 import { autoCut } from '../../src/curation/AutoCut';
 import { autoSort } from '../../src/curation/AutoSort';
 import { applyBreakpoints } from '../../bench/runner';
+import { computeSortMetrics } from '../../bench/metrics/autosort-metrics';
 
 const TEST_FILE = resolve('test-data/bTaeGut2.mat.pretext');
 const hasTestFile = existsSync(TEST_FILE);
@@ -96,6 +97,96 @@ describe('loadPretextFromDisk', () => {
     const allOrderIndices = result.chains.flatMap(c => c.map(e => e.orderIndex));
     expect(allOrderIndices.length).toBe(assembly.contigOrder.length);
     expect(new Set(allOrderIndices).size).toBe(assembly.contigOrder.length);
+  }, 120_000);
+
+  it.skipIf(!hasTestFile)('regression guard: autoSort metrics stay above thresholds', async () => {
+    const assembly = await loadPretextFromDisk(TEST_FILE);
+
+    // Run autoCut -> applyBreakpoints -> autoSort (full pipeline)
+    const cutResult = autoCut(
+      assembly.contactMap,
+      assembly.overviewSize,
+      assembly.contigs,
+      assembly.contigOrder,
+      assembly.textureSize,
+    );
+
+    const postCut = applyBreakpoints(
+      assembly.contigs,
+      assembly.contigOrder,
+      cutResult,
+    );
+
+    const sortResult = autoSort(
+      assembly.contactMap,
+      assembly.overviewSize,
+      postCut.contigs,
+      postCut.contigOrder,
+      assembly.textureSize,
+    );
+
+    // Extract proxy ground truth via signal-based chromosome detection
+    const groundTruth = extractGroundTruth(assembly);
+
+    // Build chromosome assignments and ground truth ordering for post-cut contigs
+    const gtNameMap = new Map<string, { rank: number; chromIdx: number }>();
+    for (let pos = 0; pos < groundTruth.contigOrder.length; pos++) {
+      const contigIdx = groundTruth.contigOrder[pos];
+      gtNameMap.set(groundTruth.contigs[contigIdx].name, {
+        rank: pos,
+        chromIdx: groundTruth.chromosomeAssignments[pos],
+      });
+    }
+
+    const mappedChromAssignments: number[] = [];
+    const mappedGtRanks: number[] = [];
+    const mappedInversions = new Map<number, boolean>();
+    const unmappedChromIdx = new Set(groundTruth.chromosomeAssignments).size;
+
+    for (let orderPos = 0; orderPos < postCut.contigOrder.length; orderPos++) {
+      const contigId = postCut.contigOrder[orderPos];
+      const contigName = postCut.contigs[contigId].name;
+      let gt = gtNameMap.get(contigName);
+      if (!gt) {
+        const parentName = contigName.replace(/_[LR]$/, '');
+        gt = gtNameMap.get(parentName);
+      }
+      if (gt) {
+        mappedChromAssignments.push(gt.chromIdx);
+        mappedGtRanks.push(gt.rank);
+        mappedInversions.set(orderPos, false);
+      } else {
+        mappedChromAssignments.push(unmappedChromIdx);
+        mappedGtRanks.push(-1);
+        mappedInversions.set(orderPos, false);
+      }
+    }
+
+    const groundTruthOrderMapped = postCut.contigOrder
+      .map((_, orderPos) => orderPos)
+      .filter(orderPos => mappedGtRanks[orderPos] >= 0)
+      .sort((a, b) => mappedGtRanks[a] - mappedGtRanks[b]);
+
+    const sortMetrics = computeSortMetrics(
+      sortResult.chains,
+      groundTruthOrderMapped,
+      mappedChromAssignments,
+      mappedInversions,
+    );
+
+    // Regression thresholds — if any of these drop, a code change broke something.
+    // Uses signal-based proxy ground truth (pre-curation file), so thresholds
+    // are set conservatively below current actuals to avoid flaky failures.
+    // Current actuals: tau ~0.93, orient ~0.97, purity ~0.97, completeness ~0.72
+    expect(sortMetrics.kendallTau).toBeGreaterThanOrEqual(0.85);
+    expect(sortMetrics.orientationAccuracy).toBeGreaterThanOrEqual(0.90);
+    expect(sortMetrics.chainPurity).toBeGreaterThanOrEqual(0.90);
+    expect(sortMetrics.chainCompleteness).toBeGreaterThanOrEqual(0.65);
+
+    // bTaeGut2 is a pre-curation assembly with many small scaffolds.
+    // Chains should be bounded but can be numerous (current: ~196).
+    expect(sortResult.chains.length).toBeGreaterThanOrEqual(10);
+    expect(sortResult.chains.length).toBeLessThanOrEqual(300);
   }, 120_000);
 
   it.skipIf(!hasTestFile)('applyBreakpoints produces valid post-cut state', async () => {
