@@ -6,3 +6,4 @@ test-data/
 test-results/
 *.png
 bench/data/
+.playwright-mcp/
