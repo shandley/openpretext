@@ -51,6 +51,7 @@ jobs:
           gh release download v0.2.0-data \
             --pattern '*.pretext' \
             --dir dist/data
+          rm -f dist/data/*_post.pretext
           cp data/specimen-catalog.json dist/data/
           cp data/pattern-gallery.json dist/data/
           cp -r data/lessons dist/data/
