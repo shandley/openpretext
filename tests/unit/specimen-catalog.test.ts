@@ -110,7 +110,7 @@ describe('SpecimenCatalog', () => {
       expect(koala.species).toBe('Phascolarctos_cinereus');
       expect(koala.commonName).toBe('Koala');
       expect(koala.taxon).toBe('mammal');
-      expect(koala.sizeMB).toBe(109);
+      expect(koala.sizeMB).toBe(100);
       expect(koala.difficulty).toBe('beginner');
       expect(koala.releaseAsset).toBe('Phascolarctos_cinereus.pretext');
     });

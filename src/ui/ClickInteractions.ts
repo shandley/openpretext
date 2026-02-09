@@ -19,8 +19,8 @@ export function setupClickInteractions(ctx: AppContext, canvas: HTMLCanvasElemen
   });
 
   canvas.addEventListener('mouseup', (e) => {
-    // Handle drag end
-    if (ctx.dragReorder.isActive()) {
+    // Handle drag end or pending drag (click without movement)
+    if (ctx.dragReorder.isActive() || ctx.dragReorder.isPending()) {
       ctx.dragReorder.onMouseUp();
       return;
     }

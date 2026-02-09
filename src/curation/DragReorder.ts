@@ -9,6 +9,7 @@
 import { state } from '../core/State';
 import { events } from '../core/EventBus';
 import { CurationEngine } from './CurationEngine';
+import { SelectionManager } from './SelectionManager';
 
 export interface DragState {
   active: boolean;
@@ -58,7 +59,9 @@ export class DragReorder {
     if (contigOrderIndex < 0) return false;
 
     const s = state.get();
-    if (!s.selectedContigs.has(contigOrderIndex)) return false;
+    if (!s.selectedContigs.has(contigOrderIndex)) {
+      SelectionManager.selectSingle(contigOrderIndex);
+    }
 
     this.pendingDrag = true;
     this.dragState = {
@@ -157,6 +160,10 @@ export class DragReorder {
 
   isActive(): boolean {
     return this.dragState.active;
+  }
+
+  isPending(): boolean {
+    return this.pendingDrag;
   }
 
   /**

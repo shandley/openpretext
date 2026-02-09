@@ -463,6 +463,14 @@
       gap: 6px;
     }
 
+    .contig-item.dragging {
+      opacity: 0.4;
+    }
+
+    .contig-item.drag-over {
+      border-top: 2px solid var(--accent, #e94560);
+    }
+
     .contig-item:hover {
       background: var(--bg-surface);
     }
@@ -1545,6 +1553,7 @@
           <div class="shortcut-row"><span class="desc">Cut contig at cursor</span><span class="key"><kbd>C</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Join selected contigs</span><span class="key"><kbd>J</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Invert selected</span><span class="key"><kbd>F</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Reorder contig</span><span class="key"><kbd>Drag</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Select all</span><span class="key"><kbd>&#8984;</kbd><kbd>A</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Undo</span><span class="key"><kbd>&#8984;</kbd><kbd>Z</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Redo</span><span class="key"><kbd>&#8984;</kbd><kbd>&#8679;</kbd><kbd>Z</kbd></span></div>

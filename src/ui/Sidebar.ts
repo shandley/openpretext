@@ -6,6 +6,7 @@ import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
+import { move } from '../curation/CurationEngine';
 
 export function formatBp(bp: number): string {
   if (bp >= 1_000_000_000) return `${(bp / 1_000_000_000).toFixed(1)} Gb`;
@@ -40,7 +41,8 @@ export function updateSidebarContigList(ctx: AppContext): void {
       ? `<span class="contig-badge scaffold">S${contig.scaffoldId}</span>`
       : '';
 
-    return `<div class="contig-item ${isSelected ? 'selected' : ''}" data-order-index="${orderIdx}">
+    const draggable = ctx.currentMode === 'edit' ? ' draggable="true"' : '';
+    return `<div class="contig-item ${isSelected ? 'selected' : ''}" data-order-index="${orderIdx}"${draggable}>
       <span class="contig-name">${contig.name}</span>
       <span class="contig-meta">${lengthStr} ${invertedBadge}${excludedBadge}${scaffoldBadge}</span>
     </div>`;
@@ -49,8 +51,10 @@ export function updateSidebarContigList(ctx: AppContext): void {
   listEl.innerHTML = html;
 
   listEl.querySelectorAll('.contig-item').forEach((el) => {
+    const htmlEl = el as HTMLElement;
+
     el.addEventListener('click', (e) => {
-      const idx = parseInt((el as HTMLElement).dataset.orderIndex ?? '-1', 10);
+      const idx = parseInt(htmlEl.dataset.orderIndex ?? '-1', 10);
       if (idx < 0) return;
 
       if ((e as MouseEvent).shiftKey) {
@@ -64,12 +68,51 @@ export function updateSidebarContigList(ctx: AppContext): void {
     });
 
     el.addEventListener('dblclick', () => {
-      const idx = parseInt((el as HTMLElement).dataset.orderIndex ?? '-1', 10);
+      const idx = parseInt(htmlEl.dataset.orderIndex ?? '-1', 10);
       if (idx < 0 || idx >= ctx.contigBoundaries.length) return;
       const start = idx === 0 ? 0 : ctx.contigBoundaries[idx - 1];
       const end = ctx.contigBoundaries[idx];
       ctx.camera.zoomToRegion(start, start, end, end);
     });
+
+    // Drag-and-drop reordering (edit mode only)
+    if (ctx.currentMode === 'edit') {
+      htmlEl.addEventListener('dragstart', (e) => {
+        const idx = htmlEl.dataset.orderIndex ?? '';
+        e.dataTransfer!.setData('text/plain', idx);
+        e.dataTransfer!.effectAllowed = 'move';
+        htmlEl.classList.add('dragging');
+      });
+
+      htmlEl.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer!.dropEffect = 'move';
+        htmlEl.classList.add('drag-over');
+      });
+
+      htmlEl.addEventListener('dragleave', () => {
+        htmlEl.classList.remove('drag-over');
+      });
+
+      htmlEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        htmlEl.classList.remove('drag-over');
+        const fromIdx = parseInt(e.dataTransfer!.getData('text/plain'), 10);
+        const toIdx = parseInt(htmlEl.dataset.orderIndex ?? '-1', 10);
+        if (isNaN(fromIdx) || toIdx < 0 || fromIdx === toIdx) return;
+        move(fromIdx, toIdx);
+        ctx.refreshAfterCuration();
+        ctx.showToast('Contig moved');
+      });
+
+      htmlEl.addEventListener('dragend', () => {
+        htmlEl.classList.remove('dragging');
+        // Clean up any lingering drag-over classes on other items
+        listEl.querySelectorAll('.drag-over').forEach(
+          (el) => (el as HTMLElement).classList.remove('drag-over')
+        );
+      });
+    }
   });
 }
 

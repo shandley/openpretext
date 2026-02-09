@@ -67,6 +67,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
       onMouseDown: vi.fn(),
       onMouseUp: vi.fn(),
       isActive: vi.fn(() => false),
+      isPending: vi.fn(() => false),
     } as any,
     scaffoldManager: {
       paintContigs: vi.fn(),
@@ -305,6 +306,7 @@ describe('ClickInteractions', () => {
             onMouseDown: vi.fn(),
             onMouseUp: vi.fn(),
             isActive: vi.fn(() => true),
+            isPending: vi.fn(() => false),
           } as any,
         });
         const canvas = createMockCanvas();
