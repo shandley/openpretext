@@ -11,7 +11,8 @@
 
 import { readFile } from 'node:fs/promises';
 import { readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runBenchmark } from './runner';
 
 interface CatalogBaseline {
@@ -45,7 +46,8 @@ export async function runRegression(dataDir: string): Promise<boolean> {
   }
 
   // Load specimen catalog as single source of truth for baselines
-  const catalogPath = resolve(join(import.meta.dirname ?? '.', '..', 'data', 'specimen-catalog.json'));
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const catalogPath = resolve(join(__dirname, '..', 'data', 'specimen-catalog.json'));
   const catalog: SpecimenCatalog = JSON.parse(await readFile(catalogPath, 'utf-8'));
   const specimensWithBaselines = catalog.specimens.filter(s => s.benchmarkBaseline !== null);
 
