@@ -37,7 +37,7 @@ Here we present OpenPretext, a browser-native Hi-C contact map viewer and curati
 
 ## Architecture
 
-OpenPretext is implemented in TypeScript with strict mode enabled, built with Vite, and rendered using WebGL2. The application has a single runtime dependency: pako for RFC 1951 raw deflate decompression. All user interface elements are implemented with pure DOM manipulation --- no UI framework (React, Vue, or Angular) is used, keeping the production bundle small and eliminating framework version churn. The codebase comprises approximately 12,000 lines of TypeScript across 30 modules, with 1,418 unit tests (Vitest) and 22 end-to-end tests (Playwright).
+OpenPretext is implemented in TypeScript with strict mode enabled, built with Vite, and rendered using WebGL2. The application has a single runtime dependency: pako for RFC 1951 raw deflate decompression. All user interface elements are implemented with pure DOM manipulation --- no UI framework (React, Vue, or Angular) is used, keeping the production bundle small and eliminating framework version churn. The codebase comprises approximately 12,000 lines of TypeScript across 30 modules, with 1,419 unit tests (Vitest) and 26 end-to-end tests (Playwright).
 
 The architecture follows an event-driven pattern centered on a typed EventBus for inter-module communication and a singleton AppState with immutable update semantics and undo/redo stacks. The rendering pipeline uses a tile-based level-of-detail (LOD) system: the full contact map is divided into a grid of tiles (typically 32 x 32), each containing BC4-compressed texture data at multiple mipmap levels. A TileManager with an LRU cache loads and decodes tiles on demand based on the current camera viewport, enabling smooth interaction with genomes up to 32,768 pixels per dimension (65,536 in high-resolution mode; Figure 1A--B).
 
@@ -82,7 +82,7 @@ OpenPretext includes an integrated education system designed for both self-direc
 5. **Manual Scaffold Assignment** (intermediate, 20 min) --- Scaffold creation, contig-to-chromosome assignment, and drag-and-drop reordering using the Nile crocodile genome.
 6. **Full Curation Exercise** (advanced, 30 min) --- Capstone exercise combining all skills with automated tools as a starting point, assessed via Kendall's tau comparison against ground truth using the zebra finch genome.
 
-The teaching corpus comprises 10 specimens from GenomeArk with curated difficulty ratings, spanning mammals (koala, bat), birds (king quail, zebra finch), reptiles (Nile crocodile, blind snake), fish (bluehead wrasse, spinyfin), amphibians (spadefoot toad), and invertebrates (lancelet). A pattern gallery presents eight diagnostic Hi-C patterns (strong diagonal, chromosome block, inversion, translocation, microchromosomes, low coverage, unplaced contigs, and A/B compartments) with visual examples and descriptions linked to specific genomic regions in the teaching specimens.
+The teaching corpus comprises 10 specimens from GenomeArk with curated difficulty ratings, spanning mammals (koala, bat), birds (king quail, zebra finch), reptiles (Nile crocodile, Wait's blind snake), fish (bluehead wrasse, spinyfin), amphibians (spadefoot toad), and invertebrates (lancelet). A pattern gallery presents eight diagnostic Hi-C patterns (strong diagonal, chromosome block, inversion, translocation, microchromosomes, low coverage, unplaced contigs, and A/B compartments) with visual examples and descriptions linked to specific genomic regions in the teaching specimens.
 
 The capstone lesson includes a self-assessment system that computes the Kendall's tau rank correlation between the student's contig ordering and the ground truth ordering, providing tiered feedback: excellent (tau >= 0.95), good (tau >= 0.85), and needs improvement (tau < 0.85).
 
@@ -109,7 +109,7 @@ Each specimen was evaluated using a post-curation pipeline: the curated `.pretex
 | *Artibeus lituratus* | Great fruit-eating bat | Mammal | 486 | 0.998 | 0.994 | 0 | 1.9s |
 | *Phascolarctos cinereus* | Koala | Mammal | 1,235 | 1.000 | 1.000 | 0 | 3.1s |
 | *Dasypus novemcinctus* | Nine-banded armadillo | Mammal | 559 | 0.996 | 0.984 | 0 | 3.8s |
-| *Anilios waitii* | Interior blind snake | Reptile | 124 | 1.000 | 1.000 | 1 | 1.5s |
+| *Anilios waitii* | Wait's blind snake | Reptile | 124 | 1.000 | 1.000 | 1 | 1.5s |
 | *Crocodylus niloticus* | Nile crocodile | Reptile | 122 | 0.985 | 0.943 | 0 | 4.2s |
 | *Dermatemys mawii* | Central American river turtle | Reptile | 150 | 0.949 | 0.933 | 0 | 3.5s |
 | *Aspidoscelis tigris* | Tiger whiptail lizard | Reptile | 185 | 0.978 | 0.973 | 0 | 2.3s |
@@ -156,7 +156,7 @@ The algorithm scales to large assemblies: the silver spinyfin (*Diretmus argente
 
 ## AutoCut performance
 
-AutoCut was evaluated on curated assemblies where zero breakpoints are expected; any detected breakpoint is therefore a false positive. Thirty-one of 34 specimens produced zero false positives. Three specimens produced a total of 4 false positives: the interior blind snake (*Anilios waitii*; 1 FP on 124 contigs), the alligator gar (*Atractosteus spatula*; 2 FPs on 356 contigs), and Couch's spadefoot toad (*Scaphiopus couchii*; 1 FP on 577 contigs). The mean false positive rate was 0.12 per specimen. These false positives may reflect genuine structural features --- such as heterochromatin, centromeric signal depletion, or segmental duplications --- that produce signal discontinuities resembling misassembly breakpoints. No new AutoCut failures were observed among the 13 specimens added in the most recent corpus expansion, confirming that the algorithm generalizes well across diverse genome architectures including sharks, non-vertebrate chordates, and additional reptile and mammal lineages.
+AutoCut was evaluated on curated assemblies where zero breakpoints are expected; any detected breakpoint is therefore a false positive. Thirty-one of 34 specimens produced zero false positives. Three specimens produced a total of 4 false positives: Wait's blind snake (*Anilios waitii*; 1 FP on 124 contigs), the alligator gar (*Atractosteus spatula*; 2 FPs on 356 contigs), and Couch's spadefoot toad (*Scaphiopus couchii*; 1 FP on 577 contigs). The mean false positive rate was 0.12 per specimen. These false positives may reflect genuine structural features --- such as heterochromatin, centromeric signal depletion, or segmental duplications --- that produce signal discontinuities resembling misassembly breakpoints. No new AutoCut failures were observed among the 13 specimens added in the most recent corpus expansion, confirming that the algorithm generalizes well across diverse genome architectures including sharks, non-vertebrate chordates, and additional reptile and mammal lineages.
 
 ## Algorithm development trajectory
 
@@ -186,7 +186,9 @@ The capstone lesson's self-assessment quantifies curation skill as Kendall's tau
 
 ## Software validation
 
-The OpenPretext codebase includes 1,418 unit tests and 22 end-to-end tests covering the parser, curation engine, scripting DSL, export formats, tile rendering, and all benchmark metrics. All tests pass on current versions of Chromium, Firefox, and WebKit. The benchmark pipeline itself is fully reproducible: specimen download, algorithm execution, and metric computation are automated via command-line scripts included in the repository (Supplementary Methods).
+The OpenPretext codebase includes 1,419 unit tests and 26 end-to-end tests covering the parser, curation engine, scripting DSL, export formats, tile rendering, edit-mode user experience, and all benchmark metrics. All tests pass on current versions of Chromium, Firefox, and WebKit. The benchmark pipeline itself is fully reproducible: specimen download, algorithm execution, and metric computation are automated via command-line scripts included in the repository (Supplementary Methods).
+
+In addition to the full 34-specimen benchmark, OpenPretext maintains a 10-specimen continuous integration (CI) regression suite that runs automatically on every commit. This subset --- comprising all 10 teaching corpus specimens (koala, wrasse, quail, finch, crocodile, spinyfin, blind snake, toad, lancelet, and bat) --- validates AutoSort and AutoCut metrics against established baselines with a 5% tolerance margin. The regression suite downloads pre- and post-curation `.pretext` files from the project's GitHub release and checks Kendall's tau, F1, and orientation accuracy for each specimen, ensuring that algorithm changes do not degrade performance on any taxonomic group. All 10 specimens pass regression with all metrics at or above baseline values.
 
 # Discussion
 

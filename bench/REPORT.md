@@ -71,7 +71,7 @@ Chromosome assignments are derived from GenomeArk naming conventions:
 | **Mammal** | *Artibeus lituratus* | Great fruit-eating bat | 486 | 18 |
 | **Mammal** | *Phascolarctos cinereus* | Koala | 1,235 | — |
 | **Mammal** | *Dasypus novemcinctus* | Nine-banded armadillo | 559 | — |
-| **Reptile** | *Anilios waitii* | Interior blind snake | 124 | 16 |
+| **Reptile** | *Anilios waitii* | Wait's blind snake | 124 | 16 |
 | **Reptile** | *Crocodylus niloticus* | Nile crocodile | 122 | 17 |
 | **Reptile** | *Dermatemys mawii* | Central American river turtle | 150 | 29 |
 | **Reptile** | *Aspidoscelis tigris* | Tiger whiptail lizard | 185 | 24 |
