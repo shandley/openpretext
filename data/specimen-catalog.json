@@ -117,22 +117,22 @@
     },
     {
       "id": "snake",
-      "species": "Acanthophis_waitii",
-      "commonName": "Pilbara death adder",
+      "species": "Anilios_waitii",
+      "commonName": "Wait's blind snake",
       "taxon": "reptile",
-      "sizeMB": 80,
+      "sizeMB": 43,
       "chromosomeCount": null,
-      "contigCount": 300,
+      "contigCount": 124,
       "difficulty": "advanced",
       "patterns": ["misassembly"],
-      "teachingNotes": "AutoCut false positive case — useful for benchmarking precision.",
+      "teachingNotes": "Combined-haplotype assembly with 124 contigs. AutoCut false positive case — useful for benchmarking precision.",
       "releaseAsset": null,
       "releaseTag": "v0.2.0-data",
       "genomeArkKeys": {
-        "pre": "species/Acanthophis_waitii/assembly_curated/Acanthophis_waitii.pretext",
-        "post": "species/Acanthophis_waitii/assembly_curated/Acanthophis_waitii_post.pretext"
+        "pre": "species/Anilios_waitii/rAniWai1/assembly_curated/intermediates/pretextmap/rAniWai1.HiC.combined.decontam.multimap.20250911.pretext",
+        "post": "species/Anilios_waitii/rAniWai1/assembly_curated/rAniWai1.hap1.cur.20251204.pretext"
       },
-      "benchmarkBaseline": null
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 1.0, "orientationAccuracy": 1.0 }
     },
     {
       "id": "toad",
@@ -140,7 +140,7 @@
       "commonName": "Couch's spadefoot toad",
       "taxon": "amphibian",
       "sizeMB": 67,
-      "chromosomeCount": null,
+      "chromosomeCount": 13,
       "contigCount": 577,
       "difficulty": "advanced",
       "patterns": ["misassembly"],
@@ -178,7 +178,7 @@
       "commonName": "Great fruit-eating bat",
       "taxon": "mammal",
       "sizeMB": 57,
-      "chromosomeCount": null,
+      "chromosomeCount": 15,
       "contigCount": 486,
       "difficulty": "advanced",
       "patterns": ["haplotype-switch", "translocations"],

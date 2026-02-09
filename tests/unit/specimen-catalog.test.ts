@@ -57,10 +57,9 @@ describe('SpecimenCatalog', () => {
       expect(benchOnly.length).toBe(5);
     });
 
-    it('specimens without baselines should only be snake', () => {
+    it('all specimens should have benchmark baselines', () => {
       const noBaseline = catalog.specimens.filter(s => s.benchmarkBaseline === null);
-      expect(noBaseline.length).toBe(1);
-      expect(noBaseline[0].id).toBe('snake');
+      expect(noBaseline.length).toBe(0);
     });
   });
 
