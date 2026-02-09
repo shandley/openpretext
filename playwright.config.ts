@@ -18,7 +18,12 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: {
+        browserName: 'chromium',
+        launchOptions: {
+          args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader'],
+        },
+      },
     },
   ],
 });

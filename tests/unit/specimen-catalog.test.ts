@@ -56,6 +56,12 @@ describe('SpecimenCatalog', () => {
       const benchOnly = catalog.specimens.filter(s => s.releaseAsset === null);
       expect(benchOnly.length).toBe(5);
     });
+
+    it('specimens without baselines should only be snake', () => {
+      const noBaseline = catalog.specimens.filter(s => s.benchmarkBaseline === null);
+      expect(noBaseline.length).toBe(1);
+      expect(noBaseline[0].id).toBe('snake');
+    });
   });
 
   describe('getTutorialSpecimens', () => {
@@ -122,10 +128,11 @@ describe('SpecimenCatalog', () => {
       expect(wrasse.difficulty).toBe('beginner');
     });
 
-    it('spinyfin should be benchmark-only', () => {
+    it('spinyfin should be benchmark-only with baseline', () => {
       const spinyfin = catalog.specimens.find(s => s.id === 'spinyfin')!;
       expect(spinyfin.releaseAsset).toBeNull();
       expect(spinyfin.contigCount).toBe(5506);
+      expect(spinyfin.benchmarkBaseline).not.toBeNull();
     });
   });
 });

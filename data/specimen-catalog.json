@@ -101,7 +101,7 @@
       "species": "Diretmoides_argenteus",
       "commonName": "Spinyfin",
       "taxon": "fish",
-      "sizeMB": 150,
+      "sizeMB": 158,
       "chromosomeCount": 24,
       "contigCount": 5506,
       "difficulty": "advanced",
@@ -113,7 +113,7 @@
         "pre": "species/Diretmoides_argenteus/assembly_curated/Diretmoides_argenteus.pretext",
         "post": "species/Diretmoides_argenteus/assembly_curated/Diretmoides_argenteus_post.pretext"
       },
-      "benchmarkBaseline": null
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 1.0, "orientationAccuracy": 0.999 }
     },
     {
       "id": "snake",
@@ -139,9 +139,9 @@
       "species": "Scaphiopus_couchii",
       "commonName": "Couch's spadefoot toad",
       "taxon": "amphibian",
-      "sizeMB": 90,
+      "sizeMB": 67,
       "chromosomeCount": null,
-      "contigCount": 400,
+      "contigCount": 577,
       "difficulty": "advanced",
       "patterns": ["misassembly"],
       "teachingNotes": "AutoCut false positive case — useful for benchmarking precision.",
@@ -151,16 +151,16 @@
         "pre": "species/Scaphiopus_couchii/assembly_curated/Scaphiopus_couchii.pretext",
         "post": "species/Scaphiopus_couchii/assembly_curated/Scaphiopus_couchii_post.pretext"
       },
-      "benchmarkBaseline": null
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 1.0, "orientationAccuracy": 0.997 }
     },
     {
       "id": "lancelet",
       "species": "Branchiostoma_lanceolatum_hap1",
       "commonName": "European lancelet (hap1)",
       "taxon": "invertebrate",
-      "sizeMB": 30,
+      "sizeMB": 69,
       "chromosomeCount": 19,
-      "contigCount": 180,
+      "contigCount": 65,
       "difficulty": "advanced",
       "patterns": ["sparse-signal", "inversions"],
       "teachingNotes": "Lowest tau (0.903), non-vertebrate chordate. Challenging sorting case.",
@@ -170,16 +170,16 @@
         "pre": "species/Branchiostoma_lanceolatum/assembly_curated/Branchiostoma_lanceolatum_hap1.pretext",
         "post": "species/Branchiostoma_lanceolatum/assembly_curated/Branchiostoma_lanceolatum_hap1_post.pretext"
       },
-      "benchmarkBaseline": null
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 0.903, "orientationAccuracy": 0.938 }
     },
     {
       "id": "bat",
       "species": "Artibeus_lituratus",
       "commonName": "Great fruit-eating bat",
       "taxon": "mammal",
-      "sizeMB": 85,
+      "sizeMB": 57,
       "chromosomeCount": null,
-      "contigCount": 350,
+      "contigCount": 486,
       "difficulty": "advanced",
       "patterns": ["haplotype-switch", "translocations"],
       "teachingNotes": "Dual-haplotype assembly with complex inter-haplotype patterns.",
@@ -189,7 +189,7 @@
         "pre": "species/Artibeus_lituratus/assembly_curated/Artibeus_lituratus.pretext",
         "post": "species/Artibeus_lituratus/assembly_curated/Artibeus_lituratus_post.pretext"
       },
-      "benchmarkBaseline": null
+      "benchmarkBaseline": { "f1": 1.0, "kendallTau": 0.998, "orientationAccuracy": 0.994 }
     }
   ]
 }

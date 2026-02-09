@@ -76,7 +76,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1418 unit tests (vitest)
+  unit/                      1419 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -99,8 +99,9 @@ tests/
     specimen-catalog.test.ts Catalog loading, validation (15 tests)
     ordering-metrics.test.ts kendallTau, ARI, longestCorrectRun (22 tests)
     tutorial-manager.test.ts Lesson schema, step navigation (10 tests)
-  e2e/                       22 E2E tests (Playwright + Chromium)
+  e2e/                       26 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
+    edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
     tile-streaming.spec.ts   Tile LOD with real .pretext file
     features-integration.spec.ts  Stats, exclusion, comparison, batch, tracks
 ```
@@ -194,7 +195,7 @@ themselves. The undo stack is the source of truth for curation history.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1418 tests must pass
+- Run `npm test` before committing; all 1419 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls
