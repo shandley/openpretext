@@ -36,6 +36,8 @@ export interface BenchmarkResult extends SpecimenResult {}
 export interface RunOptions {
   autoCutParams?: Partial<AutoCutParams>;
   autoSortParams?: Partial<AutoSortParams>;
+  /** Mipmap level for loading assemblies. Lower = higher resolution. */
+  mipLevel?: number;
 }
 
 /**
@@ -134,10 +136,11 @@ export async function runBenchmark(
   const t0 = performance.now();
 
   // Load pre-curation assembly (for supplementary stats)
-  const preAssembly = await loadPretextFromDisk(preCurationPath);
+  const loadOpts = options.mipLevel != null ? { mipLevel: options.mipLevel } : undefined;
+  const preAssembly = await loadPretextFromDisk(preCurationPath, loadOpts);
 
   // Load curated assembly — this is both input and ground truth source
-  const curatedAssembly = await loadPretextFromDisk(postCurationPath);
+  const curatedAssembly = await loadPretextFromDisk(postCurationPath, loadOpts);
   const groundTruth = extractGroundTruth(curatedAssembly);
   const tLoad = performance.now();
 

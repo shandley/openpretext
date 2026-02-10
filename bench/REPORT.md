@@ -331,13 +331,32 @@ All specimens have < 60 effective contigs at overview resolution, yet 9 of 10 ac
 
 **Rejected approach:** An adaptive guard based on effective contigs (< 60) was investigated but rejected because it would also disable sorting on pre-curation assemblies where AutoSort is needed. Pre-curation assemblies show similar effective contig ranges (9–52).
 
-**Potential fix:** Multi-resolution scoring — using full-resolution tile data for small contigs instead of the 1,024-pixel overview — could resolve this limitation.
+**Multi-resolution investigation:** Loading at 4,096-pixel overview (mipmap level 3, 67 MB) was tested but does not improve results. On five post-curation specimens, tau was slightly worse at 4,096px for 3 of 5 species (thresholds are tuned for 1,024px signal characteristics). The lancelet's tiny scaffolds (1–6 texture pixels) remain sub-pixel even at 4,096px — the issue is fundamental to the genome's structure, not the overview resolution.
 
-### 6.3 Orientation accuracy on small assemblies
+### 6.3 Pre-curation analysis
+
+Running AutoSort on all 10 **pre-curation** assemblies (where contigs are NOT yet ordered into chromosomes) shows that the algorithm groups the chromosome-scale contigs correctly but cannot reach the many small fragments:
+
+| Species | Contigs | Effective | Multi-contig chains | Known chroms |
+|---------|---------|-----------|---------------------|-------------|
+| *A. waitii* | 240 | 29 | 8 | — |
+| *A. lituratus* | 815 | 31 | 10 | 15 |
+| *B. lanceolatum* | 96 | 22 | 2 | 19 |
+| *C. chinensis* | 645 | 40 | 13 | 30 |
+| *C. niloticus* | 209 | 28 | 1 | 16 |
+| *D. argenteus* | 10,123 | 52 | 3 | 24 |
+| *P. cinereus* | 1,245 | 9 | 1 | 16 |
+| *S. couchii* | 1,145 | 29 | 7 | 13 |
+| *T. guttata* | 134 | 31 | 1 | 32 |
+| *T. bifasciatum* | 169 | 48 | 4 | 24 |
+
+Multi-contig chain counts (1–13) are well below the known chromosome counts (13–32) because only the ~10–50 largest contigs produce reliable link scores at 1,024-pixel overview resolution. The remaining hundreds to thousands of small contigs receive zero-score links and form trivial single-contig chains. This confirms AutoSort's role as a **starting point** that groups chromosome-scale contigs, after which manual curation assigns the smaller fragments.
+
+### 6.4 Orientation accuracy on small assemblies
 
 *L. chalumnae* (coelacanth, 0.929), *D. mawii* (turtle, 0.933), and *B. misakiensis* (acorn worm, 0.933) have the lowest orientation accuracy. Corner-sampling degrades when contigs span few pixels.
 
-### 6.4 Pre-curation evaluation mode (FUTURE)
+### 6.5 Pre-curation evaluation mode (FUTURE)
 
 Running on curated assemblies is valid for algorithm benchmarking but doesn't capture the full curation pipeline. A true end-to-end evaluation would require solving the cross-file contig mapping problem.
 
