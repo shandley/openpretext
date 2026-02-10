@@ -308,7 +308,30 @@ v4 expands the corpus by 62% (21 -> 34 specimens) with no degradation in aggrega
 
 ### 6.2 Lancelet hap1 ordering (tau=0.903)
 
-The weakest specimen is *B. lanceolatum* hap1 with only 65 contigs. The compact chromosome structure may challenge the signal-based sorting. This is at the boundary of the low-contig threshold (60) — adjusting the threshold or adding special handling for compact genomes could help.
+The weakest specimen is *B. lanceolatum* hap1 with 65 contigs. Investigation reveals that at 1,024-pixel overview resolution, only 19 of 65 contigs occupy >= 4 overview pixels (the `computeLinkScore` minimum for reliable scoring). The remaining 46 contigs are invisible to the algorithm.
+
+**Root cause:** *B. lanceolatum* has 19 chromosomes of relatively uniform size — unusual among chordates. With ~1 scorable contig per chromosome, inter-chromosome link scores become comparable to intra-chromosome scores, causing Union Find chaining to merge contigs across chromosome boundaries.
+
+**Effective contig analysis (all 10 CI regression specimens):**
+
+| Species | Total contigs | Effective (>= 4px) | Ratio |
+|---------|---------------|---------------------|-------|
+| Koala | 1,235 | 8 | 0.6% |
+| Toad | 577 | 13 | 2.3% |
+| Snake | 124 | 15 | 12.1% |
+| Crocodile | 122 | 16 | 13.1% |
+| Bat | 486 | 18 | 3.7% |
+| Lancelet | 65 | 19 | 29.2% |
+| Spinyfin | 5,506 | 24 | 0.4% |
+| Wrasse | 52 | 24 | 46.2% |
+| Quail | 424 | 27 | 6.4% |
+| Finch | 560 | 35 | 6.3% |
+
+All specimens have < 60 effective contigs at overview resolution, yet 9 of 10 achieve tau >= 0.984. The lancelet is uniquely affected because its effective contig count (~19) closely matches its chromosome count (19), leaving no redundancy for the algorithm.
+
+**Rejected approach:** An adaptive guard based on effective contigs (< 60) was investigated but rejected because it would also disable sorting on pre-curation assemblies where AutoSort is needed. Pre-curation assemblies show similar effective contig ranges (9–52).
+
+**Potential fix:** Multi-resolution scoring — using full-resolution tile data for small contigs instead of the 1,024-pixel overview — could resolve this limitation.
 
 ### 6.3 Orientation accuracy on small assemblies
 
