@@ -32,8 +32,24 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Unit tests
-        run: npm test
+      - name: Unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Report coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e "
+              const c = require('./coverage/coverage-summary.json').total;
+              const fmt = (v) => v.pct + '%';
+              console.log('| Metric | Coverage |');
+              console.log('|--------|----------|');
+              console.log('| Statements |', fmt(c.statements), '|');
+              console.log('| Branches |', fmt(c.branches), '|');
+              console.log('| Functions |', fmt(c.functions), '|');
+              console.log('| Lines |', fmt(c.lines), '|');
+            " >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium

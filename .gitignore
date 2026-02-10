@@ -4,6 +4,7 @@ dist/
 .DS_Store
 test-data/
 test-results/
+coverage/
 *.png
 bench/data/
 .playwright-mcp/

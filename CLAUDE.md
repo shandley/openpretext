@@ -99,7 +99,7 @@ tests/
     specimen-catalog.test.ts Catalog loading, validation (15 tests)
     ordering-metrics.test.ts kendallTau, ARI, longestCorrectRun (22 tests)
     tutorial-manager.test.ts Lesson schema, step navigation (10 tests)
-  e2e/                       26 E2E tests (Playwright + Chromium)
+  e2e/                       34 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
     tile-streaming.spec.ts   Tile LOD with real .pretext file

@@ -7,7 +7,7 @@ export default defineConfig({
     include: ['tests/unit/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json-summary'],
+      reporter: ['text', 'json-summary', 'lcov'],
       include: ['src/**/*.ts'],
       exclude: ['src/main.ts'],
     },
