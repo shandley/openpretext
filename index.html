@@ -1152,6 +1152,151 @@
     .script-output-error { color: #e94560; }
     .script-output-info { color: var(--text-secondary); }
 
+    /* AI Assist panel */
+    #ai-assist-panel {
+      display: none;
+      position: fixed;
+      top: var(--toolbar-height);
+      right: 0;
+      bottom: var(--statusbar-height);
+      width: 400px;
+      background: var(--bg-secondary);
+      border-left: 2px solid var(--accent);
+      z-index: 200;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #ai-assist-panel.visible {
+      display: flex;
+    }
+
+    .ai-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .ai-header button {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+
+    .ai-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .ai-key-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .ai-key-row input {
+      flex: 1;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    .ai-key-row input:focus {
+      border-color: var(--accent);
+    }
+
+    .ai-key-row button {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .ai-analyze-btn {
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .ai-analyze-btn:hover {
+      background: var(--accent-hover);
+    }
+
+    #ai-status {
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-height: 18px;
+    }
+
+    #ai-results {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .ai-prose {
+      font-size: 12px;
+      color: var(--text-primary);
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .ai-code-block {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .ai-code-block pre {
+      margin: 0;
+      padding: 8px;
+      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+      font-size: 11px;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    .ai-run-btn {
+      display: block;
+      width: 100%;
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      border-top: 1px solid var(--border);
+    }
+
+    .ai-run-btn:hover {
+      background: var(--accent-hover);
+    }
+
     /* Keyboard shortcuts help modal */
     #shortcuts-modal {
       display: none;
@@ -1437,6 +1582,7 @@
         <button class="toolbar-btn" id="btn-tracks">Tracks <kbd>X</kbd></button>
         <button class="toolbar-btn" id="btn-sidebar">Info <kbd>I</kbd></button>
         <button class="toolbar-btn" id="btn-console">Console <kbd>`</kbd></button>
+        <button class="toolbar-btn" id="btn-ai-assist">AI Assist</button>
       </div>
     </div>
 
@@ -1527,6 +1673,23 @@
       <div class="script-body">
         <textarea id="script-input" placeholder="# Enter curation commands...&#10;# Examples:&#10;#   invert chr1&#10;#   move chr3 to 1&#10;#   scaffold create Chr1_scaffold&#10;#   zoom chr5&#10;#   echo Hello world"></textarea>
         <div id="script-output"><span class="script-output-info">Output will appear here...</span></div>
+      </div>
+    </div>
+
+    <!-- AI Assist panel -->
+    <div id="ai-assist-panel">
+      <div class="ai-header">
+        <span>AI Assist</span>
+        <button id="btn-close-ai">&times;</button>
+      </div>
+      <div class="ai-body">
+        <div class="ai-key-row">
+          <input type="password" id="ai-api-key" placeholder="Anthropic API key">
+          <button id="btn-ai-save-key">Save</button>
+        </div>
+        <button id="btn-ai-analyze" class="ai-analyze-btn">Analyze Map</button>
+        <div id="ai-status"></div>
+        <div id="ai-results"></div>
       </div>
     </div>
 

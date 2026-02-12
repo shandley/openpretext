@@ -61,6 +61,9 @@ export { startRenderLoop, renderCutIndicator, onCameraChange, updateDetailTiles 
 // ScriptConsole
 export { isScriptConsoleVisible, toggleScriptConsole, setupScriptConsole, runScript } from './ScriptConsole';
 
+// AIAssistPanel
+export { isAIPanelVisible, toggleAIAssist, setupAIAssist } from './AIAssistPanel';
+
 // CommandPalette
 export { isCommandPaletteVisible, toggleCommandPalette, setupCommandPalette } from './CommandPalette';
 

@@ -17,6 +17,7 @@ import { toggleScriptConsole } from './ScriptConsole';
 import { toggleShortcutsModal } from './ShortcutsModal';
 import { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoin, runBatchInvert, runSortByLength, runAutoSort, runAutoCut, undoLastBatch } from './BatchActions';
 import { togglePatternGallery } from './PatternGallery';
+import { toggleAIAssist } from './AIAssistPanel';
 
 import type { SpecimenEntry } from '../data/SpecimenCatalog';
 
@@ -116,6 +117,7 @@ function getCommands(ctx: AppContext) {
     { name: 'Tutorial: Manual Scaffold Assignment', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '05-scaffold-assignment') },
     { name: 'Tutorial: Full Curation Exercise', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '06-full-curation-exercise') },
     { name: 'Pattern Gallery', shortcut: '', action: () => togglePatternGallery(ctx) },
+    { name: 'AI: Analyze Contact Map', shortcut: '', action: () => toggleAIAssist() },
   ];
 }
 

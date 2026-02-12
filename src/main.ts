@@ -43,6 +43,7 @@ import {
   startRenderLoop,
   onCameraChange,
   setupScriptConsole,
+  setupAIAssist,
   setupCommandPalette,
   setupKeyboardShortcuts,
   setupToolbar,
@@ -137,6 +138,7 @@ class OpenPretextApp {
     setupClickInteractions(ctx, canvas);
     setupEventListeners(ctx);
     setupScriptConsole(ctx);
+    setupAIAssist(ctx);
     setupShortcutsModal();
     setupContigSearch(ctx);
     setupTrackUpload(ctx);
