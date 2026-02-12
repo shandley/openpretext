@@ -50,7 +50,7 @@ src/
     AIContext.ts             Assembly state context builder for AI prompts
     AIPrompts.ts             System prompt with DSL reference + Hi-C guide
     AIFeedback.ts            Per-suggestion feedback storage + aggregation
-    AIStrategyIO.ts          Strategy export/import as JSON files
+    AIStrategyIO.ts          Strategy export/import with example validation
   data/
     SpecimenCatalog.ts       Types + loader for specimen-catalog.json
     LessonSchema.ts          Types + loader for tutorial lesson JSON files
@@ -84,7 +84,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1533 unit tests (vitest)
+  unit/                      1534 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -113,7 +113,7 @@ tests/
     ai-panel.test.ts         Response parsing, code extraction (7 tests)
     prompt-strategy.test.ts  Strategy data validation, lookup (14 tests)
     custom-strategy.test.ts  Custom strategy CRUD, merge, localStorage (19 tests)
-    ai-strategy-io.test.ts   Export/import JSON, validation, conflict resolution (25 tests)
+    ai-strategy-io.test.ts   Export/import JSON, validation, conflict resolution (26 tests)
     ai-feedback.test.ts      Feedback storage, aggregation, clear (16 tests)
   e2e/                       34 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
@@ -208,8 +208,9 @@ themselves. The undo stack is the source of truth for curation history.
   `MetricsTracker`, sends to Anthropic Messages API, renders DSL suggestions
   with executable "Run" buttons using `ScriptParser` + `ScriptExecutor`.
   Strategy dropdown selects from built-in + custom strategies. Includes
-  strategy editor (create/edit/delete), export/import buttons, and
-  per-suggestion feedback (thumbs up/down via `AIFeedbackUI`).
+  strategy editor (create/edit/delete), export/import buttons, Browse link
+  to the community strategy repository (`shandley/openpretext-strategies`),
+  and per-suggestion feedback (thumbs up/down via `AIFeedbackUI`).
 - **PromptStrategy**: `data/prompt-strategies.json` contains 5 built-in
   strategies. Custom strategies stored in localStorage key
   `openpretext-custom-strategies`. `mergeStrategies()` combines built-in
@@ -217,10 +218,20 @@ themselves. The undo stack is the source of truth for curation history.
 - **AIStrategyIO**: JSON export/import for sharing strategies between users.
   `exportStrategyAsJSON()` triggers browser download. `parseImportedStrategies()`
   validates and imports JSON, prefixing conflicting built-in IDs.
+  `filterValidExamples()` silently drops malformed example objects during import.
 - **AIFeedback**: Per-suggestion feedback stored in localStorage key
   `openpretext-ai-feedback`. Tracks strategy ID, rating (up/down), and
   whether the command was executed. `getStrategyRatingSummary()` returns
   aggregate up/down/total counts shown in the strategy description.
+
+## Companion Repository
+
+The community strategy repository lives at `shandley/openpretext-strategies`.
+It contains individual strategy JSON files that users can download and import
+via the AI panel's Import button. The app links to it via the Browse button
+in `.ai-io-actions` (`index.html`). The strategies repo has its own CI
+(`scripts/validate.mjs`) that validates JSON format, required fields, example
+structure, filename conventions, and ID uniqueness on every PR.
 
 ## Conventions
 
@@ -229,7 +240,7 @@ themselves. The undo stack is the source of truth for curation history.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1533 tests must pass
+- Run `npm test` before committing; all 1534 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls
