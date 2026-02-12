@@ -49,10 +49,12 @@ src/
     AIClient.ts              Anthropic Messages API wrapper (vision)
     AIContext.ts             Assembly state context builder for AI prompts
     AIPrompts.ts             System prompt with DSL reference + Hi-C guide
+    AIFeedback.ts            Per-suggestion feedback storage + aggregation
+    AIStrategyIO.ts          Strategy export/import as JSON files
   data/
     SpecimenCatalog.ts       Types + loader for specimen-catalog.json
     LessonSchema.ts          Types + loader for tutorial lesson JSON files
-    PromptStrategy.ts        Types + loader for prompt-strategies.json
+    PromptStrategy.ts        Types + loader + custom strategy CRUD (localStorage)
   scripting/
     ScriptParser.ts          Tokenizer + parser for 18-command DSL
     ScriptExecutor.ts        Executes parsed AST via ScriptContext DI
@@ -82,7 +84,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1473 unit tests (vitest)
+  unit/                      1533 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -107,9 +109,12 @@ tests/
     tutorial-manager.test.ts Lesson schema, step navigation (10 tests)
     ai-client.test.ts        AIClient fetch, errors (7 tests)
     ai-context.test.ts       Context building, formatting (13 tests)
-    ai-prompts.test.ts       System prompt, DSL coverage (7 tests)
+    ai-prompts.test.ts       System prompt, DSL coverage (13 tests)
     ai-panel.test.ts         Response parsing, code extraction (7 tests)
     prompt-strategy.test.ts  Strategy data validation, lookup (14 tests)
+    custom-strategy.test.ts  Custom strategy CRUD, merge, localStorage (19 tests)
+    ai-strategy-io.test.ts   Export/import JSON, validation, conflict resolution (25 tests)
+    ai-feedback.test.ts      Feedback storage, aggregation, clear (16 tests)
   e2e/                       34 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
@@ -202,11 +207,20 @@ themselves. The undo stack is the source of truth for curation history.
   screenshot via `SnapshotExporter`, builds context from `AppState` +
   `MetricsTracker`, sends to Anthropic Messages API, renders DSL suggestions
   with executable "Run" buttons using `ScriptParser` + `ScriptExecutor`.
-  Strategy dropdown selects from `data/prompt-strategies.json`.
-- **PromptStrategy**: `data/prompt-strategies.json` contains 5 curation
-  strategies that augment the base AI system prompt with domain-specific
-  guidance and few-shot examples. `buildSystemPrompt(strategy)` appends
-  the strategy supplement to the immutable base prompt.
+  Strategy dropdown selects from built-in + custom strategies. Includes
+  strategy editor (create/edit/delete), export/import buttons, and
+  per-suggestion feedback (thumbs up/down via `AIFeedbackUI`).
+- **PromptStrategy**: `data/prompt-strategies.json` contains 5 built-in
+  strategies. Custom strategies stored in localStorage key
+  `openpretext-custom-strategies`. `mergeStrategies()` combines built-in
+  and custom. `buildSystemPrompt(strategy)` appends supplement to base prompt.
+- **AIStrategyIO**: JSON export/import for sharing strategies between users.
+  `exportStrategyAsJSON()` triggers browser download. `parseImportedStrategies()`
+  validates and imports JSON, prefixing conflicting built-in IDs.
+- **AIFeedback**: Per-suggestion feedback stored in localStorage key
+  `openpretext-ai-feedback`. Tracks strategy ID, rating (up/down), and
+  whether the command was executed. `getStrategyRatingSummary()` returns
+  aggregate up/down/total counts shown in the strategy description.
 
 ## Conventions
 
@@ -215,7 +229,7 @@ themselves. The undo stack is the source of truth for curation history.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1473 tests must pass
+- Run `npm test` before committing; all 1533 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls

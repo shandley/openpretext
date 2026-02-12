@@ -1252,6 +1252,25 @@
       min-height: 16px;
     }
 
+    .ai-io-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .ai-small-btn {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .ai-small-btn:hover {
+      border-color: var(--accent);
+    }
+
     .ai-analyze-btn {
       background: var(--accent);
       border: none;
@@ -1303,9 +1322,13 @@
       line-height: 1.5;
     }
 
+    .ai-feedback-row {
+      display: flex;
+      border-top: 1px solid var(--border);
+    }
+
     .ai-run-btn {
-      display: block;
-      width: 100%;
+      flex: 1;
       background: var(--accent);
       border: none;
       color: white;
@@ -1313,11 +1336,141 @@
       cursor: pointer;
       font-size: 11px;
       font-weight: 600;
-      border-top: 1px solid var(--border);
     }
 
     .ai-run-btn:hover {
       background: var(--accent-hover);
+    }
+
+    .ai-feedback-btn {
+      background: var(--bg-surface);
+      border: none;
+      border-left: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 5px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .ai-feedback-btn:hover {
+      background: var(--bg-secondary);
+    }
+
+    .ai-feedback-btn.rated {
+      color: var(--accent);
+    }
+
+    .ai-editor-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .ai-delete-btn {
+      color: #f87171;
+    }
+
+    .ai-delete-btn:hover {
+      border-color: #f87171;
+    }
+
+    #ai-strategy-editor {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .ai-editor-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 2px;
+    }
+
+    .ai-editor-input {
+      width: 100%;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .ai-editor-input:focus {
+      border-color: var(--accent);
+    }
+
+    .ai-editor-select {
+      width: 100%;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .ai-editor-select:focus {
+      border-color: var(--accent);
+    }
+
+    .ai-editor-textarea {
+      width: 100%;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      resize: vertical;
+      min-height: 60px;
+      box-sizing: border-box;
+    }
+
+    .ai-editor-textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .ai-editor-commands {
+      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+      font-size: 11px;
+    }
+
+    .ai-examples-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .ai-example-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+
+    .ai-example-row .ai-delete-btn {
+      align-self: flex-end;
+    }
+
+    .ai-editor-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
     }
 
     /* Keyboard shortcuts help modal */
@@ -1717,6 +1870,50 @@
           </select>
         </div>
         <div id="ai-strategy-desc" class="ai-strategy-desc"></div>
+        <div class="ai-editor-actions">
+          <button id="btn-ai-new-strategy" class="ai-small-btn">+ New</button>
+          <button id="btn-ai-edit-strategy" class="ai-small-btn" style="display:none">Edit</button>
+          <button id="btn-ai-delete-strategy" class="ai-small-btn ai-delete-btn" style="display:none">Delete</button>
+        </div>
+        <div class="ai-io-actions">
+          <button id="btn-ai-export" class="ai-small-btn">Export</button>
+          <button id="btn-ai-import" class="ai-small-btn">Import</button>
+          <input type="file" id="ai-strategy-import" accept=".json" style="display:none">
+        </div>
+        <div id="ai-strategy-editor" style="display:none">
+          <div>
+            <div class="ai-editor-label">Name</div>
+            <input type="text" id="ai-editor-name" class="ai-editor-input" placeholder="Strategy name">
+          </div>
+          <div>
+            <div class="ai-editor-label">Description</div>
+            <input type="text" id="ai-editor-desc" class="ai-editor-input" placeholder="Short description">
+          </div>
+          <div>
+            <div class="ai-editor-label">Category</div>
+            <select id="ai-editor-category" class="ai-editor-select">
+              <option value="general">General</option>
+              <option value="pattern">Pattern</option>
+              <option value="workflow">Workflow</option>
+              <option value="organism">Organism</option>
+            </select>
+          </div>
+          <div>
+            <div class="ai-editor-label">Supplement Text</div>
+            <textarea id="ai-editor-supplement" class="ai-editor-textarea" rows="4" placeholder="Additional prompt guidance..."></textarea>
+          </div>
+          <div>
+            <div class="ai-examples-header">
+              <div class="ai-editor-label">Examples</div>
+              <button id="btn-ai-add-example" class="ai-small-btn">+ Add Example</button>
+            </div>
+            <div id="ai-editor-examples"></div>
+          </div>
+          <div class="ai-editor-footer">
+            <button id="btn-ai-editor-cancel" class="ai-small-btn">Cancel</button>
+            <button id="btn-ai-editor-save" class="ai-small-btn" style="background:var(--accent);color:white;border-color:var(--accent);">Save</button>
+          </div>
+        </div>
         <button id="btn-ai-analyze" class="ai-analyze-btn">Analyze Map</button>
         <div id="ai-status"></div>
         <div id="ai-results"></div>

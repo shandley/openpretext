@@ -19,7 +19,20 @@ import { captureDataURL } from '../export/SnapshotExporter';
 import { AIClient, AIAuthError, AIRateLimitError } from '../ai/AIClient';
 import { buildAnalysisContext } from '../ai/AIContext';
 import { buildSystemPrompt, buildUserMessage } from '../ai/AIPrompts';
-import { loadStrategyLibrary, getStrategyById, type StrategyLibrary } from '../data/PromptStrategy';
+import {
+  loadStrategyLibrary,
+  getStrategyById,
+  loadCustomStrategies,
+  saveCustomStrategies,
+  deleteCustomStrategy,
+  mergeStrategies,
+  type StrategyLibrary,
+  type PromptStrategy,
+  type StrategyExample,
+} from '../data/PromptStrategy';
+import { exportStrategyAsJSON, parseImportedStrategies } from '../ai/AIStrategyIO';
+import { attachFeedbackButtons } from './AIFeedbackUI';
+import { getStrategyRatingSummary } from '../ai/AIFeedback';
 
 const STORAGE_KEY = 'openpretext-ai-key';
 
@@ -86,7 +99,7 @@ function runDSLBlock(ctx: AppContext, dsl: string): void {
   ctx.showToast(`Executed: ${successCount} succeeded, ${failCount} failed`, 3000);
 }
 
-function renderResults(ctx: AppContext, text: string): void {
+function renderResults(ctx: AppContext, text: string, strategyId: string): void {
   const resultsEl = document.getElementById('ai-results');
   if (!resultsEl) return;
 
@@ -114,6 +127,8 @@ function renderResults(ctx: AppContext, text: string): void {
         runDSLBlock(ctx, block.content);
       });
       wrapper.appendChild(btn);
+
+      attachFeedbackButtons(wrapper, strategyId, block.content);
 
       resultsEl.appendChild(wrapper);
     }
@@ -161,7 +176,7 @@ async function analyzeMap(ctx: AppContext): Promise<void> {
     const response = await client.analyze(base64, systemPrompt, userMessage);
 
     if (statusEl) statusEl.textContent = '';
-    renderResults(ctx, response);
+    renderResults(ctx, response, strategyId);
   } catch (err: any) {
     if (err instanceof AIAuthError) {
       if (statusEl) statusEl.textContent = 'Invalid API key. Please check and try again.';
@@ -171,6 +186,196 @@ async function analyzeMap(ctx: AppContext): Promise<void> {
       if (statusEl) statusEl.textContent = `Error: ${err.message ?? 'Unknown error'}`;
     }
   }
+}
+
+/** All strategies (built-in + custom) currently displayed in the dropdown. */
+let allStrategies: PromptStrategy[] = [];
+
+/** The strategy currently being edited (null = new strategy). */
+let editingStrategyId: string | null = null;
+
+function refreshStrategyDropdown(ctx: AppContext): void {
+  const select = document.getElementById('ai-strategy-select') as HTMLSelectElement;
+  const descEl = document.getElementById('ai-strategy-desc');
+  if (!select) return;
+
+  const builtIn = strategyLibrary?.strategies ?? [];
+  const custom = loadCustomStrategies();
+  allStrategies = mergeStrategies(builtIn, custom);
+
+  const previousValue = select.value;
+  select.innerHTML = '';
+  for (const s of allStrategies) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.isCustom ? `${s.name} (Custom)` : s.name;
+    select.appendChild(opt);
+  }
+
+  // Restore previous selection if it still exists
+  if (allStrategies.some((s) => s.id === previousValue)) {
+    select.value = previousValue;
+  }
+
+  updateStrategyDesc();
+  updateEditorButtons();
+}
+
+function updateStrategyDesc(): void {
+  const select = document.getElementById('ai-strategy-select') as HTMLSelectElement;
+  const descEl = document.getElementById('ai-strategy-desc');
+  if (!select || !descEl) return;
+  const strategy = allStrategies.find((s) => s.id === select.value);
+  let text = strategy?.description ?? '';
+  const summary = getStrategyRatingSummary(select.value);
+  if (summary && summary.total > 0) {
+    const pct = Math.round((summary.up / summary.total) * 100);
+    text += ` (${pct}% positive, ${summary.total} ratings)`;
+  }
+  descEl.textContent = text;
+}
+
+function updateEditorButtons(): void {
+  const select = document.getElementById('ai-strategy-select') as HTMLSelectElement;
+  const editBtn = document.getElementById('btn-ai-edit-strategy');
+  const deleteBtn = document.getElementById('btn-ai-delete-strategy');
+  if (!select || !editBtn || !deleteBtn) return;
+
+  const strategy = allStrategies.find((s) => s.id === select.value);
+  const isCustom = strategy?.isCustom === true;
+  editBtn.style.display = isCustom ? 'inline-block' : 'none';
+  deleteBtn.style.display = isCustom ? 'inline-block' : 'none';
+}
+
+function showEditor(strategy: PromptStrategy | null): void {
+  const editor = document.getElementById('ai-strategy-editor');
+  if (!editor) return;
+
+  editingStrategyId = strategy?.id ?? null;
+
+  const nameInput = document.getElementById('ai-editor-name') as HTMLInputElement;
+  const descInput = document.getElementById('ai-editor-desc') as HTMLInputElement;
+  const catSelect = document.getElementById('ai-editor-category') as HTMLSelectElement;
+  const suppInput = document.getElementById('ai-editor-supplement') as HTMLTextAreaElement;
+  const examplesContainer = document.getElementById('ai-editor-examples');
+
+  if (nameInput) nameInput.value = strategy?.name ?? '';
+  if (descInput) descInput.value = strategy?.description ?? '';
+  if (catSelect) catSelect.value = strategy?.category ?? 'general';
+  if (suppInput) suppInput.value = strategy?.supplement ?? '';
+
+  // Populate examples
+  if (examplesContainer) {
+    examplesContainer.innerHTML = '';
+    if (strategy?.examples && strategy.examples.length > 0) {
+      for (const ex of strategy.examples) {
+        addExampleRow(examplesContainer, ex.scenario, ex.commands);
+      }
+    }
+  }
+
+  editor.style.display = 'block';
+}
+
+function hideEditor(): void {
+  const editor = document.getElementById('ai-strategy-editor');
+  if (editor) editor.style.display = 'none';
+  editingStrategyId = null;
+}
+
+function addExampleRow(container: HTMLElement, scenario: string = '', commands: string = ''): void {
+  const row = document.createElement('div');
+  row.className = 'ai-example-row';
+
+  const scenarioInput = document.createElement('input');
+  scenarioInput.type = 'text';
+  scenarioInput.placeholder = 'Scenario description';
+  scenarioInput.className = 'ai-editor-input';
+  scenarioInput.value = scenario;
+
+  const commandsInput = document.createElement('textarea');
+  commandsInput.placeholder = 'DSL commands';
+  commandsInput.className = 'ai-editor-textarea ai-editor-commands';
+  commandsInput.rows = 2;
+  commandsInput.value = commands;
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'ai-small-btn ai-delete-btn';
+  removeBtn.textContent = 'Remove';
+  removeBtn.addEventListener('click', () => {
+    row.remove();
+  });
+
+  row.appendChild(scenarioInput);
+  row.appendChild(commandsInput);
+  row.appendChild(removeBtn);
+  container.appendChild(row);
+}
+
+function collectExamples(): StrategyExample[] {
+  const container = document.getElementById('ai-editor-examples');
+  if (!container) return [];
+  const rows = container.querySelectorAll('.ai-example-row');
+  const examples: StrategyExample[] = [];
+  rows.forEach((row) => {
+    const scenario = (row.querySelector('input') as HTMLInputElement)?.value?.trim() ?? '';
+    const commands = (row.querySelector('textarea') as HTMLTextAreaElement)?.value?.trim() ?? '';
+    if (scenario || commands) {
+      examples.push({ scenario, commands });
+    }
+  });
+  return examples;
+}
+
+function saveEditorStrategy(ctx: AppContext): void {
+  const nameInput = document.getElementById('ai-editor-name') as HTMLInputElement;
+  const descInput = document.getElementById('ai-editor-desc') as HTMLInputElement;
+  const catSelect = document.getElementById('ai-editor-category') as HTMLSelectElement;
+  const suppInput = document.getElementById('ai-editor-supplement') as HTMLTextAreaElement;
+
+  const name = nameInput?.value?.trim();
+  if (!name) {
+    ctx.showToast('Strategy name is required', 3000);
+    return;
+  }
+
+  const examples = collectExamples();
+  const category = (catSelect?.value ?? 'general') as PromptStrategy['category'];
+
+  const existing = loadCustomStrategies();
+
+  if (editingStrategyId) {
+    // Update existing
+    const idx = existing.findIndex((s) => s.id === editingStrategyId);
+    if (idx !== -1) {
+      existing[idx] = {
+        ...existing[idx],
+        name,
+        description: descInput?.value?.trim() ?? '',
+        category,
+        supplement: suppInput?.value?.trim() ?? '',
+        examples,
+        isCustom: true,
+      };
+    }
+  } else {
+    // Create new
+    const id = 'custom-' + Date.now().toString(36);
+    existing.push({
+      id,
+      name,
+      description: descInput?.value?.trim() ?? '',
+      category,
+      supplement: suppInput?.value?.trim() ?? '',
+      examples,
+      isCustom: true,
+    });
+  }
+
+  saveCustomStrategies(existing);
+  hideEditor();
+  refreshStrategyDropdown(ctx);
+  ctx.showToast(editingStrategyId ? 'Strategy updated' : 'Strategy created', 2000);
 }
 
 export function setupAIAssist(ctx: AppContext): void {
@@ -206,32 +411,118 @@ export function setupAIAssist(ctx: AppContext): void {
     analyzeMap(ctx);
   });
 
+  // Strategy dropdown change
+  document.getElementById('ai-strategy-select')?.addEventListener('change', () => {
+    updateStrategyDesc();
+    updateEditorButtons();
+  });
+
+  // New strategy button
+  document.getElementById('btn-ai-new-strategy')?.addEventListener('click', () => {
+    showEditor(null);
+  });
+
+  // Edit strategy button
+  document.getElementById('btn-ai-edit-strategy')?.addEventListener('click', () => {
+    const select = document.getElementById('ai-strategy-select') as HTMLSelectElement;
+    const strategy = allStrategies.find((s) => s.id === select?.value);
+    if (strategy?.isCustom) {
+      showEditor(strategy);
+    }
+  });
+
+  // Delete strategy button
+  document.getElementById('btn-ai-delete-strategy')?.addEventListener('click', () => {
+    const select = document.getElementById('ai-strategy-select') as HTMLSelectElement;
+    const strategy = allStrategies.find((s) => s.id === select?.value);
+    if (strategy?.isCustom) {
+      deleteCustomStrategy(strategy.id);
+      hideEditor();
+      refreshStrategyDropdown(ctx);
+      ctx.showToast('Strategy deleted', 2000);
+    }
+  });
+
+  // Editor save button
+  document.getElementById('btn-ai-editor-save')?.addEventListener('click', () => {
+    saveEditorStrategy(ctx);
+  });
+
+  // Editor cancel button
+  document.getElementById('btn-ai-editor-cancel')?.addEventListener('click', () => {
+    hideEditor();
+  });
+
+  // Add example button
+  document.getElementById('btn-ai-add-example')?.addEventListener('click', () => {
+    const container = document.getElementById('ai-editor-examples');
+    if (container) addExampleRow(container);
+  });
+
+  // Export strategy button
+  document.getElementById('btn-ai-export')?.addEventListener('click', () => {
+    const select = document.getElementById('ai-strategy-select') as HTMLSelectElement;
+    const strategy = allStrategies.find((s) => s.id === select?.value);
+    if (strategy) {
+      exportStrategyAsJSON(strategy);
+      ctx.showToast('Strategy exported', 2000);
+    }
+  });
+
+  // Import strategy button — triggers hidden file input
+  document.getElementById('btn-ai-import')?.addEventListener('click', () => {
+    const fileInput = document.getElementById('ai-strategy-import') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+      fileInput.click();
+    }
+  });
+
+  // Handle imported strategy file
+  document.getElementById('ai-strategy-import')?.addEventListener('change', (e) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const imported = parseImportedStrategies(reader.result as string);
+        if (imported.length === 0) {
+          ctx.showToast('No strategies found in file', 3000);
+          return;
+        }
+
+        const existing = loadCustomStrategies();
+        const existingIds = new Set(existing.map((s) => s.id));
+        let added = 0;
+        for (const s of imported) {
+          if (!existingIds.has(s.id)) {
+            existing.push(s);
+            existingIds.add(s.id);
+            added++;
+          }
+        }
+
+        saveCustomStrategies(existing);
+        refreshStrategyDropdown(ctx);
+        ctx.showToast(`Imported ${added} ${added === 1 ? 'strategy' : 'strategies'}`, 3000);
+      } catch (err: any) {
+        ctx.showToast(`Import failed: ${err.message}`, 4000);
+      }
+    };
+    reader.readAsText(file);
+  });
+
   // Load strategy library and populate dropdown
   loadStrategyLibrary()
     .then((lib) => {
       strategyLibrary = lib;
-      const select = document.getElementById('ai-strategy-select') as HTMLSelectElement;
-      const descEl = document.getElementById('ai-strategy-desc');
-      if (!select) return;
-
-      select.innerHTML = '';
-      for (const s of lib.strategies) {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.name;
-        select.appendChild(opt);
-      }
-
-      // Show description on change
-      const updateDesc = () => {
-        if (!descEl) return;
-        const strategy = getStrategyById(lib, select.value);
-        descEl.textContent = strategy?.description ?? '';
-      };
-      select.addEventListener('change', updateDesc);
-      updateDesc();
+      refreshStrategyDropdown(ctx);
     })
     .catch(() => {
       // Strategy loading is optional — panel still works without it
+      // Still load custom strategies even if built-in loading fails
+      refreshStrategyDropdown(ctx);
     });
 }

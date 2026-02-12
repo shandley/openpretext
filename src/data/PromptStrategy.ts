@@ -2,7 +2,9 @@
  * PromptStrategy — types and loader for the prompt strategy library.
  *
  * Each strategy augments the base AI system prompt with domain-specific
- * guidance and optional few-shot examples.
+ * guidance and optional few-shot examples. Supports built-in strategies
+ * from prompt-strategies.json and user-created custom strategies stored
+ * in localStorage.
  */
 
 export interface StrategyExample {
@@ -21,12 +23,16 @@ export interface PromptStrategy {
   supplement: string;
   /** Few-shot examples shown to the model. */
   examples: StrategyExample[];
+  /** True for user-created strategies stored in localStorage. */
+  isCustom?: boolean;
 }
 
 export interface StrategyLibrary {
   version: string;
   strategies: PromptStrategy[];
 }
+
+const CUSTOM_STORAGE_KEY = 'openpretext-custom-strategies';
 
 let cached: StrategyLibrary | null = null;
 
@@ -47,6 +53,40 @@ export function getStrategyById(
   id: string,
 ): PromptStrategy | undefined {
   return library.strategies.find((s) => s.id === id);
+}
+
+/** Load custom strategies from localStorage. Returns empty array if none exist. */
+export function loadCustomStrategies(): PromptStrategy[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((s: PromptStrategy) => ({ ...s, isCustom: true }));
+  } catch {
+    return [];
+  }
+}
+
+/** Save custom strategies to localStorage. */
+export function saveCustomStrategies(strategies: PromptStrategy[]): void {
+  localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(strategies));
+}
+
+/** Delete a custom strategy by id. */
+export function deleteCustomStrategy(id: string): void {
+  const strategies = loadCustomStrategies();
+  const filtered = strategies.filter((s) => s.id !== id);
+  saveCustomStrategies(filtered);
+}
+
+/** Merge built-in and custom strategies into a single array. Custom strategies are marked with isCustom: true. */
+export function mergeStrategies(
+  builtIn: PromptStrategy[],
+  custom: PromptStrategy[],
+): PromptStrategy[] {
+  const tagged = custom.map((s) => ({ ...s, isCustom: true as const }));
+  return [...builtIn, ...tagged];
 }
 
 /** Reset cache (for testing). */
