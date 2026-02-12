@@ -1,0 +1,73 @@
+{
+  "version": "1.0.0",
+  "strategies": [
+    {
+      "id": "general",
+      "name": "General Analysis",
+      "description": "Balanced analysis suitable for any assembly. Identifies inversions, misjoins, and reordering opportunities.",
+      "category": "general",
+      "supplement": "",
+      "examples": []
+    },
+    {
+      "id": "inversion-focus",
+      "name": "Inversion Detection",
+      "description": "Focuses on identifying and fixing inversions visible as anti-diagonal patterns within chromosomal blocks.",
+      "category": "pattern",
+      "supplement": "Your primary task is to detect inversions in this contact map. Inversions appear as anti-diagonal (perpendicular to the main diagonal) signal within a chromosomal block. They indicate a contig segment is in the wrong orientation.\n\nKey visual signatures:\n- A bright stripe running perpendicular to the main diagonal within a block\n- The anti-diagonal signal is typically as bright as the main diagonal\n- Small inversions may appear as small \"butterfly\" patterns\n- Multiple inversions in the same chromosome appear as alternating diagonal/anti-diagonal stripes\n\nFor each inversion you detect:\n1. Identify which contig contains the inverted region\n2. If the entire contig is inverted, suggest `invert <contig>`\n3. If only part of a contig is inverted, suggest `cut` first to isolate the inverted segment, then `invert` it\n\nPrioritize inversions by confidence — report the most visually obvious ones first.",
+      "examples": [
+        {
+          "scenario": "A clear anti-diagonal stripe is visible in contig scaffold_15, spanning its entire length",
+          "commands": "invert scaffold_15"
+        },
+        {
+          "scenario": "The left half of contig chr3 shows anti-diagonal signal while the right half is normal",
+          "commands": "# Cut chr3 at the inversion boundary, then invert the left fragment\ncut chr3 512\ninvert chr3"
+        }
+      ]
+    },
+    {
+      "id": "scaffolding",
+      "name": "Scaffold Assignment",
+      "description": "Guides chromosome-level scaffolding: identify chromosomal blocks, create scaffolds, and assign contigs to chromosomes.",
+      "category": "workflow",
+      "supplement": "Your primary task is to help organize contigs into chromosome-level scaffolds. Focus on identifying which contigs belong to the same chromosome based on their interaction patterns.\n\nWorkflow:\n1. First, identify distinct chromosomal blocks along the diagonal — these appear as bright square regions with strong internal signal and weak signal between blocks\n2. For each identified chromosome, suggest creating a scaffold with a descriptive name\n3. Then assign contigs to their respective scaffolds using `scaffold paint`\n4. If contigs within a block are out of order, suggest `move` commands to correct the ordering before scaffolding\n\nNaming conventions:\n- Use `Chr1`, `Chr2`, etc. for numbered chromosomes (largest first)\n- Use `ChrZ`, `ChrW` for sex chromosomes if identifiable\n- Use `ChrUn` for unplaced contigs that don't clearly belong to any block\n\nFocus on the largest, most clearly defined blocks first. Leave ambiguous contigs unassigned rather than guessing.",
+      "examples": [
+        {
+          "scenario": "Three distinct chromosomal blocks are visible: contigs #0-#4 form one block, #5-#8 form another, and #9-#12 form a third",
+          "commands": "scaffold create Chr1\nscaffold paint #0 Chr1\nscaffold paint #1 Chr1\nscaffold paint #2 Chr1\nscaffold paint #3 Chr1\nscaffold paint #4 Chr1"
+        }
+      ]
+    },
+    {
+      "id": "fragmented-assembly",
+      "name": "Fragmented Assembly",
+      "description": "For assemblies with many small contigs. Emphasizes automated operations (autosort, autocut) and batch processing.",
+      "category": "workflow",
+      "supplement": "This assembly has many contigs, suggesting it is fragmented or in an early stage of curation. For fragmented assemblies:\n\n1. Start with automated operations to establish a baseline ordering:\n   - Suggest `autosort` to reorder contigs by Hi-C linkage signal\n   - Suggest `autocut` if you see obvious misjoins (diagonal gaps)\n2. After automated operations, focus on the largest contigs where manual corrections will have the most impact\n3. Small contigs with weak signal may be debris or unplaced fragments — these are lower priority\n4. Look for groups of small contigs that share strong off-diagonal signal with larger contigs — these likely belong to the same chromosome and should be moved adjacent\n\nFor very fragmented assemblies, don't try to fix everything. Focus on:\n- The 5-10 most impactful reordering moves\n- Clear inversions in the largest contigs\n- Obvious misjoins where the diagonal signal drops to zero\n\nSuggest operations in batches of 3-5 commands maximum.",
+      "examples": [
+        {
+          "scenario": "A fragmented assembly with 200+ contigs in seemingly random order",
+          "commands": "# Start with automated sorting to establish baseline ordering\nautosort"
+        },
+        {
+          "scenario": "After autosort, several small contigs (#45, #46, #47) show strong off-diagonal signal with the block at #10-#15",
+          "commands": "move #45 after #15\nmove #46 after #15\nmove #47 after #15"
+        }
+      ]
+    },
+    {
+      "id": "micro-chromosomes",
+      "name": "Micro-chromosomes",
+      "description": "For bird and reptile genomes with many small micro-chromosomes alongside larger macro-chromosomes.",
+      "category": "organism",
+      "supplement": "This genome likely contains micro-chromosomes — very small chromosomes typical of birds, reptiles, and some fish. Key characteristics:\n\n- Expect 10-20 large macro-chromosomes AND 10-20+ tiny micro-chromosomes\n- Micro-chromosomes appear as very small but distinct blocks along the diagonal\n- They are gene-dense despite their small size, so they often show proportionally bright signal\n- Micro-chromosomes can be difficult to distinguish from assembly debris\n\nCuration priorities:\n1. First ensure the macro-chromosomes are correctly ordered and oriented\n2. Then identify micro-chromosomes: look for small but distinctly bounded blocks\n3. Group micro-chromosomes together (they're typically ordered after macro-chromosomes by convention)\n4. Don't confuse micro-chromosomes with misassembled fragments — micro-chromosomes show clean internal signal, fragments show noisy or absent signal\n5. Sex chromosomes (Z/W in birds, various in reptiles) may show distinctive patterns: the Z is often one of the larger chromosomes, while W is small and repetitive\n\nWhen scaffolding, name micro-chromosomes sequentially after the macro-chromosomes (e.g., Chr11, Chr12... if there are 10 macro-chromosomes).",
+      "examples": [
+        {
+          "scenario": "A bird genome shows 8 large blocks and then many tiny blocks in the bottom-right of the map",
+          "commands": "# The tiny blocks are likely micro-chromosomes — verify ordering\necho Micro-chromosomes detected: small blocks at positions #25-#40\nzoom #25"
+        }
+      ]
+    }
+  ]
+}

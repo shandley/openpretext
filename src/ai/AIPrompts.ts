@@ -4,6 +4,7 @@
 
 import type { AnalysisContext } from './AIContext';
 import { formatContextMessage } from './AIContext';
+import type { PromptStrategy } from '../data/PromptStrategy';
 
 export const SYSTEM_PROMPT = `You are a genome assembly curation expert analyzing Hi-C contact maps.
 
@@ -76,6 +77,28 @@ Contigs can be referenced by name (e.g., \`chr1\`, \`scaffold_42\`) or by 0-base
 5. Use contig names when available, fall back to \`#N\` indices.
 6. Each \`\`\`dsl code block should be independently executable.
 7. Do not suggest operations you are not confident about.`;
+
+/**
+ * Build the complete system prompt, optionally augmented with a strategy.
+ * The base SYSTEM_PROMPT is always included; strategies append to it.
+ */
+export function buildSystemPrompt(strategy?: PromptStrategy): string {
+  if (!strategy || !strategy.supplement) {
+    return SYSTEM_PROMPT;
+  }
+
+  let prompt = SYSTEM_PROMPT;
+  prompt += `\n\n## Strategy: ${strategy.name}\n\n${strategy.supplement}`;
+
+  if (strategy.examples.length > 0) {
+    prompt += '\n\n## Examples\n';
+    for (const ex of strategy.examples) {
+      prompt += `\n**Scenario:** ${ex.scenario}\n\`\`\`dsl\n${ex.commands}\n\`\`\`\n`;
+    }
+  }
+
+  return prompt;
+}
 
 export function buildUserMessage(context: AnalysisContext): string {
   return formatContextMessage(context);

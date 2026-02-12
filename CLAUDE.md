@@ -52,6 +52,7 @@ src/
   data/
     SpecimenCatalog.ts       Types + loader for specimen-catalog.json
     LessonSchema.ts          Types + loader for tutorial lesson JSON files
+    PromptStrategy.ts        Types + loader for prompt-strategies.json
   scripting/
     ScriptParser.ts          Tokenizer + parser for 18-command DSL
     ScriptExecutor.ts        Executes parsed AST via ScriptContext DI
@@ -68,6 +69,7 @@ data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
   lessons/                   Tutorial lesson JSON files (6 lessons)
   pattern-gallery.json       Hi-C pattern reference gallery (8 patterns)
+  prompt-strategies.json     AI prompt strategy library (5 strategies)
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)
   runner.ts                  Benchmark pipeline orchestrator
@@ -80,7 +82,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1453 unit tests (vitest)
+  unit/                      1473 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -107,6 +109,7 @@ tests/
     ai-context.test.ts       Context building, formatting (13 tests)
     ai-prompts.test.ts       System prompt, DSL coverage (7 tests)
     ai-panel.test.ts         Response parsing, code extraction (7 tests)
+    prompt-strategy.test.ts  Strategy data validation, lookup (14 tests)
   e2e/                       34 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
@@ -199,6 +202,11 @@ themselves. The undo stack is the source of truth for curation history.
   screenshot via `SnapshotExporter`, builds context from `AppState` +
   `MetricsTracker`, sends to Anthropic Messages API, renders DSL suggestions
   with executable "Run" buttons using `ScriptParser` + `ScriptExecutor`.
+  Strategy dropdown selects from `data/prompt-strategies.json`.
+- **PromptStrategy**: `data/prompt-strategies.json` contains 5 curation
+  strategies that augment the base AI system prompt with domain-specific
+  guidance and few-shot examples. `buildSystemPrompt(strategy)` appends
+  the strategy supplement to the immutable base prompt.
 
 ## Conventions
 
@@ -207,7 +215,7 @@ themselves. The undo stack is the source of truth for curation history.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1453 tests must pass
+- Run `npm test` before committing; all 1473 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls

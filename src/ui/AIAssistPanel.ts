@@ -18,11 +18,13 @@ import { autoSortContigs, autoCutContigs } from '../curation/BatchOperations';
 import { captureDataURL } from '../export/SnapshotExporter';
 import { AIClient, AIAuthError, AIRateLimitError } from '../ai/AIClient';
 import { buildAnalysisContext } from '../ai/AIContext';
-import { SYSTEM_PROMPT, buildUserMessage } from '../ai/AIPrompts';
+import { buildSystemPrompt, buildUserMessage } from '../ai/AIPrompts';
+import { loadStrategyLibrary, getStrategyById, type StrategyLibrary } from '../data/PromptStrategy';
 
 const STORAGE_KEY = 'openpretext-ai-key';
 
 let aiPanelVisible = false;
+let strategyLibrary: StrategyLibrary | null = null;
 
 export function isAIPanelVisible(): boolean {
   return aiPanelVisible;
@@ -148,9 +150,15 @@ async function analyzeMap(ctx: AppContext): Promise<void> {
     const context = buildAnalysisContext(ctx);
     const userMessage = buildUserMessage(context);
 
+    // Build system prompt with selected strategy
+    const select = document.getElementById('ai-strategy-select') as HTMLSelectElement;
+    const strategyId = select?.value ?? 'general';
+    const strategy = strategyLibrary ? getStrategyById(strategyLibrary, strategyId) : undefined;
+    const systemPrompt = buildSystemPrompt(strategy);
+
     // Call the API
     const client = new AIClient(apiKey);
-    const response = await client.analyze(base64, SYSTEM_PROMPT, userMessage);
+    const response = await client.analyze(base64, systemPrompt, userMessage);
 
     if (statusEl) statusEl.textContent = '';
     renderResults(ctx, response);
@@ -197,4 +205,33 @@ export function setupAIAssist(ctx: AppContext): void {
   document.getElementById('btn-ai-analyze')?.addEventListener('click', () => {
     analyzeMap(ctx);
   });
+
+  // Load strategy library and populate dropdown
+  loadStrategyLibrary()
+    .then((lib) => {
+      strategyLibrary = lib;
+      const select = document.getElementById('ai-strategy-select') as HTMLSelectElement;
+      const descEl = document.getElementById('ai-strategy-desc');
+      if (!select) return;
+
+      select.innerHTML = '';
+      for (const s of lib.strategies) {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        select.appendChild(opt);
+      }
+
+      // Show description on change
+      const updateDesc = () => {
+        if (!descEl) return;
+        const strategy = getStrategyById(lib, select.value);
+        descEl.textContent = strategy?.description ?? '';
+      };
+      select.addEventListener('change', updateDesc);
+      updateDesc();
+    })
+    .catch(() => {
+      // Strategy loading is optional — panel still works without it
+    });
 }
