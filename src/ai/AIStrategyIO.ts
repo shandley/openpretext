@@ -119,7 +119,7 @@ export function parseImportedStrategies(jsonText: string): PromptStrategy[] {
       description: (typeof s.description === 'string' ? s.description : '') as string,
       category: isValidCategory(s.category) ? s.category : 'general',
       supplement: s.supplement as string,
-      examples: Array.isArray(s.examples) ? s.examples : [],
+      examples: Array.isArray(s.examples) ? filterValidExamples(s.examples) : [],
       isCustom: true,
     });
   }
@@ -129,4 +129,18 @@ export function parseImportedStrategies(jsonText: string): PromptStrategy[] {
 
 function isValidCategory(value: unknown): value is PromptStrategy['category'] {
   return value === 'general' || value === 'pattern' || value === 'workflow' || value === 'organism';
+}
+
+/** Keep only example entries that have string scenario and commands fields. */
+function filterValidExamples(arr: unknown[]): { scenario: string; commands: string }[] {
+  const result: { scenario: string; commands: string }[] = [];
+  for (const item of arr) {
+    if (item !== null && typeof item === 'object') {
+      const obj = item as Record<string, unknown>;
+      if (typeof obj.scenario === 'string' && typeof obj.commands === 'string') {
+        result.push({ scenario: obj.scenario, commands: obj.commands });
+      }
+    }
+  }
+  return result;
 }

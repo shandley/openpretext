@@ -181,6 +181,24 @@ describe('AIStrategyIO', () => {
       expect(result[0].examples[0].scenario).toBe('test scenario');
       expect(result[0].examples[0].commands).toBe('invert chr1');
     });
+
+    it('filters out malformed examples with non-string fields', () => {
+      const json = JSON.stringify({
+        id: 'bad-examples',
+        name: 'Bad Examples',
+        supplement: 'text',
+        examples: [
+          { scenario: 42, commands: null },
+          { scenario: 'valid', commands: 'invert chr1' },
+          'not an object',
+          { scenario: 'missing commands' },
+        ],
+      });
+      const result = parseImportedStrategies(json);
+      expect(result[0].examples).toHaveLength(1);
+      expect(result[0].examples[0].scenario).toBe('valid');
+      expect(result[0].examples[0].commands).toBe('invert chr1');
+    });
   });
 
   describe('exportStrategyAsJSON', () => {
