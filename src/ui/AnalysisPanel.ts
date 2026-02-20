@@ -3,25 +3,20 @@
  *
  * Provides UI for computing insulation scores, contact decay curves,
  * and A/B compartment eigenvectors from the Hi-C contact map.
+ * Computations run in a background Web Worker via AnalysisWorkerClient.
  * Results are displayed as overlay tracks via TrackRenderer.
  */
 
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import type { ContigRange } from '../curation/AutoSort';
+import { insulationToTracks } from '../analysis/InsulationScore';
 import {
-  computeInsulation,
-  insulationToTracks,
-} from '../analysis/InsulationScore';
-import {
-  computeContactDecay,
   formatDecayStats,
   type ContactDecayResult,
 } from '../analysis/ContactDecay';
-import {
-  computeCompartments,
-  compartmentToTrack,
-} from '../analysis/CompartmentAnalysis';
+import { compartmentToTrack } from '../analysis/CompartmentAnalysis';
+import { AnalysisWorkerClient } from '../analysis/AnalysisWorkerClient';
 
 // ---------------------------------------------------------------------------
 // Cached state
@@ -29,6 +24,8 @@ import {
 
 let cachedDecay: ContactDecayResult | null = null;
 let insulationWindowSize = 10;
+let workerClient: AnalysisWorkerClient | null = null;
+let computing = false;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,18 +57,40 @@ function buildContigRanges(): ContigRange[] {
   return ranges;
 }
 
+function getClient(): AnalysisWorkerClient {
+  if (!workerClient) {
+    workerClient = new AnalysisWorkerClient();
+  }
+  return workerClient;
+}
+
+function setButtonsDisabled(disabled: boolean): void {
+  const ids = [
+    'btn-compute-insulation',
+    'btn-compute-decay',
+    'btn-compute-compartments',
+    'btn-run-all-analysis',
+  ];
+  for (const id of ids) {
+    const btn = document.getElementById(id) as HTMLButtonElement | null;
+    if (btn) btn.disabled = disabled;
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Analysis runners
+// Analysis runners (async, using worker)
 // ---------------------------------------------------------------------------
 
-function runInsulation(ctx: AppContext): void {
+async function runInsulation(ctx: AppContext): Promise<void> {
   const s = state.get();
   if (!s.map?.contactMap) return;
 
   const overviewSize = getOverviewSize();
-  const result = computeInsulation(s.map.contactMap, overviewSize, {
-    windowSize: insulationWindowSize,
-  });
+  const result = await getClient().computeInsulation(
+    s.map.contactMap,
+    overviewSize,
+    { windowSize: insulationWindowSize },
+  );
   const { insulationTrack, boundaryTrack } = insulationToTracks(
     result,
     overviewSize,
@@ -86,23 +105,30 @@ function runInsulation(ctx: AppContext): void {
   updateResultsDisplay();
 }
 
-function runDecay(ctx: AppContext): void {
+async function runDecay(ctx: AppContext): Promise<void> {
   const s = state.get();
   if (!s.map?.contactMap) return;
 
   const overviewSize = getOverviewSize();
   const ranges = buildContigRanges();
-  cachedDecay = computeContactDecay(s.map.contactMap, overviewSize, ranges);
+  cachedDecay = await getClient().computeContactDecay(
+    s.map.contactMap,
+    overviewSize,
+    ranges,
+  );
   ctx.showToast(`P(s) decay exponent: ${cachedDecay.decayExponent.toFixed(2)}`);
   updateResultsDisplay();
 }
 
-function runCompartments(ctx: AppContext): void {
+async function runCompartments(ctx: AppContext): Promise<void> {
   const s = state.get();
   if (!s.map?.contactMap) return;
 
   const overviewSize = getOverviewSize();
-  const result = computeCompartments(s.map.contactMap, overviewSize);
+  const result = await getClient().computeCompartments(
+    s.map.contactMap,
+    overviewSize,
+  );
   const track = compartmentToTrack(result, overviewSize, s.map.textureSize);
 
   ctx.trackRenderer.addTrack(track);
@@ -138,15 +164,15 @@ export function setupAnalysisPanel(ctx: AppContext): void {
   const container = document.getElementById('analysis-content');
   if (!container) return;
 
-  // Build the panel HTML (will be shown once data is loaded)
-  // The initial "No data loaded" placeholder is replaced by runAllAnalyses
-  // or by the user clicking buttons.
+  // Worker client is lazily initialized on first use.
+  // The "No data loaded" placeholder is replaced by runAllAnalyses on file:loaded.
 }
 
 /**
  * Run all analyses on the current contact map and register tracks.
+ * Computations run in a background Web Worker.
  */
-export function runAllAnalyses(ctx: AppContext): void {
+export async function runAllAnalyses(ctx: AppContext): Promise<void> {
   const s = state.get();
   if (!s.map?.contactMap) return;
 
@@ -166,7 +192,9 @@ export function runAllAnalyses(ctx: AppContext): void {
       <button class="analysis-btn" id="btn-compute-compartments">Compartments</button>
     </div>
     <button class="analysis-btn" id="btn-run-all-analysis" style="margin-bottom:6px;width:100%;">Compute All</button>
-    <div id="analysis-results"></div>
+    <div id="analysis-results">
+      <div style="color: var(--text-secondary); font-size: 11px;">Computing...</div>
+    </div>
   `;
 
   // Wire slider
@@ -179,24 +207,61 @@ export function runAllAnalyses(ctx: AppContext): void {
 
   // Wire individual buttons
   document.getElementById('btn-compute-insulation')?.addEventListener('click', () => {
-    runInsulation(ctx);
+    if (!computing) {
+      computing = true;
+      setButtonsDisabled(true);
+      runInsulation(ctx).finally(() => {
+        computing = false;
+        setButtonsDisabled(false);
+      });
+    }
   });
   document.getElementById('btn-compute-decay')?.addEventListener('click', () => {
-    runDecay(ctx);
+    if (!computing) {
+      computing = true;
+      setButtonsDisabled(true);
+      runDecay(ctx).finally(() => {
+        computing = false;
+        setButtonsDisabled(false);
+      });
+    }
   });
   document.getElementById('btn-compute-compartments')?.addEventListener('click', () => {
-    runCompartments(ctx);
+    if (!computing) {
+      computing = true;
+      setButtonsDisabled(true);
+      runCompartments(ctx).finally(() => {
+        computing = false;
+        setButtonsDisabled(false);
+      });
+    }
   });
   document.getElementById('btn-run-all-analysis')?.addEventListener('click', () => {
-    runInsulation(ctx);
-    runDecay(ctx);
-    runCompartments(ctx);
+    if (!computing) {
+      computing = true;
+      setButtonsDisabled(true);
+      Promise.all([
+        runInsulation(ctx),
+        runDecay(ctx),
+        runCompartments(ctx),
+      ]).finally(() => {
+        computing = false;
+        setButtonsDisabled(false);
+      });
+    }
   });
 
-  // Auto-compute all analyses
-  runInsulation(ctx);
-  runDecay(ctx);
-  runCompartments(ctx);
+  // Auto-compute all analyses (async, in worker)
+  computing = true;
+  setButtonsDisabled(true);
+  await Promise.all([
+    runInsulation(ctx),
+    runDecay(ctx),
+    runCompartments(ctx),
+  ]).finally(() => {
+    computing = false;
+    setButtonsDisabled(false);
+  });
 }
 
 /**
