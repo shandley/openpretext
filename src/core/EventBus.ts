@@ -25,6 +25,7 @@ export interface AppEvents {
   'tutorial:started': { lessonId: string };
   'tutorial:step-advanced': { lessonId: string; stepId: string };
   'tutorial:completed': { lessonId: string; score?: number };
+  'misassembly:updated': { count: number };
 }
 
 class EventBus {

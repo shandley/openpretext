@@ -36,6 +36,8 @@ export function setupEventListeners(ctx: AppContext): void {
     runAllAnalyses(ctx);
   });
 
+  events.on('misassembly:updated', () => ctx.updateSidebarContigList());
+
   events.on('curation:cut', () => refreshAfterCuration(ctx));
   events.on('curation:join', () => refreshAfterCuration(ctx));
   events.on('curation:invert', () => refreshAfterCuration(ctx));

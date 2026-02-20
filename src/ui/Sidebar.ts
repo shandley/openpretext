@@ -6,6 +6,7 @@ import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
+import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { move } from '../curation/CurationEngine';
 
 export function formatBp(bp: number): string {
@@ -37,6 +38,7 @@ export function updateSidebarContigList(ctx: AppContext): void {
     const lengthStr = formatBp(contig.length);
     const invertedBadge = contig.inverted ? '<span class="contig-badge inverted">INV</span>' : '';
     const excludedBadge = contigExclusion.isExcluded(orderIdx) ? '<span class="contig-badge excluded">EXC</span>' : '';
+    const misassemblyBadge = misassemblyFlags.isFlagged(orderIdx) ? '<span class="contig-badge misassembly">MIS</span>' : '';
     const scaffoldBadge = contig.scaffoldId !== null
       ? `<span class="contig-badge scaffold">S${contig.scaffoldId}</span>`
       : '';
@@ -44,7 +46,7 @@ export function updateSidebarContigList(ctx: AppContext): void {
     const draggable = ctx.currentMode === 'edit' ? ' draggable="true"' : '';
     return `<div class="contig-item ${isSelected ? 'selected' : ''}" data-order-index="${orderIdx}"${draggable}>
       <span class="contig-name">${contig.name}</span>
-      <span class="contig-meta">${lengthStr} ${invertedBadge}${excludedBadge}${scaffoldBadge}</span>
+      <span class="contig-meta">${lengthStr} ${invertedBadge}${excludedBadge}${misassemblyBadge}${scaffoldBadge}</span>
     </div>`;
   }).join('');
 

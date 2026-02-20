@@ -23,6 +23,8 @@ import {
   downloadCompartmentBedGraph,
   downloadDecayTSV,
 } from '../export/AnalysisExport';
+import { detectMisassemblies, misassemblyToTrack } from '../analysis/MisassemblyDetector';
+import { misassemblyFlags } from '../curation/MisassemblyFlags';
 
 // ---------------------------------------------------------------------------
 // Cached state
@@ -111,6 +113,7 @@ async function runInsulation(ctx: AppContext): Promise<void> {
   ctx.tracksVisible = true;
   ctx.updateTrackConfigPanel();
   ctx.showToast(`Insulation: ${result.boundaries.length} TAD boundaries detected`);
+  runMisassemblyDetection(ctx);
   updateResultsDisplay(ctx);
 }
 
@@ -145,7 +148,31 @@ async function runCompartments(ctx: AppContext): Promise<void> {
   ctx.tracksVisible = true;
   ctx.updateTrackConfigPanel();
   ctx.showToast(`Compartments: ${result.iterations} iterations, eigenvalue ${result.eigenvalue.toFixed(2)}`);
+  runMisassemblyDetection(ctx);
   updateResultsDisplay(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Misassembly detection
+// ---------------------------------------------------------------------------
+
+function runMisassemblyDetection(ctx: AppContext): void {
+  if (!cachedInsulation || !cachedCompartments) return;
+  const s = state.get();
+  if (!s.map) return;
+
+  const ranges = buildContigRanges();
+  const overviewSize = getOverviewSize();
+  const result = detectMisassemblies(cachedInsulation, cachedCompartments, ranges);
+  misassemblyFlags.setFlags(result.flags);
+
+  const track = misassemblyToTrack(result, overviewSize, s.map.textureSize);
+  ctx.trackRenderer.addTrack(track);
+  ctx.updateTrackConfigPanel();
+
+  if (result.summary.total > 0) {
+    ctx.showToast(`${result.summary.total} potential misassemblies detected`, 4000);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +290,12 @@ function updateResultsDisplay(ctx: AppContext): void {
   if (cachedDecay) {
     html += formatDecayStats(cachedDecay);
     html += renderDecayChart(cachedDecay);
+  }
+
+  // Misassembly summary
+  const flagCount = misassemblyFlags.getFlaggedCount();
+  if (flagCount > 0) {
+    html += `<div class="stats-row"><span>Misassemblies</span><span style="color:#e67e22;">${flagCount} contigs</span></div>`;
   }
 
   // Export buttons (only if at least one result exists)
@@ -414,6 +447,8 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
   ]).finally(() => {
     computing = false;
     setButtonsDisabled(false);
+    runMisassemblyDetection(ctx);
+    updateResultsDisplay(ctx);
   });
 }
 
@@ -424,8 +459,10 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedDecay = null;
   cachedInsulation = null;
   cachedCompartments = null;
+  misassemblyFlags.clearAll();
   ctx.trackRenderer.removeTrack('Insulation Score');
   ctx.trackRenderer.removeTrack('TAD Boundaries');
   ctx.trackRenderer.removeTrack('A/B Compartments');
+  ctx.trackRenderer.removeTrack('Misassembly Flags');
   ctx.updateTrackConfigPanel();
 }

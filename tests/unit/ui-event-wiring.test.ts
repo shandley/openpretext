@@ -214,7 +214,7 @@ describe('EventWiring', () => {
       const ctx = createMockCtx();
       setupEventListeners(ctx);
 
-      expect(mockEventsOn).toHaveBeenCalledTimes(7);
+      expect(mockEventsOn).toHaveBeenCalledTimes(8);
     });
 
     it('file:loaded handler should call updateSidebarContigList', () => {
