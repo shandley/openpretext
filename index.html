@@ -1580,6 +1580,49 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* Analysis panel */
+    .analysis-btn {
+      padding: 3px 8px;
+      font-size: 11px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .analysis-btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+    .analysis-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .analysis-buttons {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin: 6px 0;
+    }
+    .analysis-slider {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+    .analysis-slider input[type="range"] {
+      flex: 1;
+      height: 4px;
+    }
+    .analysis-slider .slider-val {
+      min-width: 20px;
+      text-align: right;
+      color: var(--text-primary);
+    }
+
     /* Excluded badge */
     .contig-badge.excluded {
       background: #e74c3c;
@@ -1784,6 +1827,12 @@
         <div class="sidebar-section">
           <h3>Assembly Metrics</h3>
           <div id="stats-content">
+            <div style="color: var(--text-secondary); font-size: 12px;">No data loaded</div>
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <h3>3D Analysis</h3>
+          <div id="analysis-content">
             <div style="color: var(--text-secondary); font-size: 12px;">No data loaded</div>
           </div>
         </div>

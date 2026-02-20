@@ -99,7 +99,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     comparisonVisible: false,
     renderer: {} as any,
     labelRenderer: {} as any,
-    trackRenderer: {} as any,
+    trackRenderer: { removeTrack: vi.fn(), addTrack: vi.fn() } as any,
     scaffoldOverlay: {} as any,
     waypointOverlay: {} as any,
     minimap: {} as any,

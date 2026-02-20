@@ -10,6 +10,7 @@ import { events } from '../core/EventBus';
 import { state } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { getContigBoundaries } from '../core/DerivedState';
+import { clearAnalysisTracks, runAllAnalyses } from './AnalysisPanel';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -29,6 +30,10 @@ export function setupEventListeners(ctx: AppContext): void {
       contigExclusion.clearAll();
     }
     ctx.updateStatsPanel();
+
+    // Auto-compute 3D analysis tracks
+    clearAnalysisTracks(ctx);
+    runAllAnalyses(ctx);
   });
 
   events.on('curation:cut', () => refreshAfterCuration(ctx));

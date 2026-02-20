@@ -88,6 +88,9 @@ export { setupAssessmentPanel } from './AssessmentPanel';
 // PatternGallery
 export { togglePatternGallery, setupPatternGallery } from './PatternGallery';
 
+// AnalysisPanel
+export { setupAnalysisPanel, runAllAnalyses, clearAnalysisTracks } from './AnalysisPanel';
+
 // Boot
 export { boot } from './Boot';
 

@@ -51,6 +51,7 @@ import {
   setupEventListeners,
   refreshAfterCuration,
   setupSpecimenPicker,
+  setupAnalysisPanel,
 } from './ui';
 
 class OpenPretextApp {
@@ -152,6 +153,7 @@ class OpenPretextApp {
     setupTutorialOverlay(ctx, tutorialManager);
     setupAssessmentPanel(ctx, tutorialManager);
     setupPatternGallery();
+    setupAnalysisPanel(ctx);
 
     console.log('OpenPretext initialized');
   }
