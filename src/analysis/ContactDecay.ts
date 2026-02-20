@@ -157,6 +157,70 @@ export function computeContactDecay(
 }
 
 // ---------------------------------------------------------------------------
+// Per-scaffold computation
+// ---------------------------------------------------------------------------
+
+export interface ScaffoldGroup {
+  scaffoldId: number;
+  name: string;
+  color: string;
+  orderIndices: number[];
+}
+
+export interface ScaffoldDecayResult {
+  scaffoldId: number;
+  scaffoldName: string;
+  color: string;
+  decay: ContactDecayResult;
+  contigCount: number;
+}
+
+/**
+ * Compute P(s) decay curves for each scaffold group independently.
+ *
+ * Filters contigRanges to those belonging to each scaffold, then calls
+ * computeContactDecay on the subset. Only includes scaffolds with at least
+ * one contig range that spans > 1 pixel.
+ */
+export function computeDecayByScaffold(
+  contactMap: Float32Array,
+  size: number,
+  contigRanges: ContigRange[],
+  scaffoldGroups: ScaffoldGroup[],
+  params?: Partial<ContactDecayParams>,
+): ScaffoldDecayResult[] {
+  const rangeByOrder = new Map<number, ContigRange>();
+  for (const r of contigRanges) {
+    rangeByOrder.set(r.orderIndex, r);
+  }
+
+  const results: ScaffoldDecayResult[] = [];
+
+  for (const group of scaffoldGroups) {
+    const filteredRanges: ContigRange[] = [];
+    for (const idx of group.orderIndices) {
+      const range = rangeByOrder.get(idx);
+      if (range && (range.end - range.start) > 1) {
+        filteredRanges.push(range);
+      }
+    }
+
+    if (filteredRanges.length === 0) continue;
+
+    const decay = computeContactDecay(contactMap, size, filteredRanges, params);
+    results.push({
+      scaffoldId: group.scaffoldId,
+      scaffoldName: group.name,
+      color: group.color,
+      decay,
+      contigCount: filteredRanges.length,
+    });
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Stats panel formatting
 // ---------------------------------------------------------------------------
 

@@ -14,7 +14,10 @@ import type { ContigRange } from '../curation/AutoSort';
 import { insulationToTracks, type InsulationResult } from '../analysis/InsulationScore';
 import {
   formatDecayStats,
+  computeDecayByScaffold,
   type ContactDecayResult,
+  type ScaffoldDecayResult,
+  type ScaffoldGroup,
 } from '../analysis/ContactDecay';
 import { compartmentToTrack, type CompartmentResult } from '../analysis/CompartmentAnalysis';
 import { AnalysisWorkerClient } from '../analysis/AnalysisWorkerClient';
@@ -35,6 +38,7 @@ import { computeHealthScore, type HealthScoreResult } from '../analysis/HealthSc
 import type {
   SessionAnalysisData,
   SessionDecay,
+  SessionScaffoldDecay,
 } from '../io/SessionManager';
 
 // ---------------------------------------------------------------------------
@@ -46,6 +50,7 @@ let baselineDecay: ContactDecayResult | null = null;
 let cachedInsulation: InsulationResult | null = null;
 let cachedCompartments: CompartmentResult | null = null;
 let cachedSuggestions: CutSuggestion[] | null = null;
+let cachedScaffoldDecay: ScaffoldDecayResult[] | null = null;
 let insulationWindowSize = 10;
 let workerClient: AnalysisWorkerClient | null = null;
 let computing = false;
@@ -78,6 +83,56 @@ function buildContigRanges(): ContigRange[] {
   }
 
   return ranges;
+}
+
+function buildScaffoldGroups(ctx: AppContext): ScaffoldGroup[] {
+  const s = state.get();
+  if (!s.map) return [];
+
+  const scaffolds = ctx.scaffoldManager.getAllScaffolds();
+  if (scaffolds.length === 0) return [];
+
+  // Group contigs by scaffoldId
+  const groups: ScaffoldGroup[] = [];
+  const unscaffolded: number[] = [];
+
+  for (let i = 0; i < s.contigOrder.length; i++) {
+    const contigId = s.contigOrder[i];
+    const contig = s.map.contigs[contigId];
+    if (contig.scaffoldId === null) {
+      unscaffolded.push(i);
+    }
+  }
+
+  for (const scaffold of scaffolds) {
+    const orderIndices: number[] = [];
+    for (let i = 0; i < s.contigOrder.length; i++) {
+      const contigId = s.contigOrder[i];
+      if (s.map.contigs[contigId].scaffoldId === scaffold.id) {
+        orderIndices.push(i);
+      }
+    }
+    if (orderIndices.length > 0) {
+      groups.push({
+        scaffoldId: scaffold.id,
+        name: scaffold.name,
+        color: scaffold.color,
+        orderIndices,
+      });
+    }
+  }
+
+  // Add unscaffolded group if there are both scaffolded and unscaffolded contigs
+  if (unscaffolded.length > 0 && groups.length > 0) {
+    groups.push({
+      scaffoldId: -1,
+      name: 'Unscaffolded',
+      color: '#888888',
+      orderIndices: unscaffolded,
+    });
+  }
+
+  return groups;
 }
 
 function getClient(): AnalysisWorkerClient {
@@ -141,6 +196,17 @@ async function runDecay(ctx: AppContext): Promise<void> {
     overviewSize,
     ranges,
   );
+
+  // Compute per-scaffold decay if scaffolds are assigned
+  const scaffoldGroups = buildScaffoldGroups(ctx);
+  if (scaffoldGroups.length >= 2) {
+    cachedScaffoldDecay = computeDecayByScaffold(
+      s.map.contactMap, overviewSize, ranges, scaffoldGroups,
+    );
+  } else {
+    cachedScaffoldDecay = null;
+  }
+
   ctx.showToast(`P(s) decay exponent: ${cachedDecay.decayExponent.toFixed(2)}`);
   updateResultsDisplay(ctx);
 }
@@ -327,12 +393,14 @@ function computeRegressionIntercept(
 function renderDecayChart(
   result: ContactDecayResult,
   baseline?: ContactDecayResult | null,
+  scaffolds?: ScaffoldDecayResult[] | null,
 ): string {
   if (result.distances.length < 2) return '';
 
   const hasBaseline = baseline != null
     && baseline !== result
     && baseline.distances.length >= 2;
+  const hasScaffolds = scaffolds != null && scaffolds.length > 0;
 
   const W = 240, H = 160;
   const m = { top: 8, right: 8, bottom: 28, left: 36 };
@@ -362,6 +430,20 @@ function renderDecayChart(
       if (bx[i] > xMax) xMax = bx[i];
       if (by[i] < yMin) yMin = by[i];
       if (by[i] > yMax) yMax = by[i];
+    }
+  }
+
+  // Expand bounds to include scaffold data
+  if (hasScaffolds) {
+    for (const sr of scaffolds) {
+      const dx = sr.decay.logDistances;
+      const dy = sr.decay.logContacts;
+      for (let i = 0; i < dx.length; i++) {
+        if (dx[i] < xMin) xMin = dx[i];
+        if (dx[i] > xMax) xMax = dx[i];
+        if (dy[i] < yMin) yMin = dy[i];
+        if (dy[i] > yMax) yMax = dy[i];
+      }
     }
   }
 
@@ -419,6 +501,26 @@ function renderDecayChart(
     }
   }
 
+  // Per-scaffold curves (behind genome-wide)
+  if (hasScaffolds) {
+    for (const sr of scaffolds) {
+      const d = sr.decay;
+      if (d.logDistances.length < 2) continue;
+      const sn = d.logDistances.length;
+
+      // Scaffold fit line (colored, thin dashed)
+      const sIntercept = computeRegressionIntercept(d.logDistances, d.logContacts, d.decayExponent);
+      const sLineY0 = d.decayExponent * d.logDistances[0] + sIntercept;
+      const sLineYn = d.decayExponent * d.logDistances[sn - 1] + sIntercept;
+      svg += `<line x1="${sx(d.logDistances[0])}" y1="${sy(sLineY0)}" x2="${sx(d.logDistances[sn - 1])}" y2="${sy(sLineYn)}" stroke="${sr.color}" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.6"/>`;
+
+      // Scaffold data points (colored, small)
+      for (let i = 0; i < sn; i++) {
+        svg += `<circle cx="${sx(d.logDistances[i])}" cy="${sy(d.logContacts[i])}" r="1" fill="${sr.color}" opacity="0.5"/>`;
+      }
+    }
+  }
+
   // Current fit line (white dashed)
   const intercept = computeRegressionIntercept(xData, yData, result.decayExponent);
   const lineY0 = result.decayExponent * xData[0] + intercept;
@@ -432,19 +534,28 @@ function renderDecayChart(
 
   svg += '</svg>';
 
-  // Legend (only when baseline is shown)
-  if (hasBaseline) {
+  // Legend
+  if (hasBaseline || hasScaffolds) {
     svg += '<div class="decay-chart-legend">';
-    svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#888" opacity="0.5"/></svg> Initial</span>';
-    svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#e94560"/></svg> Current</span>';
+    if (hasBaseline) {
+      svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#888" opacity="0.5"/></svg> Initial</span>';
+    }
+    svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#e94560"/></svg> Genome</span>';
+    if (hasScaffolds) {
+      for (const sr of scaffolds) {
+        svg += `<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="${sr.color}"/></svg> ${sr.scaffoldName}</span>`;
+      }
+    }
     svg += '</div>';
 
-    // Delta exponent
-    const delta = result.decayExponent - baseline.decayExponent;
-    const sign = delta >= 0 ? '+' : '';
-    svg += `<div style="text-align:center;font-size:9px;color:var(--text-secondary);margin-top:2px;">`;
-    svg += `Exponent: ${baseline.decayExponent.toFixed(2)} \u2192 ${result.decayExponent.toFixed(2)} (\u0394 ${sign}${delta.toFixed(2)})`;
-    svg += '</div>';
+    // Delta exponent (only when baseline exists)
+    if (hasBaseline) {
+      const delta = result.decayExponent - baseline.decayExponent;
+      const sign = delta >= 0 ? '+' : '';
+      svg += `<div style="text-align:center;font-size:9px;color:var(--text-secondary);margin-top:2px;">`;
+      svg += `Exponent: ${baseline.decayExponent.toFixed(2)} \u2192 ${result.decayExponent.toFixed(2)} (\u0394 ${sign}${delta.toFixed(2)})`;
+      svg += '</div>';
+    }
   }
 
   svg += '</div>';
@@ -521,7 +632,23 @@ function updateResultsDisplay(ctx: AppContext): void {
 
   if (cachedDecay) {
     html += formatDecayStats(cachedDecay);
-    html += renderDecayChart(cachedDecay, baselineDecay);
+    html += renderDecayChart(cachedDecay, baselineDecay, cachedScaffoldDecay);
+
+    // Per-scaffold exponent table
+    if (cachedScaffoldDecay && cachedScaffoldDecay.length > 0) {
+      html += '<div class="scaffold-decay-table">';
+      for (const sr of cachedScaffoldDecay) {
+        const exp = sr.decay.decayExponent;
+        const r2 = sr.decay.rSquared;
+        const inRange = exp <= -0.8 && exp >= -1.5;
+        const expColor = inRange ? '#4caf50' : '#f39c12';
+        html += `<div class="scaffold-decay-row">`;
+        html += `<span style="color:${sr.color}">${sr.scaffoldName} (${sr.contigCount})</span>`;
+        html += `<span style="color:${expColor}">${exp.toFixed(2)} <span style="color:var(--text-secondary);font-size:9px;">R\u00B2=${r2.toFixed(2)}</span></span>`;
+        html += '</div>';
+      }
+      html += '</div>';
+    }
   }
 
   // Misassembly summary + suggest cuts
@@ -655,6 +782,16 @@ export function exportAnalysisState(): SessionAnalysisData | null {
     };
   }
 
+  if (cachedScaffoldDecay && cachedScaffoldDecay.length > 0) {
+    data.scaffoldDecay = cachedScaffoldDecay.map(sr => ({
+      scaffoldId: sr.scaffoldId,
+      scaffoldName: sr.scaffoldName,
+      color: sr.color,
+      decay: decayToSession(sr.decay),
+      contigCount: sr.contigCount,
+    }));
+  }
+
   return data;
 }
 
@@ -689,6 +826,16 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
 
   if (data.baselineDecay) {
     baselineDecay = sessionToDecay(data.baselineDecay);
+  }
+
+  if (data.scaffoldDecay && data.scaffoldDecay.length > 0) {
+    cachedScaffoldDecay = data.scaffoldDecay.map((sd: SessionScaffoldDecay) => ({
+      scaffoldId: sd.scaffoldId,
+      scaffoldName: sd.scaffoldName,
+      color: sd.color,
+      decay: sessionToDecay(sd.decay),
+      contigCount: sd.contigCount,
+    }));
   }
 
   if (data.compartments) {
@@ -834,6 +981,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedInsulation = null;
   cachedCompartments = null;
   cachedSuggestions = null;
+  cachedScaffoldDecay = null;
   misassemblyFlags.clearAll();
   ctx.trackRenderer.removeTrack('Insulation Score');
   ctx.trackRenderer.removeTrack('TAD Boundaries');

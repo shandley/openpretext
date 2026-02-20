@@ -112,6 +112,17 @@ export interface SessionCompartments {
 }
 
 /**
+ * Serialized per-scaffold decay result.
+ */
+export interface SessionScaffoldDecay {
+  scaffoldId: number;
+  scaffoldName: string;
+  color: string;
+  decay: SessionDecay;
+  contigCount: number;
+}
+
+/**
  * Persisted analysis state for session save/restore.
  */
 export interface SessionAnalysisData {
@@ -120,6 +131,7 @@ export interface SessionAnalysisData {
   decay?: SessionDecay;
   baselineDecay?: SessionDecay;
   compartments?: SessionCompartments;
+  scaffoldDecay?: SessionScaffoldDecay[];
 }
 
 /**
@@ -230,6 +242,19 @@ function validateSessionAnalysis(v: unknown): boolean {
     if (!isFiniteNumberArray(v.compartments.normalizedEigenvector)) return false;
     if (!isFiniteNumber(v.compartments.iterations)) return false;
     if (!isFiniteNumber(v.compartments.eigenvalue)) return false;
+  }
+
+  // Optional per-scaffold decay
+  if (v.scaffoldDecay !== undefined) {
+    if (!Array.isArray(v.scaffoldDecay)) return false;
+    for (const sd of v.scaffoldDecay) {
+      if (!isObject(sd)) return false;
+      if (!Number.isInteger(sd.scaffoldId)) return false;
+      if (!isNonEmptyString(sd.scaffoldName)) return false;
+      if (!isNonEmptyString(sd.color)) return false;
+      if (!validateSessionDecay(sd.decay)) return false;
+      if (!Number.isInteger(sd.contigCount) || (sd.contigCount as number) < 0) return false;
+    }
   }
 
   return true;

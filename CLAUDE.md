@@ -94,7 +94,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1713 unit tests (vitest)
+  unit/                      1729 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -127,6 +127,7 @@ tests/
     ai-feedback.test.ts      Feedback storage, aggregation, clear (16 tests)
     insulation-score.test.ts Insulation score + TAD boundaries (32 tests)
     contact-decay.test.ts    P(s) decay curve + exponent fitting (15 tests)
+    per-chromosome-decay.test.ts  Per-scaffold P(s) computation + session persistence (16 tests)
     compartment-analysis.test.ts  A/B compartment eigenvector pipeline (31 tests)
     misassembly-detector.test.ts  Misassembly detection + flag manager (24 tests)
     cut-suggestions.test.ts      Cut suggestion generation + pixel conversion (18 tests)
@@ -248,9 +249,11 @@ themselves. The undo stack is the source of truth for curation history.
   `contactMap` (Float32Array, row-major, symmetric). Insulation score uses
   a sliding off-diagonal window (Crane et al. 2015) and detects TAD boundaries
   as prominent local minima. Contact decay reuses `computeIntraDiagonalProfile`
-  from AutoSort and fits a power-law exponent in log-log space. Compartment
-  analysis computes O/E → correlation → first eigenvector via power iteration.
-  All three produce `TrackConfig` objects registered with `TrackRenderer`.
+  from AutoSort and fits a power-law exponent in log-log space.
+  `computeDecayByScaffold()` computes per-chromosome P(s) curves by filtering
+  contig ranges per scaffold. Compartment analysis computes O/E → correlation →
+  first eigenvector via power iteration. All three produce `TrackConfig`
+  objects registered with `TrackRenderer`.
 - **AnalysisWorkerClient**: Runs analysis computations in a background Web
   Worker (`AnalysisWorker.ts`) via `postMessage`. Falls back to synchronous
   main-thread execution if workers are unavailable. Result typed arrays are
@@ -300,7 +303,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1671 tests must pass
+- Run `npm test` before committing; all 1729 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls
