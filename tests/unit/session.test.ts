@@ -12,6 +12,7 @@ import {
 import type {
   SessionData,
   SessionWaypoint,
+  SessionAnalysisData,
   WaypointManagerLike,
 } from '../../src/io/SessionManager';
 
@@ -777,5 +778,190 @@ describe('edge cases', () => {
     });
     // Validation does not enforce uniqueness of waypoint IDs
     expect(validateSession(data)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Analysis persistence
+// ---------------------------------------------------------------------------
+
+function makeValidAnalysisData(overrides: Partial<SessionAnalysisData> = {}): SessionAnalysisData {
+  return {
+    insulationWindowSize: 10,
+    insulation: {
+      rawScores: [0.5, 0.6, 0.4],
+      normalizedScores: [0.1, 0.2, 0.15],
+      boundaries: [5, 15],
+      boundaryStrengths: [0.8, 0.6],
+    },
+    decay: {
+      distances: [1, 2, 3, 4, 5],
+      meanContacts: [100, 50, 25, 12, 6],
+      logDistances: [0, 0.301, 0.477, 0.602, 0.699],
+      logContacts: [2, 1.699, 1.398, 1.079, 0.778],
+      decayExponent: -1.12,
+      rSquared: 0.98,
+      maxDistance: 100,
+    },
+    baselineDecay: {
+      distances: [1, 2, 3, 4, 5],
+      meanContacts: [95, 48, 23, 11, 5],
+      logDistances: [0, 0.301, 0.477, 0.602, 0.699],
+      logContacts: [1.978, 1.681, 1.362, 1.041, 0.699],
+      decayExponent: -1.05,
+      rSquared: 0.97,
+      maxDistance: 100,
+    },
+    compartments: {
+      eigenvector: [0.3, -0.2, 0.5, -0.1],
+      normalizedEigenvector: [0.6, -0.4, 1.0, -0.2],
+      iterations: 25,
+      eigenvalue: 0.45,
+    },
+    ...overrides,
+  };
+}
+
+describe('analysis persistence', () => {
+  describe('validation', () => {
+    it('accepts session with valid analysis field', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData(),
+      });
+      expect(validateSession(data)).toBe(true);
+    });
+
+    it('accepts session without analysis field (backward compat)', () => {
+      const data = makeValidSessionData();
+      delete (data as any).analysis;
+      expect(validateSession(data)).toBe(true);
+    });
+
+    it('rejects session with non-object analysis field', () => {
+      const data = makeValidSessionData({
+        analysis: 'bad' as any,
+      });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects analysis with missing insulationWindowSize', () => {
+      const analysis = makeValidAnalysisData();
+      delete (analysis as any).insulationWindowSize;
+      const data = makeValidSessionData({ analysis });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects analysis with NaN in insulation array', () => {
+      const analysis = makeValidAnalysisData();
+      analysis.insulation!.rawScores = [1, NaN, 3];
+      const data = makeValidSessionData({ analysis });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects analysis with Infinity in decay array', () => {
+      const analysis = makeValidAnalysisData();
+      analysis.decay!.distances = [1, Infinity, 3];
+      const data = makeValidSessionData({ analysis });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects analysis with non-array eigenvector', () => {
+      const analysis = makeValidAnalysisData();
+      (analysis.compartments as any).eigenvector = 'not-array';
+      const data = makeValidSessionData({ analysis });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects analysis with non-finite eigenvalue', () => {
+      const analysis = makeValidAnalysisData();
+      analysis.compartments!.eigenvalue = Infinity;
+      const data = makeValidSessionData({ analysis });
+      expect(validateSession(data)).toBe(false);
+    });
+  });
+
+  describe('round-trip serialization', () => {
+    it('survives JSON round-trip with all three analyses', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData(),
+      });
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis).toBeDefined();
+      expect(restored.analysis!.insulationWindowSize).toBe(10);
+      expect(restored.analysis!.insulation!.boundaries).toEqual([5, 15]);
+      expect(restored.analysis!.decay!.decayExponent).toBe(-1.12);
+      expect(restored.analysis!.compartments!.eigenvalue).toBe(0.45);
+    });
+
+    it('survives round-trip with baseline decay', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData(),
+      });
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis!.baselineDecay).toBeDefined();
+      expect(restored.analysis!.baselineDecay!.decayExponent).toBe(-1.05);
+    });
+
+    it('round-trips with only partial analysis (insulation only)', () => {
+      const analysis = makeValidAnalysisData();
+      delete analysis.decay;
+      delete analysis.baselineDecay;
+      delete analysis.compartments;
+      const data = makeValidSessionData({ analysis });
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis!.insulation).toBeDefined();
+      expect(restored.analysis!.decay).toBeUndefined();
+      expect(restored.analysis!.compartments).toBeUndefined();
+    });
+
+    it('round-trips session without analysis (old format)', () => {
+      const data = makeValidSessionData();
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis).toBeUndefined();
+    });
+  });
+
+  describe('typed array conversion', () => {
+    it('number[] values survive JSON serialization', () => {
+      const original = [0.123456789, -0.987654321, 1e-10, 1e10];
+      const json = JSON.stringify(original);
+      const parsed = JSON.parse(json);
+      expect(parsed).toEqual(original);
+    });
+
+    it('empty arrays survive round-trip', () => {
+      const analysis: SessionAnalysisData = {
+        insulationWindowSize: 10,
+        insulation: {
+          rawScores: [],
+          normalizedScores: [],
+          boundaries: [],
+          boundaryStrengths: [],
+        },
+      };
+      const data = makeValidSessionData({ analysis });
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis!.insulation!.rawScores).toEqual([]);
+      expect(restored.analysis!.insulation!.boundaries).toEqual([]);
+    });
+
+    it('Float64Array.from round-trips number[] correctly', () => {
+      const original = [1.5, 2.7, 3.14159, -0.001];
+      const typed = Float64Array.from(original);
+      const back = Array.from(typed);
+      expect(back).toEqual(original);
+    });
+
+    it('Float32Array.from round-trips number[] with float32 precision', () => {
+      const original = [0.5, -0.25, 1.0, 0.0];
+      const typed = Float32Array.from(original);
+      const back = Array.from(typed);
+      expect(back).toEqual(original);
+    });
   });
 });

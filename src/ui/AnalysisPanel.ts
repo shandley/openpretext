@@ -32,6 +32,10 @@ import {
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { cut } from '../curation/CurationEngine';
 import { computeHealthScore, type HealthScoreResult } from '../analysis/HealthScore';
+import type {
+  SessionAnalysisData,
+  SessionDecay,
+} from '../io/SessionManager';
 
 // ---------------------------------------------------------------------------
 // Cached state
@@ -584,6 +588,128 @@ function updateResultsDisplay(ctx: AppContext): void {
  */
 export function getHealthScore(ctx: AppContext): HealthScoreResult | null {
   return buildHealthScore(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Session persistence
+// ---------------------------------------------------------------------------
+
+function decayToSession(result: ContactDecayResult): SessionDecay {
+  return {
+    distances: Array.from(result.distances),
+    meanContacts: Array.from(result.meanContacts),
+    logDistances: Array.from(result.logDistances),
+    logContacts: Array.from(result.logContacts),
+    decayExponent: result.decayExponent,
+    rSquared: result.rSquared,
+    maxDistance: result.maxDistance,
+  };
+}
+
+function sessionToDecay(s: SessionDecay): ContactDecayResult {
+  return {
+    distances: Float64Array.from(s.distances),
+    meanContacts: Float64Array.from(s.meanContacts),
+    logDistances: Float64Array.from(s.logDistances),
+    logContacts: Float64Array.from(s.logContacts),
+    decayExponent: s.decayExponent,
+    rSquared: s.rSquared,
+    maxDistance: s.maxDistance,
+  };
+}
+
+/**
+ * Export the current analysis state for session persistence.
+ * Returns null if no analysis has been computed.
+ */
+export function exportAnalysisState(): SessionAnalysisData | null {
+  if (!cachedInsulation && !cachedDecay && !cachedCompartments) return null;
+
+  const data: SessionAnalysisData = {
+    insulationWindowSize,
+  };
+
+  if (cachedInsulation) {
+    data.insulation = {
+      rawScores: Array.from(cachedInsulation.rawScores),
+      normalizedScores: Array.from(cachedInsulation.normalizedScores),
+      boundaries: [...cachedInsulation.boundaries],
+      boundaryStrengths: [...cachedInsulation.boundaryStrengths],
+    };
+  }
+
+  if (cachedDecay) {
+    data.decay = decayToSession(cachedDecay);
+  }
+
+  if (baselineDecay) {
+    data.baselineDecay = decayToSession(baselineDecay);
+  }
+
+  if (cachedCompartments) {
+    data.compartments = {
+      eigenvector: Array.from(cachedCompartments.eigenvector),
+      normalizedEigenvector: Array.from(cachedCompartments.normalizedEigenvector),
+      iterations: cachedCompartments.iterations,
+      eigenvalue: cachedCompartments.eigenvalue,
+    };
+  }
+
+  return data;
+}
+
+/**
+ * Restore analysis state from a session, re-registering tracks and running
+ * misassembly detection from the restored data.
+ */
+export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData): void {
+  const s = state.get();
+  if (!s.map) return;
+
+  insulationWindowSize = data.insulationWindowSize;
+  const overviewSize = getOverviewSize();
+
+  if (data.insulation) {
+    cachedInsulation = {
+      rawScores: Float64Array.from(data.insulation.rawScores),
+      normalizedScores: Float32Array.from(data.insulation.normalizedScores),
+      boundaries: [...data.insulation.boundaries],
+      boundaryStrengths: [...data.insulation.boundaryStrengths],
+    };
+    const { insulationTrack, boundaryTrack } = insulationToTracks(
+      cachedInsulation, overviewSize, s.map.textureSize,
+    );
+    ctx.trackRenderer.addTrack(insulationTrack);
+    ctx.trackRenderer.addTrack(boundaryTrack);
+  }
+
+  if (data.decay) {
+    cachedDecay = sessionToDecay(data.decay);
+  }
+
+  if (data.baselineDecay) {
+    baselineDecay = sessionToDecay(data.baselineDecay);
+  }
+
+  if (data.compartments) {
+    cachedCompartments = {
+      eigenvector: Float32Array.from(data.compartments.eigenvector),
+      normalizedEigenvector: Float32Array.from(data.compartments.normalizedEigenvector),
+      iterations: data.compartments.iterations,
+      eigenvalue: data.compartments.eigenvalue,
+    };
+    const track = compartmentToTrack(cachedCompartments, overviewSize, s.map.textureSize);
+    ctx.trackRenderer.addTrack(track);
+  }
+
+  // Re-derive misassembly detection from restored insulation + compartments
+  if (cachedInsulation && cachedCompartments) {
+    runMisassemblyDetection(ctx);
+  }
+
+  ctx.tracksVisible = true;
+  ctx.updateTrackConfigPanel();
+  updateResultsDisplay(ctx);
 }
 
 /**

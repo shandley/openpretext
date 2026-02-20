@@ -76,7 +76,7 @@ src/
     SnapshotExporter.ts      PNG screenshot via canvas.toBlob
     CurationLog.ts           JSON operation history export
   io/
-    SessionManager.ts        Session save/load (JSON with undo stack)
+    SessionManager.ts        Session save/load (JSON with undo stack + analysis)
 data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
   lessons/                   Tutorial lesson JSON files (6 lessons)
@@ -94,7 +94,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1697 unit tests (vitest)
+  unit/                      1713 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -265,6 +265,11 @@ themselves. The undo stack is the source of truth for curation history.
   equally-weighted components (contiguity, P(s) decay quality, assembly
   integrity, compartment strength) into a 0–100 composite score. Used by
   both AnalysisPanel (detailed card) and StatsPanel (summary row).
+- **Analysis persistence**: Analysis results (insulation, P(s) decay,
+  compartments, baseline P(s)) are serialized in session files via optional
+  `SessionAnalysisData` field. `exportAnalysisState()` converts typed arrays
+  to `number[]`; `restoreAnalysisState()` reconstructs them and re-registers
+  tracks. Backward compatible — old sessions without analysis still load.
 - **MisassemblyDetector**: Detects potential chimeric contigs by finding
   TAD boundaries and compartment eigenvector sign-changes that fall inside
   a contig (not at edges). Uses an edge margin (default 2 overview pixels)

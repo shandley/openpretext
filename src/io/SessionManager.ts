@@ -79,6 +79,50 @@ export interface SessionScaffold {
 }
 
 /**
+ * Serialized insulation score result (typed arrays → number[]).
+ */
+export interface SessionInsulation {
+  rawScores: number[];
+  normalizedScores: number[];
+  boundaries: number[];
+  boundaryStrengths: number[];
+}
+
+/**
+ * Serialized P(s) contact decay result.
+ */
+export interface SessionDecay {
+  distances: number[];
+  meanContacts: number[];
+  logDistances: number[];
+  logContacts: number[];
+  decayExponent: number;
+  rSquared: number;
+  maxDistance: number;
+}
+
+/**
+ * Serialized compartment analysis result.
+ */
+export interface SessionCompartments {
+  eigenvector: number[];
+  normalizedEigenvector: number[];
+  iterations: number;
+  eigenvalue: number;
+}
+
+/**
+ * Persisted analysis state for session save/restore.
+ */
+export interface SessionAnalysisData {
+  insulationWindowSize: number;
+  insulation?: SessionInsulation;
+  decay?: SessionDecay;
+  baselineDecay?: SessionDecay;
+  compartments?: SessionCompartments;
+}
+
+/**
  * Complete session data structure.
  *
  * This is the top-level object serialized to/from JSON.
@@ -94,6 +138,8 @@ export interface SessionData {
   camera: SessionCamera;
   settings: SessionSettings;
   operationLog: SessionOperationLogEntry[];
+  /** Optional persisted analysis results (added post-v1, backward compatible). */
+  analysis?: SessionAnalysisData;
 }
 
 /**
@@ -127,6 +173,66 @@ function isFiniteNumber(v: unknown): v is number {
  */
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.length > 0;
+}
+
+/**
+ * Type guard: returns true if the value is an array of finite numbers.
+ */
+function isFiniteNumberArray(v: unknown): v is number[] {
+  if (!Array.isArray(v)) return false;
+  for (const item of v) {
+    if (!isFiniteNumber(item)) return false;
+  }
+  return true;
+}
+
+/**
+ * Validate a SessionDecay sub-object.
+ */
+function validateSessionDecay(v: unknown): boolean {
+  if (!isObject(v)) return false;
+  if (!isFiniteNumberArray(v.distances)) return false;
+  if (!isFiniteNumberArray(v.meanContacts)) return false;
+  if (!isFiniteNumberArray(v.logDistances)) return false;
+  if (!isFiniteNumberArray(v.logContacts)) return false;
+  if (!isFiniteNumber(v.decayExponent)) return false;
+  if (!isFiniteNumber(v.rSquared)) return false;
+  if (!isFiniteNumber(v.maxDistance)) return false;
+  return true;
+}
+
+/**
+ * Validate the optional analysis field on SessionData.
+ */
+function validateSessionAnalysis(v: unknown): boolean {
+  if (!isObject(v)) return false;
+  if (!isFiniteNumber(v.insulationWindowSize)) return false;
+
+  // Optional insulation
+  if (v.insulation !== undefined) {
+    if (!isObject(v.insulation)) return false;
+    if (!isFiniteNumberArray(v.insulation.rawScores)) return false;
+    if (!isFiniteNumberArray(v.insulation.normalizedScores)) return false;
+    if (!isFiniteNumberArray(v.insulation.boundaries)) return false;
+    if (!isFiniteNumberArray(v.insulation.boundaryStrengths)) return false;
+  }
+
+  // Optional decay
+  if (v.decay !== undefined && !validateSessionDecay(v.decay)) return false;
+
+  // Optional baseline decay
+  if (v.baselineDecay !== undefined && !validateSessionDecay(v.baselineDecay)) return false;
+
+  // Optional compartments
+  if (v.compartments !== undefined) {
+    if (!isObject(v.compartments)) return false;
+    if (!isFiniteNumberArray(v.compartments.eigenvector)) return false;
+    if (!isFiniteNumberArray(v.compartments.normalizedEigenvector)) return false;
+    if (!isFiniteNumber(v.compartments.iterations)) return false;
+    if (!isFiniteNumber(v.compartments.eigenvalue)) return false;
+  }
+
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +431,11 @@ export function validateSession(data: unknown): data is SessionData {
       return false;
     }
     if (typeof entry.description !== 'string') return false;
+  }
+
+  // -- analysis (optional, backward compatible) --
+  if (data.analysis !== undefined) {
+    if (!validateSessionAnalysis(data.analysis)) return false;
   }
 
   return true;

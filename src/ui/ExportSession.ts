@@ -12,9 +12,11 @@ import { parseFASTA } from '../formats/FASTAParser';
 import { parseBedGraph, bedGraphToTrack } from '../formats/BedGraphParser';
 import { downloadSnapshot } from '../export/SnapshotExporter';
 import { exportSession, importSession, downloadSession } from '../io/SessionManager';
+import type { SessionData } from '../io/SessionManager';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import { syncColormapDropdown, syncGammaSlider } from './ColorMapControls';
 import { rebuildContigBoundaries } from './EventWiring';
+import { exportAnalysisState, restoreAnalysisState } from './AnalysisPanel';
 
 export function exportAGP(ctx: AppContext): void {
   const s = state.get();
@@ -50,7 +52,11 @@ export function saveSession(ctx: AppContext): void {
     return;
   }
   try {
-    const sessionData = exportSession(s, ctx.scaffoldManager, ctx.waypointManager);
+    const sessionData: SessionData = exportSession(s, ctx.scaffoldManager, ctx.waypointManager);
+    const analysisState = exportAnalysisState();
+    if (analysisState) {
+      sessionData.analysis = analysisState;
+    }
     downloadSession(sessionData);
     ctx.showToast('Session saved');
   } catch (err) {
@@ -126,6 +132,12 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     rebuildContigBoundaries(ctx);
     ctx.updateSidebarContigList();
     ctx.updateSidebarScaffoldList();
+
+    // Restore persisted analysis results if present
+    if (session.analysis) {
+      restoreAnalysisState(ctx, session.analysis);
+    }
+
     ctx.showToast(`Session restored (${session.operationLog.length} operations)`);
   } catch (err) {
     console.error('Session load error:', err);
