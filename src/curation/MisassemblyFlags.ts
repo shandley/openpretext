@@ -58,6 +58,17 @@ class MisassemblyFlagManager {
   }
 
   /**
+   * Get all flags across all contigs.
+   */
+  getAllFlags(): MisassemblyFlag[] {
+    const all: MisassemblyFlag[] = [];
+    for (const flags of this.flagData.values()) {
+      all.push(...flags);
+    }
+    return all;
+  }
+
+  /**
    * Get the detailed flags for a specific contig.
    * Returns an empty array if the contig is not flagged.
    */

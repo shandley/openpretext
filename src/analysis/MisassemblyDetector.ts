@@ -12,6 +12,7 @@ import type { TrackConfig } from '../renderer/TrackRenderer';
 import type { InsulationResult } from './InsulationScore';
 import type { CompartmentResult } from './CompartmentAnalysis';
 import type { ContigRange } from '../curation/AutoSort';
+import type { ContigInfo } from '../core/State';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -192,6 +193,87 @@ export function detectMisassemblies(
     flaggedContigs,
     summary: { tadOnly, compartmentOnly, both, total: flags.length },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Track generation
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Cut suggestions
+// ---------------------------------------------------------------------------
+
+export interface CutSuggestion {
+  /** Position in contigOrder array. */
+  orderIndex: number;
+  /** Index into map.contigs array. */
+  contigId: number;
+  /** Human-readable contig name. */
+  contigName: string;
+  /** Texture-space pixel offset within the contig (parameter for CurationEngine.cut). */
+  pixelOffset: number;
+  /** What triggered this suggestion. */
+  reason: MisassemblyReason;
+  /** Signal strength / confidence. */
+  strength: number;
+}
+
+/**
+ * Convert misassembly flags to actionable cut suggestions.
+ *
+ * Each flag's overview pixel is converted to a texture-space pixel offset
+ * within the owning contig, suitable for passing to `CurationEngine.cut()`.
+ * Results are sorted by orderIndex descending for right-to-left batch execution.
+ */
+export function buildCutSuggestions(
+  flags: MisassemblyFlag[],
+  contigRanges: ContigRange[],
+  contigs: ContigInfo[],
+  contigOrder: number[],
+): CutSuggestion[] {
+  const rangeByOrder = new Map<number, ContigRange>();
+  for (const r of contigRanges) {
+    rangeByOrder.set(r.orderIndex, r);
+  }
+
+  const suggestions: CutSuggestion[] = [];
+
+  for (const flag of flags) {
+    const range = rangeByOrder.get(flag.orderIndex);
+    if (!range) continue;
+
+    const rangeSpan = range.end - range.start;
+    if (rangeSpan <= 0) continue;
+
+    const contigId = contigOrder[flag.orderIndex];
+    if (contigId == null) continue;
+    const contig = contigs[contigId];
+    if (!contig) continue;
+
+    const contigPixelLength = contig.pixelEnd - contig.pixelStart;
+    if (contigPixelLength <= 1) continue;
+
+    // Convert overview pixel to fractional position within contig
+    const fraction = (flag.overviewPixel - range.start) / rangeSpan;
+    let pixelOffset = Math.round(fraction * contigPixelLength);
+
+    // Clamp to valid range for cut() — must be > 0 and < contigPixelLength
+    pixelOffset = Math.max(1, Math.min(pixelOffset, contigPixelLength - 1));
+
+    suggestions.push({
+      orderIndex: flag.orderIndex,
+      contigId,
+      contigName: contig.name,
+      pixelOffset,
+      reason: flag.reason,
+      strength: flag.strength,
+    });
+  }
+
+  // Sort descending by orderIndex for right-to-left batch execution
+  suggestions.sort((a, b) => b.orderIndex - a.orderIndex);
+
+  return suggestions;
 }
 
 // ---------------------------------------------------------------------------

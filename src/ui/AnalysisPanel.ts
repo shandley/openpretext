@@ -23,8 +23,14 @@ import {
   downloadCompartmentBedGraph,
   downloadDecayTSV,
 } from '../export/AnalysisExport';
-import { detectMisassemblies, misassemblyToTrack } from '../analysis/MisassemblyDetector';
+import {
+  detectMisassemblies,
+  misassemblyToTrack,
+  buildCutSuggestions,
+  type CutSuggestion,
+} from '../analysis/MisassemblyDetector';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
+import { cut } from '../curation/CurationEngine';
 
 // ---------------------------------------------------------------------------
 // Cached state
@@ -33,6 +39,7 @@ import { misassemblyFlags } from '../curation/MisassemblyFlags';
 let cachedDecay: ContactDecayResult | null = null;
 let cachedInsulation: InsulationResult | null = null;
 let cachedCompartments: CompartmentResult | null = null;
+let cachedSuggestions: CutSuggestion[] | null = null;
 let insulationWindowSize = 10;
 let workerClient: AnalysisWorkerClient | null = null;
 let computing = false;
@@ -176,6 +183,129 @@ function runMisassemblyDetection(ctx: AppContext): void {
 }
 
 // ---------------------------------------------------------------------------
+// Cut suggestions
+// ---------------------------------------------------------------------------
+
+function showCutSuggestions(ctx: AppContext): void {
+  const s = state.get();
+  if (!s.map) return;
+
+  const ranges = buildContigRanges();
+  const flags = misassemblyFlags.getAllFlags();
+  if (flags.length === 0) return;
+
+  cachedSuggestions = buildCutSuggestions(
+    flags, ranges, s.map.contigs, s.contigOrder,
+  );
+
+  renderSuggestionCards(ctx);
+}
+
+function renderSuggestionCards(ctx: AppContext): void {
+  const container = document.getElementById('cut-suggestions');
+  if (!container || !cachedSuggestions || cachedSuggestions.length === 0) {
+    if (container) container.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  for (let i = 0; i < cachedSuggestions.length; i++) {
+    const s = cachedSuggestions[i];
+    const reasonLabel =
+      s.reason === 'both' ? 'TAD + compartment' :
+      s.reason === 'tad_boundary' ? 'TAD boundary' : 'Compartment switch';
+    html += `<div class="cut-suggestion-card" data-idx="${i}">
+      <div class="cut-suggestion-info">
+        <span class="cut-suggestion-name">${s.contigName}</span>
+        <span class="cut-suggestion-detail">${reasonLabel} \u00b7 offset ${s.pixelOffset}px \u00b7 strength ${s.strength.toFixed(2)}</span>
+      </div>
+      <div class="cut-suggestion-actions">
+        <button class="cut-accept-btn" data-idx="${i}" title="Accept cut">\u2713</button>
+        <button class="cut-skip-btn" data-idx="${i}" title="Skip">\u2717</button>
+      </div>
+    </div>`;
+  }
+
+  if (cachedSuggestions.length > 1) {
+    html += `<button class="cut-accept-all-btn" id="btn-accept-all-cuts">Accept All (${cachedSuggestions.length})</button>`;
+  }
+
+  container.innerHTML = html;
+
+  // Wire accept buttons
+  container.querySelectorAll('.cut-accept-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt((btn as HTMLElement).dataset.idx ?? '-1', 10);
+      if (idx >= 0 && cachedSuggestions && cachedSuggestions[idx]) {
+        applySingleCut(ctx, cachedSuggestions[idx]);
+      }
+    });
+  });
+
+  // Wire skip buttons
+  container.querySelectorAll('.cut-skip-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt((btn as HTMLElement).dataset.idx ?? '-1', 10);
+      if (idx >= 0 && cachedSuggestions) {
+        cachedSuggestions.splice(idx, 1);
+        renderSuggestionCards(ctx);
+      }
+    });
+  });
+
+  // Wire accept all button
+  document.getElementById('btn-accept-all-cuts')?.addEventListener('click', () => {
+    if (cachedSuggestions && cachedSuggestions.length > 0) {
+      applyAllCuts(ctx, [...cachedSuggestions]);
+    }
+  });
+}
+
+function applySingleCut(ctx: AppContext, suggestion: CutSuggestion): void {
+  try {
+    cut(suggestion.orderIndex, suggestion.pixelOffset);
+    ctx.refreshAfterCuration();
+    ctx.showToast(`Cut ${suggestion.contigName} at offset ${suggestion.pixelOffset}`);
+  } catch (e) {
+    ctx.showToast(`Cut failed: ${(e as Error).message}`, 4000);
+  }
+
+  // Indices are stale after a cut — clear all remaining suggestions
+  cachedSuggestions = null;
+  const container = document.getElementById('cut-suggestions');
+  if (container) container.innerHTML = '';
+
+  // Re-run detection with new contig layout
+  runMisassemblyDetection(ctx);
+  updateResultsDisplay(ctx);
+}
+
+function applyAllCuts(ctx: AppContext, suggestions: CutSuggestion[]): void {
+  // Already sorted by orderIndex descending for right-to-left execution
+  let applied = 0;
+  for (const s of suggestions) {
+    try {
+      cut(s.orderIndex, s.pixelOffset);
+      applied++;
+    } catch {
+      // Skip invalid cuts (can happen if contig was already modified)
+    }
+  }
+
+  ctx.refreshAfterCuration();
+  cachedSuggestions = null;
+  const container = document.getElementById('cut-suggestions');
+  if (container) container.innerHTML = '';
+
+  if (applied > 0) {
+    ctx.showToast(`Applied ${applied} cuts`);
+    // Re-run detection with new contig layout
+    runMisassemblyDetection(ctx);
+  }
+  updateResultsDisplay(ctx);
+}
+
+// ---------------------------------------------------------------------------
 // P(s) decay chart (inline SVG)
 // ---------------------------------------------------------------------------
 
@@ -292,10 +422,13 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += renderDecayChart(cachedDecay);
   }
 
-  // Misassembly summary
+  // Misassembly summary + suggest cuts
   const flagCount = misassemblyFlags.getFlaggedCount();
   if (flagCount > 0) {
     html += `<div class="stats-row"><span>Misassemblies</span><span style="color:#e67e22;">${flagCount} contigs</span></div>`;
+    const allFlags = misassemblyFlags.getAllFlags();
+    html += `<button class="analysis-btn" id="btn-suggest-cuts" style="background:#e67e22;color:#fff;width:100%;margin:4px 0;">Suggest Cuts (${allFlags.length})</button>`;
+    html += '<div id="cut-suggestions"></div>';
   }
 
   // Export buttons (only if at least one result exists)
@@ -336,6 +469,11 @@ function updateResultsDisplay(ctx: AppContext): void {
       downloadCompartmentBedGraph(cachedCompartments, s, overviewSize);
       ctx.showToast('Compartment BedGraph exported');
     }
+  });
+
+  // Wire suggest cuts button
+  document.getElementById('btn-suggest-cuts')?.addEventListener('click', () => {
+    showCutSuggestions(ctx);
   });
 }
 
@@ -459,6 +597,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedDecay = null;
   cachedInsulation = null;
   cachedCompartments = null;
+  cachedSuggestions = null;
   misassemblyFlags.clearAll();
   ctx.trackRenderer.removeTrack('Insulation Score');
   ctx.trackRenderer.removeTrack('TAD Boundaries');

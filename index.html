@@ -1643,6 +1643,66 @@
       color: #fff;
     }
 
+    /* Cut suggestion cards */
+    .cut-suggestion-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px;
+      margin: 2px 0;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    .cut-suggestion-info { flex: 1; min-width: 0; }
+    .cut-suggestion-name {
+      font-weight: 600;
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cut-suggestion-detail {
+      color: var(--text-secondary);
+      font-size: 10px;
+    }
+    .cut-suggestion-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .cut-accept-btn {
+      background: #27ae60;
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .cut-accept-btn:hover { background: #219a52; }
+    .cut-skip-btn {
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .cut-skip-btn:hover { background: var(--border); }
+    .cut-accept-all-btn {
+      width: 100%;
+      background: #27ae60;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 5px;
+      margin-top: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .cut-accept-all-btn:hover { background: #219a52; }
+
     /* Track configuration */
     .track-config-item {
       padding: 6px 0;

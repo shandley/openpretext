@@ -42,6 +42,7 @@ src/
     ScaffoldManager.ts       Scaffold (chromosome) assignment CRUD
     WaypointManager.ts       Named position markers
     ContigExclusion.ts       Set-based contig hide/exclude management
+    MisassemblyFlags.ts      Singleton manager for flagged misassembly contigs
     BatchOperations.ts       Batch select/cut/join/invert/sort operations
     QualityMetrics.ts        N50/L50/N90/L90 assembly statistics + tracking
     OrderingMetrics.ts       Shared pure-math ordering metrics (kendallTau, ARI)
@@ -49,6 +50,7 @@ src/
     InsulationScore.ts       Insulation score + TAD boundary detection
     ContactDecay.ts          P(s) contact decay curve + exponent fitting
     CompartmentAnalysis.ts   A/B compartment eigenvector (O/E + PCA)
+    MisassemblyDetector.ts   TAD/compartment-based chimeric contig detection
     AnalysisWorker.ts        Background Web Worker for analysis computation
     AnalysisWorkerClient.ts  Promise-based main-thread worker client
   ai/
@@ -69,6 +71,7 @@ src/
     AGPWriter.ts             AGP 2.1 format generation
     BEDWriter.ts             BED6 format export (scaffold-aware)
     FASTAWriter.ts           FASTA export with reverse complement
+    AnalysisExport.ts        BedGraph/TSV export for analysis tracks
     SnapshotExporter.ts      PNG screenshot via canvas.toBlob
     CurationLog.ts           JSON operation history export
   io/
@@ -90,7 +93,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1612 unit tests (vitest)
+  unit/                      1671 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -124,6 +127,8 @@ tests/
     insulation-score.test.ts Insulation score + TAD boundaries (32 tests)
     contact-decay.test.ts    P(s) decay curve + exponent fitting (15 tests)
     compartment-analysis.test.ts  A/B compartment eigenvector pipeline (31 tests)
+    misassembly-detector.test.ts  Misassembly detection + flag manager (24 tests)
+    cut-suggestions.test.ts      Cut suggestion generation + pixel conversion (18 tests)
   e2e/                       34 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
@@ -141,8 +146,8 @@ tests/
 4. **Single runtime dependency** -- only `pako` for deflate decompression
 5. **Dependency injection** -- ScriptExecutor uses a ScriptContext interface
    so tests can run without DOM or GPU
-6. **Singleton patterns** -- `contigExclusion` and `state` are singletons;
-   batch operations read directly from state
+6. **Singleton patterns** -- `contigExclusion`, `misassemblyFlags`, and `state`
+   are singletons; batch operations read directly from state
 7. **Web Worker for analysis** -- 3D genomics computations (insulation,
    compartments) run in a background worker to avoid blocking the UI;
    `AnalysisWorkerClient` provides a Promise-based API with automatic
@@ -251,7 +256,21 @@ themselves. The undo stack is the source of truth for curation history.
 - **AnalysisPanel**: Sidebar section "3D Analysis" with compute buttons,
   insulation window size slider, and auto-computation on `file:loaded` via
   `EventWiring`. Buttons are disabled during computation and all three
-  analyses run in parallel in the worker.
+  analyses run in parallel in the worker. Includes BedGraph/TSV export
+  buttons and an inline P(s) decay SVG chart.
+- **MisassemblyDetector**: Detects potential chimeric contigs by finding
+  TAD boundaries and compartment eigenvector sign-changes that fall inside
+  a contig (not at edges). Uses an edge margin (default 2 overview pixels)
+  to avoid false positives at true assembly breaks. Merges nearby TAD +
+  compartment signals within a merge radius into higher-confidence `'both'`
+  flags. Produces a marker `TrackConfig` for overlay rendering.
+- **MisassemblyFlags**: Singleton manager (mirrors `ContigExclusion` pattern)
+  tracking flagged contig indices. `setFlags()` emits `'misassembly:updated'`
+  event for reactive sidebar refresh. Sidebar shows orange "MIS" badges.
+  Detection runs automatically after insulation + compartment analysis completes.
+  "Suggest Cuts" button converts flags to executable cut operations
+  (`buildCutSuggestions` in MisassemblyDetector). Accept/Skip per suggestion,
+  or Accept All for batch execution (right-to-left for index stability).
 
 ## Companion Repository
 
@@ -269,7 +288,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1612 tests must pass
+- Run `npm test` before committing; all 1671 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls
@@ -284,6 +303,8 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Contig `originalIndex` (position in the file) differs from the display
   order stored in `contigOrder[]`.
 - `contigExclusion` is a singleton -- call `clearAll()` when loading new data.
+- `misassemblyFlags` is a singleton -- call `clearAll()` when loading new data
+  or clearing analysis tracks.
 - Batch operations process indices right-to-left to maintain index stability
   during cuts and joins.
 - Analysis modules operate on the overview `contactMap`, not full-resolution
