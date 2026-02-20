@@ -5,24 +5,32 @@
  * and A/B compartment eigenvectors from the Hi-C contact map.
  * Computations run in a background Web Worker via AnalysisWorkerClient.
  * Results are displayed as overlay tracks via TrackRenderer.
+ * Includes inline P(s) decay chart and export buttons.
  */
 
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import type { ContigRange } from '../curation/AutoSort';
-import { insulationToTracks } from '../analysis/InsulationScore';
+import { insulationToTracks, type InsulationResult } from '../analysis/InsulationScore';
 import {
   formatDecayStats,
   type ContactDecayResult,
 } from '../analysis/ContactDecay';
-import { compartmentToTrack } from '../analysis/CompartmentAnalysis';
+import { compartmentToTrack, type CompartmentResult } from '../analysis/CompartmentAnalysis';
 import { AnalysisWorkerClient } from '../analysis/AnalysisWorkerClient';
+import {
+  downloadInsulationBedGraph,
+  downloadCompartmentBedGraph,
+  downloadDecayTSV,
+} from '../export/AnalysisExport';
 
 // ---------------------------------------------------------------------------
 // Cached state
 // ---------------------------------------------------------------------------
 
 let cachedDecay: ContactDecayResult | null = null;
+let cachedInsulation: InsulationResult | null = null;
+let cachedCompartments: CompartmentResult | null = null;
 let insulationWindowSize = 10;
 let workerClient: AnalysisWorkerClient | null = null;
 let computing = false;
@@ -91,6 +99,7 @@ async function runInsulation(ctx: AppContext): Promise<void> {
     overviewSize,
     { windowSize: insulationWindowSize },
   );
+  cachedInsulation = result;
   const { insulationTrack, boundaryTrack } = insulationToTracks(
     result,
     overviewSize,
@@ -102,7 +111,7 @@ async function runInsulation(ctx: AppContext): Promise<void> {
   ctx.tracksVisible = true;
   ctx.updateTrackConfigPanel();
   ctx.showToast(`Insulation: ${result.boundaries.length} TAD boundaries detected`);
-  updateResultsDisplay();
+  updateResultsDisplay(ctx);
 }
 
 async function runDecay(ctx: AppContext): Promise<void> {
@@ -117,7 +126,7 @@ async function runDecay(ctx: AppContext): Promise<void> {
     ranges,
   );
   ctx.showToast(`P(s) decay exponent: ${cachedDecay.decayExponent.toFixed(2)}`);
-  updateResultsDisplay();
+  updateResultsDisplay(ctx);
 }
 
 async function runCompartments(ctx: AppContext): Promise<void> {
@@ -129,28 +138,172 @@ async function runCompartments(ctx: AppContext): Promise<void> {
     s.map.contactMap,
     overviewSize,
   );
+  cachedCompartments = result;
   const track = compartmentToTrack(result, overviewSize, s.map.textureSize);
 
   ctx.trackRenderer.addTrack(track);
   ctx.tracksVisible = true;
   ctx.updateTrackConfigPanel();
   ctx.showToast(`Compartments: ${result.iterations} iterations, eigenvalue ${result.eigenvalue.toFixed(2)}`);
-  updateResultsDisplay();
+  updateResultsDisplay(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// P(s) decay chart (inline SVG)
+// ---------------------------------------------------------------------------
+
+function renderDecayChart(result: ContactDecayResult): string {
+  if (result.distances.length < 2) return '';
+
+  const W = 240, H = 160;
+  const m = { top: 8, right: 8, bottom: 28, left: 36 };
+  const pw = W - m.left - m.right;
+  const ph = H - m.top - m.bottom;
+
+  const xData = result.logDistances;
+  const yData = result.logContacts;
+  const n = xData.length;
+
+  // Compute bounds
+  let xMin = xData[0], xMax = xData[0];
+  let yMin = yData[0], yMax = yData[0];
+  for (let i = 1; i < n; i++) {
+    if (xData[i] < xMin) xMin = xData[i];
+    if (xData[i] > xMax) xMax = xData[i];
+    if (yData[i] < yMin) yMin = yData[i];
+    if (yData[i] > yMax) yMax = yData[i];
+  }
+
+  // Add small padding to avoid points on edges
+  const xPad = (xMax - xMin) * 0.05 || 0.1;
+  const yPad = (yMax - yMin) * 0.05 || 0.1;
+  xMin -= xPad; xMax += xPad;
+  yMin -= yPad; yMax += yPad;
+
+  const sx = (v: number) => m.left + ((v - xMin) / (xMax - xMin)) * pw;
+  const sy = (v: number) => m.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
+
+  // Build SVG
+  let svg = `<div class="decay-chart"><svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Axes
+  svg += `<line x1="${m.left}" y1="${m.top + ph}" x2="${m.left + pw}" y2="${m.top + ph}" stroke="#a0a0b0" stroke-width="0.5"/>`;
+  svg += `<line x1="${m.left}" y1="${m.top}" x2="${m.left}" y2="${m.top + ph}" stroke="#a0a0b0" stroke-width="0.5"/>`;
+
+  // X-axis ticks (3-4 nice values)
+  const xTicks = niceTickValues(xMin, xMax, 4);
+  for (const tick of xTicks) {
+    const x = sx(tick);
+    svg += `<line x1="${x}" y1="${m.top + ph}" x2="${x}" y2="${m.top + ph + 3}" stroke="#a0a0b0" stroke-width="0.5"/>`;
+    svg += `<text x="${x}" y="${m.top + ph + 12}" text-anchor="middle" font-size="7" fill="#a0a0b0">${tick.toFixed(1)}</text>`;
+  }
+
+  // Y-axis ticks
+  const yTicks = niceTickValues(yMin, yMax, 4);
+  for (const tick of yTicks) {
+    const y = sy(tick);
+    svg += `<line x1="${m.left - 3}" y1="${y}" x2="${m.left}" y2="${y}" stroke="#a0a0b0" stroke-width="0.5"/>`;
+    svg += `<text x="${m.left - 5}" y="${y + 2.5}" text-anchor="end" font-size="7" fill="#a0a0b0">${tick.toFixed(1)}</text>`;
+  }
+
+  // Axis labels
+  svg += `<text x="${m.left + pw / 2}" y="${H - 2}" text-anchor="middle" font-size="8" fill="#a0a0b0">log\u2081\u2080(distance)</text>`;
+  svg += `<text x="8" y="${m.top + ph / 2}" text-anchor="middle" font-size="8" fill="#a0a0b0" transform="rotate(-90, 8, ${m.top + ph / 2})">log\u2081\u2080(P(s))</text>`;
+
+  // Fit line (dashed)
+  const fitY0 = result.decayExponent * xData[0] + (yData[0] - result.decayExponent * xData[0]);
+  const fitYn = result.decayExponent * xData[n - 1] + (yData[0] - result.decayExponent * xData[0]);
+  // Use actual regression: intercept = mean(y) - slope * mean(x)
+  let sumX = 0, sumY = 0;
+  for (let i = 0; i < n; i++) { sumX += xData[i]; sumY += yData[i]; }
+  const intercept = sumY / n - result.decayExponent * (sumX / n);
+  const lineY0 = result.decayExponent * xData[0] + intercept;
+  const lineYn = result.decayExponent * xData[n - 1] + intercept;
+
+  svg += `<line x1="${sx(xData[0])}" y1="${sy(lineY0)}" x2="${sx(xData[n - 1])}" y2="${sy(lineYn)}" stroke="#e8e8e8" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+
+  // Data points
+  for (let i = 0; i < n; i++) {
+    svg += `<circle cx="${sx(xData[i])}" cy="${sy(yData[i])}" r="1.5" fill="#e94560" opacity="0.6"/>`;
+  }
+
+  svg += '</svg></div>';
+  return svg;
+}
+
+function niceTickValues(min: number, max: number, count: number): number[] {
+  const range = max - min;
+  const rawStep = range / count;
+  // Round step to nearest 0.5 or 1
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  let step: number;
+  const normalized = rawStep / magnitude;
+  if (normalized <= 1.5) step = magnitude;
+  else if (normalized <= 3.5) step = 2 * magnitude;
+  else if (normalized <= 7.5) step = 5 * magnitude;
+  else step = 10 * magnitude;
+
+  const ticks: number[] = [];
+  const start = Math.ceil(min / step) * step;
+  for (let v = start; v <= max; v += step) {
+    ticks.push(v);
+  }
+  return ticks;
 }
 
 // ---------------------------------------------------------------------------
 // Results display
 // ---------------------------------------------------------------------------
 
-function updateResultsDisplay(): void {
+function updateResultsDisplay(ctx: AppContext): void {
   const el = document.getElementById('analysis-results');
   if (!el) return;
 
   let html = '';
   if (cachedDecay) {
     html += formatDecayStats(cachedDecay);
+    html += renderDecayChart(cachedDecay);
   }
+
+  // Export buttons (only if at least one result exists)
+  if (cachedInsulation || cachedDecay || cachedCompartments) {
+    html += '<div class="analysis-export-buttons">';
+    if (cachedInsulation) {
+      html += '<button class="analysis-btn" id="btn-export-insulation">Export Insulation</button>';
+    }
+    if (cachedDecay) {
+      html += '<button class="analysis-btn" id="btn-export-decay">Export P(s)</button>';
+    }
+    if (cachedCompartments) {
+      html += '<button class="analysis-btn" id="btn-export-compartments">Export Compartments</button>';
+    }
+    html += '</div>';
+  }
+
   el.innerHTML = html || '<div style="color: var(--text-secondary); font-size: 11px;">Click a button above to compute.</div>';
+
+  // Wire export buttons
+  const overviewSize = getOverviewSize();
+  const s = state.get();
+
+  document.getElementById('btn-export-insulation')?.addEventListener('click', () => {
+    if (cachedInsulation) {
+      downloadInsulationBedGraph(cachedInsulation, s, overviewSize);
+      ctx.showToast('Insulation BedGraph exported');
+    }
+  });
+  document.getElementById('btn-export-decay')?.addEventListener('click', () => {
+    if (cachedDecay) {
+      downloadDecayTSV(cachedDecay);
+      ctx.showToast('P(s) decay TSV exported');
+    }
+  });
+  document.getElementById('btn-export-compartments')?.addEventListener('click', () => {
+    if (cachedCompartments) {
+      downloadCompartmentBedGraph(cachedCompartments, s, overviewSize);
+      ctx.showToast('Compartment BedGraph exported');
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +422,8 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
  */
 export function clearAnalysisTracks(ctx: AppContext): void {
   cachedDecay = null;
+  cachedInsulation = null;
+  cachedCompartments = null;
   ctx.trackRenderer.removeTrack('Insulation Score');
   ctx.trackRenderer.removeTrack('TAD Boundaries');
   ctx.trackRenderer.removeTrack('A/B Compartments');
