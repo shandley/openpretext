@@ -4,6 +4,7 @@
 
 import type { AppContext } from './AppContext';
 import { contigExclusion } from '../curation/ContigExclusion';
+import { getHealthScore } from './AnalysisPanel';
 
 export function updateStatsPanel(ctx: AppContext): void {
   const el = document.getElementById('stats-content');
@@ -32,6 +33,15 @@ export function updateStatsPanel(ctx: AppContext): void {
   };
 
   let html = '';
+
+  // Health score summary row
+  const healthScore = getHealthScore(ctx);
+  if (healthScore) {
+    const color = healthScore.overall >= 70 ? '#4caf50' :
+      healthScore.overall >= 40 ? '#f39c12' : '#e94560';
+    html += `<div class="stats-row"><span>Health Score</span><span style="color:${color};font-weight:600;">${healthScore.overall}</span></div>`;
+  }
+
   html += `<div class="stats-row"><span>Contigs</span><span>${m.contigCount}${delta(summary.contigCountDelta)}</span></div>`;
   if (excluded > 0) {
     html += `<div class="stats-row"><span>Excluded</span><span style="color:#f39c12;">${excluded}</span></div>`;

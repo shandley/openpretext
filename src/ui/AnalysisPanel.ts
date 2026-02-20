@@ -31,12 +31,14 @@ import {
 } from '../analysis/MisassemblyDetector';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { cut } from '../curation/CurationEngine';
+import { computeHealthScore, type HealthScoreResult } from '../analysis/HealthScore';
 
 // ---------------------------------------------------------------------------
 // Cached state
 // ---------------------------------------------------------------------------
 
 let cachedDecay: ContactDecayResult | null = null;
+let baselineDecay: ContactDecayResult | null = null;
 let cachedInsulation: InsulationResult | null = null;
 let cachedCompartments: CompartmentResult | null = null;
 let cachedSuggestions: CutSuggestion[] | null = null;
@@ -309,8 +311,24 @@ function applyAllCuts(ctx: AppContext, suggestions: CutSuggestion[]): void {
 // P(s) decay chart (inline SVG)
 // ---------------------------------------------------------------------------
 
-function renderDecayChart(result: ContactDecayResult): string {
+function computeRegressionIntercept(
+  xData: Float64Array, yData: Float64Array, slope: number,
+): number {
+  const n = xData.length;
+  let sumX = 0, sumY = 0;
+  for (let i = 0; i < n; i++) { sumX += xData[i]; sumY += yData[i]; }
+  return sumY / n - slope * (sumX / n);
+}
+
+function renderDecayChart(
+  result: ContactDecayResult,
+  baseline?: ContactDecayResult | null,
+): string {
   if (result.distances.length < 2) return '';
+
+  const hasBaseline = baseline != null
+    && baseline !== result
+    && baseline.distances.length >= 2;
 
   const W = 240, H = 160;
   const m = { top: 8, right: 8, bottom: 28, left: 36 };
@@ -321,7 +339,7 @@ function renderDecayChart(result: ContactDecayResult): string {
   const yData = result.logContacts;
   const n = xData.length;
 
-  // Compute bounds
+  // Compute bounds from current data
   let xMin = xData[0], xMax = xData[0];
   let yMin = yData[0], yMax = yData[0];
   for (let i = 1; i < n; i++) {
@@ -329,6 +347,18 @@ function renderDecayChart(result: ContactDecayResult): string {
     if (xData[i] > xMax) xMax = xData[i];
     if (yData[i] < yMin) yMin = yData[i];
     if (yData[i] > yMax) yMax = yData[i];
+  }
+
+  // Expand bounds to include baseline if present
+  if (hasBaseline) {
+    const bx = baseline.logDistances;
+    const by = baseline.logContacts;
+    for (let i = 0; i < bx.length; i++) {
+      if (bx[i] < xMin) xMin = bx[i];
+      if (bx[i] > xMax) xMax = bx[i];
+      if (by[i] < yMin) yMin = by[i];
+      if (by[i] > yMax) yMax = by[i];
+    }
   }
 
   // Add small padding to avoid points on edges
@@ -367,24 +397,53 @@ function renderDecayChart(result: ContactDecayResult): string {
   svg += `<text x="${m.left + pw / 2}" y="${H - 2}" text-anchor="middle" font-size="8" fill="#a0a0b0">log\u2081\u2080(distance)</text>`;
   svg += `<text x="8" y="${m.top + ph / 2}" text-anchor="middle" font-size="8" fill="#a0a0b0" transform="rotate(-90, 8, ${m.top + ph / 2})">log\u2081\u2080(P(s))</text>`;
 
-  // Fit line (dashed)
-  const fitY0 = result.decayExponent * xData[0] + (yData[0] - result.decayExponent * xData[0]);
-  const fitYn = result.decayExponent * xData[n - 1] + (yData[0] - result.decayExponent * xData[0]);
-  // Use actual regression: intercept = mean(y) - slope * mean(x)
-  let sumX = 0, sumY = 0;
-  for (let i = 0; i < n; i++) { sumX += xData[i]; sumY += yData[i]; }
-  const intercept = sumY / n - result.decayExponent * (sumX / n);
+  // Baseline layer (behind current)
+  if (hasBaseline) {
+    const bx = baseline.logDistances;
+    const by = baseline.logContacts;
+    const bn = bx.length;
+
+    // Baseline fit line (gray dashed)
+    const bIntercept = computeRegressionIntercept(bx, by, baseline.decayExponent);
+    const bLineY0 = baseline.decayExponent * bx[0] + bIntercept;
+    const bLineYn = baseline.decayExponent * bx[bn - 1] + bIntercept;
+    svg += `<line x1="${sx(bx[0])}" y1="${sy(bLineY0)}" x2="${sx(bx[bn - 1])}" y2="${sy(bLineYn)}" stroke="#888" stroke-width="1" stroke-dasharray="3,3"/>`;
+
+    // Baseline data points (gray)
+    for (let i = 0; i < bn; i++) {
+      svg += `<circle cx="${sx(bx[i])}" cy="${sy(by[i])}" r="1.5" fill="#888" opacity="0.3"/>`;
+    }
+  }
+
+  // Current fit line (white dashed)
+  const intercept = computeRegressionIntercept(xData, yData, result.decayExponent);
   const lineY0 = result.decayExponent * xData[0] + intercept;
   const lineYn = result.decayExponent * xData[n - 1] + intercept;
-
   svg += `<line x1="${sx(xData[0])}" y1="${sy(lineY0)}" x2="${sx(xData[n - 1])}" y2="${sy(lineYn)}" stroke="#e8e8e8" stroke-width="1.5" stroke-dasharray="4,3"/>`;
 
-  // Data points
+  // Current data points (red)
   for (let i = 0; i < n; i++) {
     svg += `<circle cx="${sx(xData[i])}" cy="${sy(yData[i])}" r="1.5" fill="#e94560" opacity="0.6"/>`;
   }
 
-  svg += '</svg></div>';
+  svg += '</svg>';
+
+  // Legend (only when baseline is shown)
+  if (hasBaseline) {
+    svg += '<div class="decay-chart-legend">';
+    svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#888" opacity="0.5"/></svg> Initial</span>';
+    svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#e94560"/></svg> Current</span>';
+    svg += '</div>';
+
+    // Delta exponent
+    const delta = result.decayExponent - baseline.decayExponent;
+    const sign = delta >= 0 ? '+' : '';
+    svg += `<div style="text-align:center;font-size:9px;color:var(--text-secondary);margin-top:2px;">`;
+    svg += `Exponent: ${baseline.decayExponent.toFixed(2)} \u2192 ${result.decayExponent.toFixed(2)} (\u0394 ${sign}${delta.toFixed(2)})`;
+    svg += '</div>';
+  }
+
+  svg += '</div>';
   return svg;
 }
 
@@ -412,14 +471,53 @@ function niceTickValues(min: number, max: number, count: number): number[] {
 // Results display
 // ---------------------------------------------------------------------------
 
+function buildHealthScore(ctx: AppContext): HealthScoreResult | null {
+  const metrics = ctx.metricsTracker.getLatest?.();
+  if (!metrics) return null;
+  if (!cachedDecay && !cachedInsulation && !cachedCompartments) return null;
+
+  return computeHealthScore({
+    n50: metrics.n50,
+    totalLength: metrics.totalLength,
+    contigCount: metrics.contigCount,
+    decayExponent: cachedDecay?.decayExponent ?? null,
+    decayRSquared: cachedDecay?.rSquared ?? null,
+    misassemblyCount: misassemblyFlags.getFlaggedCount(),
+    eigenvalue: cachedCompartments?.eigenvalue ?? null,
+  });
+}
+
+function renderHealthScoreCard(score: HealthScoreResult): string {
+  const color = score.overall >= 70 ? '#4caf50' :
+    score.overall >= 40 ? '#f39c12' : '#e94560';
+  const c = score.components;
+  return `<div class="health-score-card">
+    <div class="health-score-value" style="color:${color}">${score.overall}</div>
+    <div class="health-score-label">Health Score</div>
+    <div class="health-score-breakdown">
+      <span title="Contiguity (N50)">N50: ${Math.round(c.contiguity)}</span>
+      <span title="P(s) decay quality">P(s): ${Math.round(c.decayQuality)}</span>
+      <span title="Assembly integrity">Int: ${Math.round(c.integrity)}</span>
+      <span title="A/B compartments">A/B: ${Math.round(c.compartments)}</span>
+    </div>
+  </div>`;
+}
+
 function updateResultsDisplay(ctx: AppContext): void {
   const el = document.getElementById('analysis-results');
   if (!el) return;
 
   let html = '';
+
+  // Health score card (top of results)
+  const healthScore = buildHealthScore(ctx);
+  if (healthScore) {
+    html += renderHealthScoreCard(healthScore);
+  }
+
   if (cachedDecay) {
     html += formatDecayStats(cachedDecay);
-    html += renderDecayChart(cachedDecay);
+    html += renderDecayChart(cachedDecay, baselineDecay);
   }
 
   // Misassembly summary + suggest cuts
@@ -480,6 +578,13 @@ function updateResultsDisplay(ctx: AppContext): void {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * Get the current health score, or null if no analysis has been computed.
+ */
+export function getHealthScore(ctx: AppContext): HealthScoreResult | null {
+  return buildHealthScore(ctx);
+}
 
 /**
  * Initialize the Analysis panel UI inside #analysis-content.
@@ -586,6 +691,10 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     computing = false;
     setButtonsDisabled(false);
     runMisassemblyDetection(ctx);
+    // Capture baseline P(s) on initial computation
+    if (cachedDecay && !baselineDecay) {
+      baselineDecay = cachedDecay;
+    }
     updateResultsDisplay(ctx);
   });
 }
@@ -595,6 +704,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
  */
 export function clearAnalysisTracks(ctx: AppContext): void {
   cachedDecay = null;
+  baselineDecay = null;
   cachedInsulation = null;
   cachedCompartments = null;
   cachedSuggestions = null;
