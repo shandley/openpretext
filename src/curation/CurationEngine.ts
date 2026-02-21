@@ -406,7 +406,8 @@ export function redo(): boolean {
   // Update redo stack before re-executing (the operation will push to undo)
   state.update({ redoStack: newRedoStack });
 
-  // Re-execute the operation
+  // Re-execute the operation (reapply functions call pushOperation which
+  // clears redoStack as a side effect — we restore it afterwards)
   switch (op.type) {
     case 'cut':
       reapplyCut(op);
@@ -428,6 +429,9 @@ export function redo(): boolean {
     default:
       break;
   }
+
+  // Restore redo stack — pushOperation() cleared it
+  state.update({ redoStack: newRedoStack });
 
   events.emit('curation:redo', {});
   return true;

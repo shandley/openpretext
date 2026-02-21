@@ -621,6 +621,41 @@ describe('CurationEngine', () => {
       CurationEngine.invert(1); // new operation clears redo
       expect(state.get().redoStack.length).toBe(0);
     });
+
+    it('should support multi-step redo without losing redo items', () => {
+      setupStandardState();
+
+      // Perform 3 operations
+      CurationEngine.invert(0);
+      CurationEngine.invert(1);
+      CurationEngine.invert(2);
+      expect(state.get().undoStack.length).toBe(3);
+
+      // Undo all 3
+      CurationEngine.undo();
+      CurationEngine.undo();
+      CurationEngine.undo();
+      expect(state.get().undoStack.length).toBe(0);
+      expect(state.get().redoStack.length).toBe(3);
+
+      // Redo all 3 — each redo should preserve remaining redo items
+      expect(CurationEngine.redo()).toBe(true);
+      expect(state.get().redoStack.length).toBe(2);
+
+      expect(CurationEngine.redo()).toBe(true);
+      expect(state.get().redoStack.length).toBe(1);
+
+      expect(CurationEngine.redo()).toBe(true);
+      expect(state.get().redoStack.length).toBe(0);
+
+      // All 3 should be back on undo stack
+      expect(state.get().undoStack.length).toBe(3);
+
+      // Contigs should reflect all 3 inversions
+      expect(state.get().map!.contigs[0].inverted).toBe(true);
+      expect(state.get().map!.contigs[1].inverted).toBe(true);
+      expect(state.get().map!.contigs[2].inverted).toBe(true);
+    });
   });
 
   // -----------------------------------------------------------------------
