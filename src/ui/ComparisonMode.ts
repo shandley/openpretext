@@ -171,7 +171,10 @@ export function updateComparisonSummary(ctx: AppContext): void {
     rows.push(`<span class="diff-badge diff-unchanged">${summary.unchanged} unchanged</span>`);
 
   el.style.display = 'block';
-  el.innerHTML = `<div class="diff-summary">${rows.join(' ')}</div>`;
+  el.innerHTML = `<div class="diff-summary">${rows.join(' ')}</div>`
+    + `<button id="btn-export-diff" class="diff-export-btn">Export Diff</button>`;
+
+  document.getElementById('btn-export-diff')?.addEventListener('click', () => exportDiffReport(ctx));
 }
 
 // ---------------------------------------------------------------------------
@@ -287,5 +290,102 @@ export function renderComparisonOverlay(ctx: AppContext, canvasCtx: CanvasRender
     }
   }
 
+  // Draw legend in bottom-right corner
+  renderDiffLegend(canvasCtx, changes, canvasWidth, canvasHeight);
+
   canvasCtx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Diff legend (drawn on canvas)
+// ---------------------------------------------------------------------------
+
+const LEGEND_ITEMS: { type: ContigChangeType; label: string; color: string }[] = [
+  { type: 'moved', label: 'Moved', color: 'rgba(243, 156, 18, 0.9)' },
+  { type: 'inverted', label: 'Inverted', color: 'rgba(155, 89, 182, 0.9)' },
+  { type: 'added', label: 'New', color: 'rgba(46, 204, 113, 0.9)' },
+  { type: 'unchanged', label: 'Unchanged', color: 'rgba(52, 152, 219, 0.7)' },
+];
+
+function renderDiffLegend(
+  canvasCtx: CanvasRenderingContext2D,
+  changes: Map<number, ContigChangeType>,
+  canvasWidth: number,
+  canvasHeight: number,
+): void {
+  // Only show legend items that are present in the diff
+  const typesPresent = new Set(changes.values());
+  const items = LEGEND_ITEMS.filter(item => typesPresent.has(item.type));
+  if (items.length === 0) return;
+
+  const lineHeight = 16;
+  const padding = 8;
+  const dotSize = 8;
+  const boxWidth = 100;
+  const boxHeight = items.length * lineHeight + padding * 2;
+  const x = canvasWidth - boxWidth - 12;
+  const y = canvasHeight - boxHeight - 12;
+
+  // Background
+  canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  canvasCtx.beginPath();
+  canvasCtx.roundRect(x, y, boxWidth, boxHeight, 4);
+  canvasCtx.fill();
+
+  // Items
+  canvasCtx.font = '11px sans-serif';
+  canvasCtx.textBaseline = 'middle';
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const iy = y + padding + i * lineHeight + lineHeight / 2;
+
+    // Color dot
+    canvasCtx.fillStyle = item.color;
+    canvasCtx.beginPath();
+    canvasCtx.arc(x + padding + dotSize / 2, iy, dotSize / 2, 0, Math.PI * 2);
+    canvasCtx.fill();
+
+    // Label
+    canvasCtx.fillStyle = '#fff';
+    canvasCtx.fillText(item.label, x + padding + dotSize + 6, iy);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Export diff report
+// ---------------------------------------------------------------------------
+
+export function exportDiffReport(ctx: AppContext): void {
+  const s = state.get();
+  if (!s.map || !ctx.comparisonSnapshot) return;
+
+  const inv = ctx.comparisonInvertedSnapshot ?? new Map();
+  const { changes, summary } = computeDiff(ctx.comparisonSnapshot, inv, s.contigOrder, s.map.contigs);
+
+  const contigDetails: Array<{ name: string; id: number; change: ContigChangeType }> = [];
+  for (const id of s.contigOrder) {
+    const contig = s.map.contigs[id];
+    if (!contig) continue;
+    contigDetails.push({
+      name: contig.name,
+      id,
+      change: changes.get(id) ?? 'unchanged',
+    });
+  }
+
+  const report = {
+    filename: s.map.filename,
+    timestamp: new Date().toISOString(),
+    summary,
+    contigs: contigDetails,
+  };
+
+  const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${s.map.filename.replace(/\.[^.]+$/, '')}-diff-report.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  ctx.showToast('Diff report exported');
 }

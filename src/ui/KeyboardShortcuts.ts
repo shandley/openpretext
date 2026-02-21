@@ -12,6 +12,7 @@ import { toggleComparisonMode } from './ComparisonMode';
 import { toggleScriptConsole } from './ScriptConsole';
 import { toggleShortcutsModal } from './ShortcutsModal';
 import { isCommandPaletteVisible, toggleCommandPalette } from './CommandPalette';
+import { runAutoSort, runAutoCut } from './BatchActions';
 
 export function setupKeyboardShortcuts(ctx: AppContext): void {
   window.addEventListener('keydown', (e) => {
@@ -23,6 +24,7 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
       case 'e': ctx.setMode('edit'); break;
       case 's':
         if (cmd) { e.preventDefault(); takeScreenshot(ctx); }
+        else if (e.altKey && ctx.currentMode === 'edit') { e.preventDefault(); runAutoSort(ctx); }
         else ctx.setMode('scaffold');
         break;
       case 'w': ctx.setMode('waypoint'); break;
@@ -82,7 +84,10 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
         break;
 
       case 'c':
-        if (ctx.currentMode === 'edit') {
+        if (e.altKey && ctx.currentMode === 'edit') {
+          e.preventDefault();
+          runAutoCut(ctx);
+        } else if (ctx.currentMode === 'edit') {
           cutAtCursorPosition(ctx);
         }
         break;

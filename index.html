@@ -1866,6 +1866,12 @@
     .diff-added { background: rgba(46,204,113,0.2); color: #2ecc71; }
     .diff-removed { background: rgba(231,76,60,0.2); color: #e74c3c; }
     .diff-unchanged { background: rgba(52,152,219,0.15); color: var(--text-secondary); }
+    .diff-export-btn {
+      margin-top: 6px; padding: 3px 8px; font-size: 10px;
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: 3px; color: var(--text-secondary); cursor: pointer;
+    }
+    .diff-export-btn:hover { background: var(--border); color: var(--text-primary); }
 
     /* Comparative P(s) chart legend */
     .decay-chart-legend {
@@ -2168,7 +2174,7 @@
     </div>
 
     <!-- Drop overlay -->
-    <div id="drop-overlay">Drop .pretext file to open</div>
+    <div id="drop-overlay">Drop .pretext, .fasta, .bedgraph, or .json file</div>
 
     <!-- Script console -->
     <div id="script-console">
@@ -2286,6 +2292,8 @@
           <div class="shortcut-row"><span class="desc">Toggle exclusion</span><span class="key"><kbd>H</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Toggle comparison</span><span class="key"><kbd>P</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Undo history</span><span class="key"><kbd>U</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Auto sort</span><span class="key"><kbd>&#8997;</kbd><kbd>S</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Auto cut</span><span class="key"><kbd>&#8997;</kbd><kbd>C</kbd></span></div>
         </div>
         <div class="shortcuts-section">
           <h3>Waypoints</h3>

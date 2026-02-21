@@ -11,7 +11,7 @@ import { generateSyntheticMap } from '../formats/SyntheticData';
 import { generateDemoTracks } from '../formats/SyntheticTracks';
 import { TileManager } from '../renderer/TileManager';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
-import { loadSession } from './ExportSession';
+import { loadSession, loadReferenceFasta, loadBedGraphTrack } from './ExportSession';
 
 async function loadPretextFromBuffer(
   ctx: AppContext,
@@ -265,7 +265,18 @@ export function setupFileDrop(ctx: AppContext): void {
     e.preventDefault();
     overlay.classList.remove('visible');
     const file = e.dataTransfer?.files[0];
-    if (file) await loadPretextFile(ctx, file);
+    if (!file) return;
+
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.fa') || name.endsWith('.fasta') || name.endsWith('.fna') || name.endsWith('.fa.gz') || name.endsWith('.fasta.gz')) {
+      await loadReferenceFasta(ctx, file);
+    } else if (name.endsWith('.bedgraph') || name.endsWith('.bg')) {
+      await loadBedGraphTrack(ctx, file);
+    } else if (name.endsWith('.json')) {
+      await loadSession(ctx, file);
+    } else {
+      await loadPretextFile(ctx, file);
+    }
   });
 }
 

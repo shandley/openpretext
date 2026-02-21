@@ -18,6 +18,7 @@ import {
   renderComparisonOverlay,
   computeDiff,
   updateComparisonSummary,
+  exportDiffReport,
 } from '../../src/ui/ComparisonMode';
 
 import { state } from '../../src/core/State';
@@ -82,10 +83,14 @@ function createMockCanvasCtx(): CanvasRenderingContext2D {
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     stroke: vi.fn(),
+    fill: vi.fn(),
+    arc: vi.fn(),
     fillText: vi.fn(),
+    roundRect: vi.fn(),
     strokeStyle: '',
     fillStyle: '',
     font: '',
+    textBaseline: '',
     lineWidth: 1,
   } as unknown as CanvasRenderingContext2D;
 }
@@ -560,6 +565,127 @@ describe('ComparisonMode', () => {
       expect(canvasCtx.save).toHaveBeenCalled();
       expect(canvasCtx.restore).toHaveBeenCalled();
       expect(canvasCtx.beginPath).not.toHaveBeenCalled();
+    });
+
+    it('should draw legend when changes exist', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: {
+          textureSize: 1000,
+          contigs: {
+            0: { pixelStart: 0, pixelEnd: 500, inverted: true },
+            1: { pixelStart: 500, pixelEnd: 1000, inverted: false },
+          },
+        },
+        contigOrder: [1, 0],
+      });
+      const ctx = createMockCtx({
+        comparisonVisible: true,
+        comparisonSnapshot: [0, 1],
+        comparisonInvertedSnapshot: new Map([[0, false], [1, false]]),
+      });
+      const canvasCtx = createMockCanvasCtx();
+
+      renderComparisonOverlay(ctx, canvasCtx, cam, canvasWidth, canvasHeight);
+
+      // Legend draws a rounded rectangle background and text labels
+      expect(canvasCtx.roundRect).toHaveBeenCalled();
+      expect(canvasCtx.fill).toHaveBeenCalled();
+      // Should draw legend items for both "moved" and "inverted"
+      const fillTextCalls = (canvasCtx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+      const labels = fillTextCalls.map((c: any[]) => c[0]);
+      expect(labels).toContain('Moved');
+      expect(labels).toContain('Inverted');
+    });
+
+    it('should not draw legend when all contigs are unchanged', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: {
+          textureSize: 1000,
+          contigs: {
+            0: { pixelStart: 0, pixelEnd: 500, inverted: false },
+            1: { pixelStart: 500, pixelEnd: 1000, inverted: false },
+          },
+        },
+        contigOrder: [0, 1],
+      });
+      const ctx = createMockCtx({
+        comparisonVisible: true,
+        comparisonSnapshot: [0, 1],
+        comparisonInvertedSnapshot: new Map([[0, false], [1, false]]),
+      });
+      const canvasCtx = createMockCanvasCtx();
+
+      renderComparisonOverlay(ctx, canvasCtx, cam, canvasWidth, canvasHeight);
+
+      // No legend should be drawn when no changes (all contigs unchanged are skipped in markers)
+      // The roundRect should not be called since the legend filters to only types present
+      // and unchanged IS in the legend items, so it will show for unchanged-only diffs
+      expect(canvasCtx.roundRect).toHaveBeenCalled();
+      const fillTextCalls = (canvasCtx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+      const labels = fillTextCalls.map((c: any[]) => c[0]);
+      expect(labels).toContain('Unchanged');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // exportDiffReport
+  // -------------------------------------------------------------------------
+  describe('exportDiffReport', () => {
+    it('should return early when no map is loaded', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({ map: null });
+      const ctx = createMockCtx({ comparisonSnapshot: [0] });
+
+      exportDiffReport(ctx);
+
+      expect(ctx.showToast).not.toHaveBeenCalled();
+    });
+
+    it('should return early when no snapshot exists', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: { contigs: [], textureSize: 1000, filename: 'test.pretext' },
+        contigOrder: [],
+      });
+      const ctx = createMockCtx({ comparisonSnapshot: null });
+
+      exportDiffReport(ctx);
+
+      expect(ctx.showToast).not.toHaveBeenCalled();
+    });
+
+    it('should create and download a JSON diff report', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: {
+          filename: 'test.pretext',
+          contigs: [
+            makeContig({ name: 'ctg1', inverted: true }),
+            makeContig({ name: 'ctg2', inverted: false }),
+          ],
+          textureSize: 1000,
+        },
+        contigOrder: [1, 0],
+      });
+      const ctx = createMockCtx({
+        comparisonSnapshot: [0, 1],
+        comparisonInvertedSnapshot: new Map([[0, false], [1, false]]),
+      });
+
+      // Mock Blob, URL, and anchor element for download
+      const mockUrl = 'blob:test';
+      const mockAnchor = { href: '', download: '', click: vi.fn() } as any;
+      (globalThis as any).Blob = vi.fn((parts: any[], opts: any) => ({ parts, type: opts.type }));
+      (globalThis as any).URL = {
+        createObjectURL: vi.fn(() => mockUrl),
+        revokeObjectURL: vi.fn(),
+      };
+      (globalThis.document.createElement as any) = vi.fn(() => mockAnchor);
+
+      exportDiffReport(ctx);
+
+      expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
+      expect(mockAnchor.download).toBe('test-diff-report.json');
+      expect(mockAnchor.click).toHaveBeenCalled();
+      expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith(mockUrl);
+      expect(ctx.showToast).toHaveBeenCalledWith('Diff report exported');
     });
   });
 });

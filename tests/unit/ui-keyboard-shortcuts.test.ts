@@ -60,6 +60,11 @@ vi.mock('../../src/ui/ShortcutsModal', () => ({
   toggleShortcutsModal: vi.fn(),
 }));
 
+vi.mock('../../src/ui/BatchActions', () => ({
+  runAutoSort: vi.fn(),
+  runAutoCut: vi.fn(),
+}));
+
 let mockCommandPaletteVisible = false;
 vi.mock('../../src/ui/CommandPalette', () => ({
   isCommandPaletteVisible: vi.fn(() => mockCommandPaletteVisible),
@@ -76,6 +81,7 @@ import { toggleComparisonMode } from '../../src/ui/ComparisonMode';
 import { toggleScriptConsole } from '../../src/ui/ScriptConsole';
 import { toggleShortcutsModal } from '../../src/ui/ShortcutsModal';
 import { isCommandPaletteVisible, toggleCommandPalette } from '../../src/ui/CommandPalette';
+import { runAutoSort, runAutoCut } from '../../src/ui/BatchActions';
 
 import type { AppContext } from '../../src/ui/AppContext';
 
@@ -147,6 +153,7 @@ function dispatchKey(key: string, opts: {
   metaKey?: boolean;
   ctrlKey?: boolean;
   shiftKey?: boolean;
+  altKey?: boolean;
   target?: any;
 } = {}) {
   const event = {
@@ -154,6 +161,7 @@ function dispatchKey(key: string, opts: {
     metaKey: opts.metaKey ?? false,
     ctrlKey: opts.ctrlKey ?? false,
     shiftKey: opts.shiftKey ?? false,
+    altKey: opts.altKey ?? false,
     target: opts.target ?? {},
     preventDefault: vi.fn(),
   };
@@ -516,6 +524,40 @@ describe('KeyboardShortcuts', () => {
       dispatchKey('Backspace');
       expect(SelectionManager.clearSelection).toHaveBeenCalled();
       expect(editCtx.updateSidebarContigList).toHaveBeenCalled();
+    });
+
+    it('should call runAutoSort when Alt+S is pressed in edit mode', () => {
+      const event = dispatchKey('s', { altKey: true });
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(runAutoSort).toHaveBeenCalledWith(editCtx);
+      expect(editCtx.setMode).not.toHaveBeenCalled();
+    });
+
+    it('should call runAutoCut when Alt+C is pressed in edit mode', () => {
+      const event = dispatchKey('c', { altKey: true });
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(runAutoCut).toHaveBeenCalledWith(editCtx);
+      expect(cutAtCursorPosition).not.toHaveBeenCalled();
+    });
+
+    it('should NOT call runAutoSort when Alt+S is pressed in navigate mode', () => {
+      // Use navigate mode ctx
+      capturedKeydownHandler = null;
+      (globalThis.window.addEventListener as ReturnType<typeof vi.fn>).mockClear();
+      setupKeyboardShortcuts(ctx);
+
+      dispatchKey('s', { altKey: true });
+      expect(runAutoSort).not.toHaveBeenCalled();
+    });
+
+    it('should NOT call runAutoCut when Alt+C is pressed in navigate mode', () => {
+      // Use navigate mode ctx
+      capturedKeydownHandler = null;
+      (globalThis.window.addEventListener as ReturnType<typeof vi.fn>).mockClear();
+      setupKeyboardShortcuts(ctx);
+
+      dispatchKey('c', { altKey: true });
+      expect(runAutoCut).not.toHaveBeenCalled();
     });
   });
 
