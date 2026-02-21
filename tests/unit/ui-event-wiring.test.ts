@@ -83,6 +83,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     updateSidebarScaffoldList: vi.fn(),
     updateStatsPanel: vi.fn(),
     updateTrackConfigPanel: vi.fn(),
+    updateUndoHistoryPanel: vi.fn(),
     rebuildContigBoundaries: vi.fn(),
     setMode: vi.fn(),
     formatBp: vi.fn(),

@@ -32,6 +32,7 @@ import {
   setupContigSearch,
   updateStatsPanel,
   updateTrackConfigPanel,
+  updateUndoHistoryPanel,
   setMode,
   setupMouseTracking,
   setupDragReorder,
@@ -119,6 +120,7 @@ class OpenPretextApp {
       updateSidebarScaffoldList: () => updateSidebarScaffoldList(ctx),
       updateStatsPanel: () => updateStatsPanel(ctx),
       updateTrackConfigPanel: () => updateTrackConfigPanel(ctx),
+      updateUndoHistoryPanel: () => updateUndoHistoryPanel(ctx),
       setMode: (mode) => setMode(ctx, mode),
     };
 

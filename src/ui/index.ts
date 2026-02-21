@@ -91,6 +91,9 @@ export { togglePatternGallery, setupPatternGallery } from './PatternGallery';
 // AnalysisPanel
 export { setupAnalysisPanel, runAllAnalyses, clearAnalysisTracks, recomputeScaffoldDecay, snapshotBaseline, resetBaseline, getBaselineDecay } from './AnalysisPanel';
 
+// UndoHistoryPanel
+export { updateUndoHistoryPanel } from './UndoHistoryPanel';
+
 // CutReviewPanel
 export { openCutReview, closeCutReview, isCutReviewActive } from './CutReviewPanel';
 

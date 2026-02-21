@@ -61,5 +61,6 @@ export interface AppContext {
   readonly updateSidebarScaffoldList: () => void;
   readonly updateStatsPanel: () => void;
   readonly updateTrackConfigPanel: () => void;
+  readonly updateUndoHistoryPanel: () => void;
   readonly setMode: (mode: InteractionMode) => void;
 }

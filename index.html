@@ -1675,6 +1675,38 @@
       margin-bottom: 6px;
     }
 
+    /* Undo history panel */
+    #undo-history-content { max-height: 200px; overflow-y: auto; }
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      margin: 1px 0;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .history-item:hover { background: var(--bg-surface); }
+    .history-item.redo { opacity: 0.45; }
+    .history-icon { width: 16px; text-align: center; flex-shrink: 0; }
+    .history-desc {
+      flex: 1; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+      color: var(--text-primary);
+    }
+    .history-time { font-size: 9px; color: var(--text-secondary); flex-shrink: 0; }
+    .history-separator {
+      border-top: 1px dashed var(--border);
+      margin: 4px 0; font-size: 9px;
+      color: var(--text-secondary); text-align: center; padding-top: 2px;
+    }
+    .history-batch-count {
+      font-size: 9px; background: var(--bg-surface);
+      padding: 1px 4px; border-radius: 3px; color: var(--text-secondary);
+    }
+
     /* Cut suggestion cards */
     .cut-suggestion-card {
       display: flex;
@@ -2051,6 +2083,12 @@
           <h3>Assembly Metrics</h3>
           <div id="stats-content">
             <div style="color: var(--text-secondary); font-size: 12px;">No data loaded</div>
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <h3>History</h3>
+          <div id="undo-history-content">
+            <div style="color: var(--text-secondary); font-size: 12px;">No operations yet</div>
           </div>
         </div>
         <div class="sidebar-section">

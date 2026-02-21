@@ -61,6 +61,7 @@ export function refreshAfterCuration(ctx: AppContext): void {
     ctx.metricsTracker.snapshot(s.map.contigs, s.contigOrder, s.undoStack.length);
   }
   ctx.updateStatsPanel();
+  ctx.updateUndoHistoryPanel();
   // Schedule debounced analysis recompute (insulation + P(s) only)
   scheduleAnalysisRecompute(ctx);
 }
