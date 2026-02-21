@@ -119,6 +119,20 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
         }
         break;
 
+      case 'u': {
+        // Open sidebar and scroll to history panel
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar && !sidebar.classList.contains('visible')) {
+          sidebar.classList.add('visible');
+          ctx.updateSidebarContigList();
+          ctx.updateStatsPanel();
+          ctx.updateTrackConfigPanel();
+        }
+        ctx.updateUndoHistoryPanel();
+        document.getElementById('undo-history-content')?.scrollIntoView({ behavior: 'smooth' });
+        break;
+      }
+
       case 'x':
         ctx.tracksVisible = !ctx.tracksVisible;
         ctx.showToast(`Tracks: ${ctx.tracksVisible ? 'visible' : 'hidden'}`);

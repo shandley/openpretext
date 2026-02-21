@@ -100,6 +100,17 @@ function getCommands(ctx: AppContext) {
     { name: 'Load BedGraph track', shortcut: '', action: () => document.getElementById('track-file-input')?.click() },
     { name: 'Toggle contig exclusion', shortcut: 'H', action: () => toggleContigExclusion(ctx) },
     { name: 'Toggle comparison mode', shortcut: 'P', action: () => toggleComparisonMode(ctx) },
+    { name: 'Show undo history', shortcut: 'U', action: () => {
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar && !sidebar.classList.contains('visible')) {
+        sidebar.classList.add('visible');
+        ctx.updateSidebarContigList();
+        ctx.updateStatsPanel();
+        ctx.updateTrackConfigPanel();
+      }
+      ctx.updateUndoHistoryPanel();
+      document.getElementById('undo-history-content')?.scrollIntoView({ behavior: 'smooth' });
+    }},
     { name: 'Batch: select by pattern', shortcut: '', action: () => runBatchSelectByPattern(ctx) },
     { name: 'Batch: select by size', shortcut: '', action: () => runBatchSelectBySize(ctx) },
     { name: 'Batch: cut large contigs', shortcut: '', action: () => runBatchCut(ctx) },
