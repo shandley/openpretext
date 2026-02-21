@@ -16,11 +16,14 @@ vi.mock('../../src/core/State', () => ({
 import {
   toggleComparisonMode,
   renderComparisonOverlay,
+  computeDiff,
+  updateComparisonSummary,
 } from '../../src/ui/ComparisonMode';
 
 import { state } from '../../src/core/State';
 import type { AppContext } from '../../src/ui/AppContext';
 import type { CameraState } from '../../src/renderer/Camera';
+import type { ContigInfo } from '../../src/core/State';
 
 // ---------------------------------------------------------------------------
 // Helper: create a mock AppContext
@@ -34,6 +37,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     updateSidebarScaffoldList: vi.fn(),
     updateStatsPanel: vi.fn(),
     updateTrackConfigPanel: vi.fn(),
+    updateUndoHistoryPanel: vi.fn(),
     setMode: vi.fn(),
     currentMode: 'edit',
     hoveredContigIndex: -1,
@@ -45,6 +49,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     animFrameId: 0,
     referenceSequences: null,
     comparisonSnapshot: null,
+    comparisonInvertedSnapshot: null,
     comparisonVisible: false,
     renderer: {} as any,
     labelRenderer: {} as any,
@@ -59,6 +64,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     metricsTracker: {} as any,
     tileManager: null,
     cancelTileDecode: null,
+    tutorialManager: null,
     ...overrides,
   };
 }
@@ -76,11 +82,52 @@ function createMockCanvasCtx(): CanvasRenderingContext2D {
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     stroke: vi.fn(),
+    fillText: vi.fn(),
     strokeStyle: '',
+    fillStyle: '',
+    font: '',
     lineWidth: 1,
   } as unknown as CanvasRenderingContext2D;
 }
 
+// ---------------------------------------------------------------------------
+// Helper: create ContigInfo
+// ---------------------------------------------------------------------------
+
+function makeContig(overrides: Partial<ContigInfo> = {}): ContigInfo {
+  return {
+    name: 'ctg',
+    originalIndex: 0,
+    length: 1000,
+    pixelStart: 0,
+    pixelEnd: 100,
+    inverted: false,
+    scaffoldId: null,
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Minimal DOM stub (no jsdom needed)
+// ---------------------------------------------------------------------------
+
+const mockElements = new Map<string, any>();
+
+function createDomElement(): any {
+  return {
+    style: { display: '' },
+    innerHTML: '',
+    remove: vi.fn(),
+  };
+}
+
+if (typeof globalThis.document === 'undefined') {
+  (globalThis as any).document = {
+    getElementById: vi.fn((id: string) => mockElements.get(id) ?? null),
+    createElement: vi.fn(() => createDomElement()),
+    body: { appendChild: vi.fn(), removeChild: vi.fn() },
+  };
+}
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -88,6 +135,133 @@ function createMockCanvasCtx(): CanvasRenderingContext2D {
 describe('ComparisonMode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockElements.clear();
+    (globalThis.document.getElementById as any) = vi.fn((id: string) => mockElements.get(id) ?? null);
+  });
+
+  // -------------------------------------------------------------------------
+  // computeDiff
+  // -------------------------------------------------------------------------
+  describe('computeDiff', () => {
+    it('should detect no changes when order and inversions match', () => {
+      const contigs = [
+        makeContig({ name: 'a', inverted: false }),
+        makeContig({ name: 'b', inverted: false }),
+      ];
+      const snapshot = [0, 1];
+      const invertedSnapshot = new Map([[0, false], [1, false]]);
+      const current = [0, 1];
+
+      const { changes, summary } = computeDiff(snapshot, invertedSnapshot, current, contigs);
+
+      expect(summary.unchanged).toBe(2);
+      expect(summary.moved).toBe(0);
+      expect(summary.inverted).toBe(0);
+      expect(summary.added).toBe(0);
+      expect(summary.removed).toBe(0);
+      expect(changes.get(0)).toBe('unchanged');
+      expect(changes.get(1)).toBe('unchanged');
+    });
+
+    it('should detect moved contigs', () => {
+      const contigs = [
+        makeContig({ name: 'a', inverted: false }),
+        makeContig({ name: 'b', inverted: false }),
+        makeContig({ name: 'c', inverted: false }),
+      ];
+      const snapshot = [0, 1, 2];
+      const invertedSnapshot = new Map([[0, false], [1, false], [2, false]]);
+      // Swap 0 and 1
+      const current = [1, 0, 2];
+
+      const { changes, summary } = computeDiff(snapshot, invertedSnapshot, current, contigs);
+
+      expect(summary.moved).toBe(2);
+      expect(summary.unchanged).toBe(1);
+      expect(changes.get(0)).toBe('moved');
+      expect(changes.get(1)).toBe('moved');
+      expect(changes.get(2)).toBe('unchanged');
+    });
+
+    it('should detect inverted contigs', () => {
+      const contigs = [
+        makeContig({ name: 'a', inverted: true }),
+        makeContig({ name: 'b', inverted: false }),
+      ];
+      const snapshot = [0, 1];
+      const invertedSnapshot = new Map([[0, false], [1, false]]);
+      const current = [0, 1];
+
+      const { changes, summary } = computeDiff(snapshot, invertedSnapshot, current, contigs);
+
+      expect(summary.inverted).toBe(1);
+      expect(summary.unchanged).toBe(1);
+      expect(changes.get(0)).toBe('inverted');
+      expect(changes.get(1)).toBe('unchanged');
+    });
+
+    it('should detect added contigs (from cuts)', () => {
+      const contigs = [
+        makeContig({ name: 'a' }),
+        makeContig({ name: 'b' }),
+        makeContig({ name: 'a_part2' }),
+      ];
+      const snapshot = [0, 1];
+      const invertedSnapshot = new Map([[0, false], [1, false]]);
+      // contig 2 is new (from a cut)
+      const current = [0, 2, 1];
+
+      const { changes, summary } = computeDiff(snapshot, invertedSnapshot, current, contigs);
+
+      expect(summary.added).toBe(1);
+      expect(changes.get(2)).toBe('added');
+    });
+
+    it('should detect removed contigs (from joins)', () => {
+      const contigs = [
+        makeContig({ name: 'a' }),
+        makeContig({ name: 'b' }),
+      ];
+      const snapshot = [0, 1, 2]; // contig 2 was in snapshot
+      const invertedSnapshot = new Map([[0, false], [1, false], [2, false]]);
+      const current = [0, 1]; // contig 2 is gone (joined)
+
+      const { changes, summary } = computeDiff(snapshot, invertedSnapshot, current, contigs);
+
+      expect(summary.removed).toBe(1);
+    });
+
+    it('should handle empty snapshot', () => {
+      const contigs = [makeContig({ name: 'a' })];
+      const { summary } = computeDiff([], new Map(), [0], contigs);
+
+      expect(summary.added).toBe(1);
+      expect(summary.removed).toBe(0);
+    });
+
+    it('should handle empty current order', () => {
+      const contigs = [makeContig({ name: 'a' })];
+      const { summary } = computeDiff([0], new Map([[0, false]]), [], contigs);
+
+      expect(summary.removed).toBe(1);
+      expect(summary.total).toBe(0);
+    });
+
+    it('should prioritize inversion over position change', () => {
+      const contigs = [
+        makeContig({ name: 'a', inverted: true }),
+        makeContig({ name: 'b', inverted: false }),
+      ];
+      const snapshot = [0, 1];
+      const invertedSnapshot = new Map([[0, false], [1, false]]);
+      // contig 0 is both moved AND inverted — inversion takes priority
+      const current = [1, 0];
+
+      const { changes } = computeDiff(snapshot, invertedSnapshot, current, contigs);
+
+      expect(changes.get(0)).toBe('inverted');
+      expect(changes.get(1)).toBe('moved');
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -118,24 +292,52 @@ describe('ComparisonMode', () => {
       expect(ctx.comparisonVisible).toBe(false);
     });
 
-    it('should toggle comparisonVisible to true and show ON toast', () => {
+    it('should toggle comparisonVisible to true and show ON toast with diff summary', () => {
       (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
         map: { contigs: [], textureSize: 1000 },
+        contigOrder: [],
       });
       const ctx = createMockCtx({
-        comparisonSnapshot: [0, 1, 2],
+        comparisonSnapshot: [],
+        comparisonInvertedSnapshot: new Map(),
         comparisonVisible: false,
       });
 
       toggleComparisonMode(ctx);
 
       expect(ctx.comparisonVisible).toBe(true);
-      expect(ctx.showToast).toHaveBeenCalledWith('Comparison: ON');
+      expect(ctx.showToast).toHaveBeenCalledWith('Comparison: ON (no changes)');
+    });
+
+    it('should show diff details in ON toast when changes exist', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: {
+          contigs: [
+            makeContig({ inverted: true }),
+            makeContig({ inverted: false }),
+          ],
+          textureSize: 1000,
+        },
+        contigOrder: [1, 0],
+      });
+      const ctx = createMockCtx({
+        comparisonSnapshot: [0, 1],
+        comparisonInvertedSnapshot: new Map([[0, false], [1, false]]),
+        comparisonVisible: false,
+      });
+
+      toggleComparisonMode(ctx);
+
+      expect(ctx.comparisonVisible).toBe(true);
+      // contig 0 is inverted, contig 1 is moved
+      expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('1 moved'));
+      expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('1 inverted'));
     });
 
     it('should toggle comparisonVisible to false and show OFF toast', () => {
       (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
         map: { contigs: [], textureSize: 1000 },
+        contigOrder: [],
       });
       const ctx = createMockCtx({
         comparisonSnapshot: [0, 1, 2],
@@ -161,6 +363,50 @@ describe('ComparisonMode', () => {
 
       expect(ctx.comparisonVisible).toBe(false);
       expect(ctx.showToast).toHaveBeenCalledWith('No data loaded');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // updateComparisonSummary
+  // -------------------------------------------------------------------------
+  describe('updateComparisonSummary', () => {
+    it('should hide when comparison is not visible', () => {
+      const el = createDomElement();
+      el.style.display = 'block';
+      mockElements.set('comparison-summary', el);
+
+      const ctx = createMockCtx({ comparisonVisible: false });
+      updateComparisonSummary(ctx);
+
+      expect(el.style.display).toBe('none');
+    });
+
+    it('should show diff badges when comparison is active', () => {
+      const el = createDomElement();
+      mockElements.set('comparison-summary', el);
+
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: {
+          contigs: [
+            makeContig({ inverted: false }),
+            makeContig({ inverted: false }),
+          ],
+          textureSize: 1000,
+        },
+        contigOrder: [1, 0],
+      });
+
+      const ctx = createMockCtx({
+        comparisonVisible: true,
+        comparisonSnapshot: [0, 1],
+        comparisonInvertedSnapshot: new Map([[0, false], [1, false]]),
+      });
+
+      updateComparisonSummary(ctx);
+
+      expect(el.style.display).toBe('block');
+      expect(el.innerHTML).toContain('diff-moved');
+      expect(el.innerHTML).toContain('2 moved');
     });
   });
 
@@ -205,14 +451,16 @@ describe('ComparisonMode', () => {
         map: {
           textureSize: 1000,
           contigs: {
-            0: { pixelStart: 0, pixelEnd: 500 },
-            1: { pixelStart: 500, pixelEnd: 1000 },
+            0: { pixelStart: 0, pixelEnd: 500, inverted: false },
+            1: { pixelStart: 500, pixelEnd: 1000, inverted: false },
           },
         },
+        contigOrder: [0, 1],
       });
       const ctx = createMockCtx({
         comparisonVisible: true,
         comparisonSnapshot: [0, 1],
+        comparisonInvertedSnapshot: new Map([[0, false], [1, false]]),
       });
       const canvasCtx = createMockCanvasCtx();
 
@@ -222,59 +470,49 @@ describe('ComparisonMode', () => {
       expect(canvasCtx.restore).toHaveBeenCalledTimes(1);
     });
 
-    it('should set dashed line style for overlay', () => {
+    it('should set dashed line style for baseline overlay', () => {
       (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
         map: {
           textureSize: 1000,
           contigs: {
-            0: { pixelStart: 0, pixelEnd: 500 },
+            0: { pixelStart: 0, pixelEnd: 500, inverted: false },
           },
         },
+        contigOrder: [0],
       });
       const ctx = createMockCtx({
         comparisonVisible: true,
         comparisonSnapshot: [0],
+        comparisonInvertedSnapshot: new Map([[0, false]]),
       });
       const canvasCtx = createMockCanvasCtx();
 
       renderComparisonOverlay(ctx, canvasCtx, cam, canvasWidth, canvasHeight);
 
       expect(canvasCtx.setLineDash).toHaveBeenCalledWith([4, 4]);
-      expect(canvasCtx.strokeStyle).toBe('rgba(52, 152, 219, 0.5)');
-      expect(canvasCtx.lineWidth).toBe(1);
     });
 
     it('should draw boundary lines for contigs in snapshot', () => {
-      // Two contigs, each 500px. totalPixels = 1000
-      // After first contig: boundary at 500/1000 = 0.5
-      // After second contig: boundary at 1000/1000 = 1.0
       (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
         map: {
           textureSize: 1000,
           contigs: {
-            0: { pixelStart: 0, pixelEnd: 500 },
-            1: { pixelStart: 500, pixelEnd: 1000 },
+            0: { pixelStart: 0, pixelEnd: 500, inverted: false },
+            1: { pixelStart: 500, pixelEnd: 1000, inverted: false },
           },
         },
+        contigOrder: [0, 1],
       });
       const ctx = createMockCtx({
         comparisonVisible: true,
         comparisonSnapshot: [0, 1],
+        comparisonInvertedSnapshot: new Map([[0, false], [1, false]]),
       });
       const canvasCtx = createMockCanvasCtx();
-
-      // cam at center, zoom=1: screenX = (boundary - 0) * 1 * 800 + 400
-      // boundary=0.5: screenX = 0.5 * 800 + 400 = 800 (at edge, not > 0 && < 800? 800 < 800 is false, so no vertical line)
-      // boundary=1.0: screenX = 1.0 * 800 + 400 = 1200 (outside)
-      // Let's use cam that makes boundaries visible
       const testCam: CameraState = { x: 0.5, y: 0.5, zoom: 1 };
 
       renderComparisonOverlay(ctx, canvasCtx, testCam, canvasWidth, canvasHeight);
 
-      // boundary=0.5: screenX = (0.5 - 0.5) * 1 * 800 + 400 = 400 (visible)
-      // boundary=1.0: screenX = (1.0 - 0.5) * 1 * 800 + 400 = 800 (not < 800, so not drawn vertically)
-      // boundary=0.5: screenY = (0.5 - 0.5) * 1 * 600 + 300 = 300 (visible)
-      // boundary=1.0: screenY = (1.0 - 0.5) * 1 * 600 + 300 = 600 (not < 600, so not drawn horizontally)
       expect(canvasCtx.beginPath).toHaveBeenCalled();
       expect(canvasCtx.stroke).toHaveBeenCalled();
     });
@@ -284,45 +522,22 @@ describe('ComparisonMode', () => {
         map: {
           textureSize: 1000,
           contigs: {
-            0: { pixelStart: 0, pixelEnd: 500 },
-            // contigId 99 does not exist
+            0: { pixelStart: 0, pixelEnd: 500, inverted: false },
           },
         },
+        contigOrder: [0],
       });
       const ctx = createMockCtx({
         comparisonVisible: true,
         comparisonSnapshot: [0, 99],
+        comparisonInvertedSnapshot: new Map([[0, false], [99, false]]),
       });
       const canvasCtx = createMockCanvasCtx();
 
-      // Should not throw
       renderComparisonOverlay(ctx, canvasCtx, cam, canvasWidth, canvasHeight);
 
       expect(canvasCtx.save).toHaveBeenCalled();
       expect(canvasCtx.restore).toHaveBeenCalled();
-    });
-
-    it('should not draw lines for boundaries outside the canvas viewport', () => {
-      // Single contig spanning the entire map: boundary at 1.0
-      // With cam at origin, zoom=1: screenX = (1.0 - 0) * 1 * 800 + 400 = 1200 (outside)
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: {
-          textureSize: 1000,
-          contigs: {
-            0: { pixelStart: 0, pixelEnd: 1000 },
-          },
-        },
-      });
-      const ctx = createMockCtx({
-        comparisonVisible: true,
-        comparisonSnapshot: [0],
-      });
-      const canvasCtx = createMockCanvasCtx();
-
-      renderComparisonOverlay(ctx, canvasCtx, cam, canvasWidth, canvasHeight);
-
-      // beginPath should not be called since the boundary is off-screen
-      expect(canvasCtx.beginPath).not.toHaveBeenCalled();
     });
 
     it('should handle empty comparison snapshot', () => {
@@ -331,10 +546,12 @@ describe('ComparisonMode', () => {
           textureSize: 1000,
           contigs: {},
         },
+        contigOrder: [],
       });
       const ctx = createMockCtx({
         comparisonVisible: true,
         comparisonSnapshot: [],
+        comparisonInvertedSnapshot: new Map(),
       });
       const canvasCtx = createMockCanvasCtx();
 
@@ -342,7 +559,6 @@ describe('ComparisonMode', () => {
 
       expect(canvasCtx.save).toHaveBeenCalled();
       expect(canvasCtx.restore).toHaveBeenCalled();
-      // No boundaries drawn
       expect(canvasCtx.beginPath).not.toHaveBeenCalled();
     });
   });

@@ -97,6 +97,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     animFrameId: 0,
     referenceSequences: null,
     comparisonSnapshot: null,
+    comparisonInvertedSnapshot: null,
     comparisonVisible: false,
     renderer: {} as any,
     labelRenderer: {} as any,

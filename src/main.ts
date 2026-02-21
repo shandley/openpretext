@@ -110,6 +110,7 @@ class OpenPretextApp {
       animFrameId: 0,
       referenceSequences: null,
       comparisonSnapshot: null,
+      comparisonInvertedSnapshot: null,
       comparisonVisible: false,
       tutorialManager: null,
 

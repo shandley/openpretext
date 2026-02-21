@@ -11,6 +11,7 @@ import { state } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { getContigBoundaries } from '../core/DerivedState';
 import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute } from './AnalysisPanel';
+import { updateComparisonSummary } from './ComparisonMode';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -25,8 +26,11 @@ export function setupEventListeners(ctx: AppContext): void {
     if (s.map) {
       ctx.metricsTracker.clear();
       ctx.metricsTracker.snapshot(s.map.contigs, s.contigOrder, 0);
-      // Store initial order for comparison mode
+      // Store initial order and inversion state for comparison mode
       ctx.comparisonSnapshot = [...s.contigOrder];
+      ctx.comparisonInvertedSnapshot = new Map(
+        s.contigOrder.map(id => [id, s.map!.contigs[id]?.inverted ?? false])
+      );
       ctx.comparisonVisible = false;
       contigExclusion.clearAll();
     }
@@ -62,6 +66,7 @@ export function refreshAfterCuration(ctx: AppContext): void {
   }
   ctx.updateStatsPanel();
   ctx.updateUndoHistoryPanel();
+  updateComparisonSummary(ctx);
   // Schedule debounced analysis recompute (insulation + P(s) only)
   scheduleAnalysisRecompute(ctx);
 }

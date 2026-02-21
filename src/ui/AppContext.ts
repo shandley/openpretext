@@ -51,6 +51,7 @@ export interface AppContext {
   animFrameId: number;
   referenceSequences: Map<string, string> | null;
   comparisonSnapshot: number[] | null;
+  comparisonInvertedSnapshot: Map<number, boolean> | null;
   comparisonVisible: boolean;
   tutorialManager: TutorialManager | null;
 

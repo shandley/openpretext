@@ -55,6 +55,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     animFrameId: 0,
     referenceSequences: null,
     comparisonSnapshot: null,
+    comparisonInvertedSnapshot: null,
     comparisonVisible: false,
     renderer: {
       canvasToMap: vi.fn(() => ({ x: 0.5, y: 0.5 })),

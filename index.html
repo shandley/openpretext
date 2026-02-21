@@ -1844,6 +1844,29 @@
     }
     .health-sparkline { margin-top: 4px; }
 
+    /* Comparison diff summary */
+    #comparison-summary {
+      padding: 6px 12px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .diff-summary {
+      display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+      font-size: 11px;
+    }
+    .diff-summary::before {
+      content: 'Diff:'; font-weight: 600; color: var(--text-primary);
+      margin-right: 2px;
+    }
+    .diff-badge {
+      padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 500;
+    }
+    .diff-moved { background: rgba(243,156,18,0.2); color: #f39c12; }
+    .diff-inverted { background: rgba(155,89,182,0.2); color: #9b59b6; }
+    .diff-added { background: rgba(46,204,113,0.2); color: #2ecc71; }
+    .diff-removed { background: rgba(231,76,60,0.2); color: #e74c3c; }
+    .diff-unchanged { background: rgba(52,152,219,0.15); color: var(--text-secondary); }
+
     /* Comparative P(s) chart legend */
     .decay-chart-legend {
       display: flex; gap: 8px; font-size: 9px;
@@ -2092,6 +2115,7 @@
             <div style="color: var(--text-secondary); font-size: 12px;">No operations yet</div>
           </div>
         </div>
+        <div id="comparison-summary" style="display:none;"></div>
         <div class="sidebar-section">
           <h3>3D Analysis</h3>
           <div id="analysis-content">

@@ -32,7 +32,7 @@ export { cycleColorMap, syncGammaSlider, syncColormapDropdown } from './ColorMap
 export { setMode } from './ModeManager';
 
 // ComparisonMode
-export { toggleComparisonMode, renderComparisonOverlay } from './ComparisonMode';
+export { toggleComparisonMode, renderComparisonOverlay, updateComparisonSummary, computeDiff } from './ComparisonMode';
 
 // Tooltip
 export { updateTooltip, hideTooltip } from './Tooltip';
