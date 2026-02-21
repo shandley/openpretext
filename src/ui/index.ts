@@ -17,7 +17,7 @@ export { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 export { toggleShortcutsModal, setupShortcutsModal } from './ShortcutsModal';
 
 // Sidebar
-export { formatBp, updateSidebarContigList, updateSidebarScaffoldList, setupContigSearch } from './Sidebar';
+export { formatBp, updateSidebarContigList, updateSidebarScaffoldList, setupContigSearch, autoAssignScaffolds } from './Sidebar';
 
 // StatsPanel
 export { updateStatsPanel } from './StatsPanel';
@@ -90,6 +90,9 @@ export { togglePatternGallery, setupPatternGallery } from './PatternGallery';
 
 // AnalysisPanel
 export { setupAnalysisPanel, runAllAnalyses, clearAnalysisTracks } from './AnalysisPanel';
+
+// CutReviewPanel
+export { openCutReview, closeCutReview, isCutReviewActive } from './CutReviewPanel';
 
 // Boot
 export { boot } from './Boot';

@@ -8,6 +8,7 @@ import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { move } from '../curation/CurationEngine';
+import { detectChromosomeBlocks } from '../analysis/ScaffoldDetection';
 
 export function formatBp(bp: number): string {
   if (bp >= 1_000_000_000) return `${(bp / 1_000_000_000).toFixed(1)} Gb`;
@@ -118,6 +119,58 @@ export function updateSidebarContigList(ctx: AppContext): void {
   });
 }
 
+export function autoAssignScaffolds(ctx: AppContext): void {
+  const s = state.get();
+  if (!s.map?.contactMap) return;
+
+  const overviewSize = Math.round(Math.sqrt(s.map.contactMap.length));
+  const result = detectChromosomeBlocks(
+    s.map.contactMap, overviewSize,
+    s.map.contigs, s.contigOrder, s.map.textureSize,
+  );
+
+  if (result.blocks.length === 0) {
+    ctx.showToast('No chromosome blocks detected');
+    return;
+  }
+
+  // Clear existing scaffolds
+  for (const sc of ctx.scaffoldManager.getAllScaffolds()) {
+    ctx.scaffoldManager.deleteScaffold(sc.id);
+  }
+
+  // Sort blocks by total pixel span (largest first) for naming
+  const sorted = [...result.blocks].sort((a, b) => {
+    let spanA = 0;
+    for (let j = a.startIndex; j <= a.endIndex; j++) {
+      const c = s.map!.contigs[s.contigOrder[j]];
+      spanA += c.pixelEnd - c.pixelStart;
+    }
+    let spanB = 0;
+    for (let j = b.startIndex; j <= b.endIndex; j++) {
+      const c = s.map!.contigs[s.contigOrder[j]];
+      spanB += c.pixelEnd - c.pixelStart;
+    }
+    return spanB - spanA;
+  });
+
+  // Create scaffolds and paint contigs
+  for (let i = 0; i < sorted.length; i++) {
+    const block = sorted[i];
+    const name = `Chr${i + 1}`;
+    const id = ctx.scaffoldManager.createScaffold(name);
+    const orderIndices: number[] = [];
+    for (let j = block.startIndex; j <= block.endIndex; j++) {
+      orderIndices.push(j);
+    }
+    ctx.scaffoldManager.paintContigs(orderIndices, id);
+  }
+
+  ctx.updateSidebarScaffoldList();
+  ctx.updateSidebarContigList();
+  ctx.showToast(`Auto-assigned ${sorted.length} scaffolds`);
+}
+
 export function updateSidebarScaffoldList(ctx: AppContext): void {
   const listEl = document.getElementById('scaffold-list');
   if (!listEl) return;
@@ -126,11 +179,17 @@ export function updateSidebarScaffoldList(ctx: AppContext): void {
   const activeId = ctx.scaffoldManager.getActiveScaffoldId();
 
   if (scaffolds.length === 0) {
-    listEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No scaffolds. Press N in scaffold mode to create one.</div>';
+    listEl.innerHTML = `
+      <div style="color: var(--text-secondary); font-size: 12px;">No scaffolds assigned.</div>
+      <button class="analysis-btn" id="btn-auto-scaffold" style="width:100%;margin:4px 0;">Auto-assign Scaffolds</button>
+    `;
+    document.getElementById('btn-auto-scaffold')?.addEventListener('click', () => {
+      autoAssignScaffolds(ctx);
+    });
     return;
   }
 
-  const html = scaffolds.map(sc => {
+  let html = scaffolds.map(sc => {
     const isActive = sc.id === activeId;
     const count = ctx.scaffoldManager.getContigsInScaffold(sc.id).length;
     return `<div class="contig-item ${isActive ? 'selected' : ''}" data-scaffold-id="${sc.id}">
@@ -139,6 +198,7 @@ export function updateSidebarScaffoldList(ctx: AppContext): void {
       <span class="contig-meta">${count} contigs</span>
     </div>`;
   }).join('');
+  html += `<button class="analysis-btn" id="btn-redetect-scaffold" style="width:100%;margin:4px 0;font-size:11px;">Re-detect Scaffolds</button>`;
 
   listEl.innerHTML = html;
 
@@ -152,6 +212,10 @@ export function updateSidebarScaffoldList(ctx: AppContext): void {
         ctx.showToast(`Active scaffold: ${sc?.name ?? ''}`);
       }
     });
+  });
+
+  document.getElementById('btn-redetect-scaffold')?.addEventListener('click', () => {
+    autoAssignScaffolds(ctx);
   });
 }
 

@@ -40,6 +40,8 @@ import type {
   SessionDecay,
   SessionScaffoldDecay,
 } from '../io/SessionManager';
+import { openCutReview } from './CutReviewPanel';
+import { autoAssignScaffolds } from './Sidebar';
 
 // ---------------------------------------------------------------------------
 // Cached state
@@ -63,13 +65,13 @@ const AUTO_RECOMPUTE_DELAY_MS = 1000;
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getOverviewSize(): number {
+export function getOverviewSize(): number {
   const s = state.get();
   if (!s.map?.contactMap) return 0;
   return Math.round(Math.sqrt(s.map.contactMap.length));
 }
 
-function buildContigRanges(): ContigRange[] {
+export function buildContigRanges(): ContigRange[] {
   const s = state.get();
   if (!s.map?.contactMap) return [];
   const overviewSize = getOverviewSize();
@@ -239,7 +241,7 @@ async function runCompartments(ctx: AppContext): Promise<void> {
 // Misassembly detection
 // ---------------------------------------------------------------------------
 
-function runMisassemblyDetection(ctx: AppContext): void {
+export function runMisassemblyDetection(ctx: AppContext): void {
   if (!cachedInsulation || !cachedCompartments) return;
   const s = state.get();
   if (!s.map) return;
@@ -658,12 +660,18 @@ function updateResultsDisplay(ctx: AppContext): void {
     }
   }
 
+  // Auto-assign scaffolds button (when P(s) computed but no scaffolds)
+  if (cachedDecay && ctx.scaffoldManager.getAllScaffolds().length === 0) {
+    html += `<button class="analysis-btn" id="btn-auto-scaffold-analysis" style="width:100%;margin:4px 0;">Auto-assign Scaffolds</button>`;
+  }
+
   // Misassembly summary + suggest cuts
   const flagCount = misassemblyFlags.getFlaggedCount();
   if (flagCount > 0) {
     html += `<div class="stats-row"><span>Misassemblies</span><span style="color:#e67e22;">${flagCount} contigs</span></div>`;
     const allFlags = misassemblyFlags.getAllFlags();
     html += `<button class="analysis-btn" id="btn-suggest-cuts" style="background:#e67e22;color:#fff;width:100%;margin:4px 0;">Suggest Cuts (${allFlags.length})</button>`;
+    html += `<button class="analysis-btn" id="btn-review-cuts" style="background:#2980b9;color:#fff;width:100%;margin:2px 0;">Review Cuts (${allFlags.length})</button>`;
     html += '<div id="cut-suggestions"></div>';
   }
 
@@ -713,6 +721,16 @@ function updateResultsDisplay(ctx: AppContext): void {
   // Wire suggest cuts button
   document.getElementById('btn-suggest-cuts')?.addEventListener('click', () => {
     showCutSuggestions(ctx);
+  });
+
+  // Wire review cuts button
+  document.getElementById('btn-review-cuts')?.addEventListener('click', () => {
+    openCutReview(ctx);
+  });
+
+  // Wire auto-assign scaffolds button
+  document.getElementById('btn-auto-scaffold-analysis')?.addEventListener('click', () => {
+    autoAssignScaffolds(ctx);
   });
 }
 
