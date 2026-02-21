@@ -1753,6 +1753,79 @@
       font-size: 12px;
     }
     .cut-skip-btn:hover { background: var(--border); }
+    .confidence-badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 600;
+      vertical-align: middle;
+    }
+    .progress-tau-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .progress-trend { font-size: 10px; margin-left: 4px; }
+    .progress-bar-container {
+      height: 6px;
+      background: var(--bg-surface);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    .progress-detail-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 2px;
+    }
+    .progress-set-ref-btn {
+      width: 100%;
+      margin-top: 4px;
+    }
+    .pattern-card {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      margin: 2px 0;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    .pattern-icon { font-size: 13px; flex-shrink: 0; }
+    .pattern-info { flex: 1; min-width: 0; }
+    .pattern-desc {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-primary);
+      font-size: 10px;
+    }
+    .pattern-strength { font-size: 10px; font-weight: 600; }
+    .pattern-nav-btn {
+      background: #8e44ad;
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+    .pattern-nav-btn:hover { background: #7d3c98; }
     .cut-accept-all-btn {
       width: 100%;
       background: #27ae60;
@@ -2126,6 +2199,12 @@
           <h3>3D Analysis</h3>
           <div id="analysis-content">
             <div style="color: var(--text-secondary); font-size: 12px;">No data loaded</div>
+          </div>
+        </div>
+        <div class="sidebar-section" id="progress-section" style="display:none">
+          <h3>Curation Progress</h3>
+          <div id="progress-content">
+            <div style="color: var(--text-secondary); font-size: 12px;">No reference set</div>
           </div>
         </div>
         <div class="sidebar-section">

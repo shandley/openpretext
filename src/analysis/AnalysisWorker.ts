@@ -11,6 +11,7 @@
 import { computeInsulation, type InsulationParams } from './InsulationScore';
 import { computeContactDecay, type ContactDecayParams } from './ContactDecay';
 import { computeCompartments, type CompartmentParams } from './CompartmentAnalysis';
+import { detectInversions, detectTranslocations, type DetectedPattern } from './PatternDetector';
 import type { ContigRange } from '../curation/AutoSort';
 
 // ---------------------------------------------------------------------------
@@ -42,7 +43,17 @@ export interface CompartmentRequest {
   params?: Partial<CompartmentParams>;
 }
 
-export type AnalysisRequest = InsulationRequest | DecayRequest | CompartmentRequest;
+export interface PatternRequest {
+  type: 'patterns';
+  id: number;
+  contactMap: Float32Array;
+  size: number;
+  contigRanges: ContigRange[];
+  inversionThreshold?: number;
+  translocationThreshold?: number;
+}
+
+export type AnalysisRequest = InsulationRequest | DecayRequest | CompartmentRequest | PatternRequest;
 
 export interface InsulationResponse {
   type: 'insulation';
@@ -74,6 +85,12 @@ export interface CompartmentResponse {
   eigenvalue: number;
 }
 
+export interface PatternResponse {
+  type: 'patterns';
+  id: number;
+  patterns: DetectedPattern[];
+}
+
 export interface ErrorResponse {
   type: 'error';
   id: number;
@@ -84,6 +101,7 @@ export type AnalysisResponse =
   | InsulationResponse
   | DecayResponse
   | CompartmentResponse
+  | PatternResponse
   | ErrorResponse;
 
 // ---------------------------------------------------------------------------
@@ -154,6 +172,22 @@ self.onmessage = (event: MessageEvent<AnalysisRequest>) => {
           response.eigenvector.buffer,
           response.normalizedEigenvector.buffer,
         ] as any);
+        break;
+      }
+
+      case 'patterns': {
+        const inversions = detectInversions(
+          msg.contactMap, msg.size, msg.contigRanges, msg.inversionThreshold,
+        );
+        const translocations = detectTranslocations(
+          msg.contactMap, msg.size, msg.contigRanges, msg.translocationThreshold,
+        );
+        const response: PatternResponse = {
+          type: 'patterns',
+          id: msg.id,
+          patterns: [...inversions, ...translocations],
+        };
+        self.postMessage(response);
         break;
       }
     }

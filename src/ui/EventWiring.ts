@@ -10,7 +10,7 @@ import { events } from '../core/EventBus';
 import { state } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { getContigBoundaries } from '../core/DerivedState';
-import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute } from './AnalysisPanel';
+import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel } from './AnalysisPanel';
 import { updateComparisonSummary } from './ComparisonMode';
 
 /**
@@ -33,6 +33,9 @@ export function setupEventListeners(ctx: AppContext): void {
       );
       ctx.comparisonVisible = false;
       contigExclusion.clearAll();
+      // Set progress reference to initial contig order
+      ctx.progressReference = [...s.contigOrder];
+      ctx.previousProgress = null;
     }
     ctx.updateStatsPanel();
 
@@ -67,6 +70,8 @@ export function refreshAfterCuration(ctx: AppContext): void {
   ctx.updateStatsPanel();
   ctx.updateUndoHistoryPanel();
   updateComparisonSummary(ctx);
+  // Update curation progress panel
+  updateProgressPanel(ctx);
   // Schedule debounced analysis recompute (insulation + P(s) only)
   scheduleAnalysisRecompute(ctx);
 }

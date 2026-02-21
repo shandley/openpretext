@@ -12,6 +12,7 @@ import type { CompartmentParams, CompartmentResult } from './CompartmentAnalysis
 import { computeInsulation } from './InsulationScore';
 import { computeContactDecay } from './ContactDecay';
 import { computeCompartments } from './CompartmentAnalysis';
+import { detectInversions, detectTranslocations, type DetectedPattern } from './PatternDetector';
 import type { ContigRange } from '../curation/AutoSort';
 import type {
   AnalysisRequest,
@@ -19,6 +20,7 @@ import type {
   InsulationResponse,
   DecayResponse,
   CompartmentResponse,
+  PatternResponse,
 } from './AnalysisWorker';
 
 // ---------------------------------------------------------------------------
@@ -194,6 +196,39 @@ export class AnalysisWorkerClient {
       }
     }
     return computeCompartments(contactMap, size, params);
+  }
+
+  /**
+   * Detect inversions and translocations in the worker.
+   * Falls back to synchronous if worker is unavailable.
+   */
+  async detectPatterns(
+    contactMap: Float32Array,
+    size: number,
+    contigRanges: ContigRange[],
+    inversionThreshold?: number,
+    translocationThreshold?: number,
+  ): Promise<DetectedPattern[]> {
+    if (!this.workerFailed && this.worker) {
+      try {
+        const id = this.nextId++;
+        const resp = await this.postRequest({
+          type: 'patterns',
+          id,
+          contactMap,
+          size,
+          contigRanges,
+          inversionThreshold,
+          translocationThreshold,
+        }) as PatternResponse;
+        return resp.patterns;
+      } catch {
+        // Fall through to synchronous
+      }
+    }
+    const inversions = detectInversions(contactMap, size, contigRanges, inversionThreshold);
+    const translocations = detectTranslocations(contactMap, size, contigRanges, translocationThreshold);
+    return [...inversions, ...translocations];
   }
 
   /**

@@ -113,6 +113,8 @@ class OpenPretextApp {
       comparisonInvertedSnapshot: null,
       comparisonVisible: false,
       tutorialManager: null,
+      progressReference: null,
+      previousProgress: null,
 
       // Cross-module callbacks
       showToast,

@@ -19,6 +19,7 @@ import type { TileManager } from '../renderer/TileManager';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import type { InteractionMode } from '../core/State';
 import type { TutorialManager } from './TutorialManager';
+import type { ProgressScore } from '../analysis/CurationProgress';
 
 export interface AppContext {
   // Renderers (readonly after init)
@@ -54,6 +55,8 @@ export interface AppContext {
   comparisonInvertedSnapshot: Map<number, boolean> | null;
   comparisonVisible: boolean;
   tutorialManager: TutorialManager | null;
+  progressReference: number[] | null;
+  previousProgress: ProgressScore | null;
 
   // Cross-module callbacks (readonly after init)
   readonly showToast: (message: string, duration?: number) => void;

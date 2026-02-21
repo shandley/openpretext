@@ -20,6 +20,17 @@ import type { ContigInfo } from '../core/State';
 
 export type MisassemblyReason = 'tad_boundary' | 'compartment_switch' | 'both';
 
+export type ConfidenceLevel = 'high' | 'medium' | 'low';
+
+export interface CutConfidence {
+  /** Composite score from 0 to 1. */
+  score: number;
+  /** Discretized level: high >= 0.7, medium >= 0.4, low < 0.4. */
+  level: ConfidenceLevel;
+  /** Per-component scores (each 0-1). */
+  components: { tad: number; compartment: number; decay: number };
+}
+
 export interface MisassemblyFlag {
   /** Position in contigOrder array. */
   orderIndex: number;
@@ -216,6 +227,8 @@ export interface CutSuggestion {
   reason: MisassemblyReason;
   /** Signal strength / confidence. */
   strength: number;
+  /** Composite confidence from multiple signals (populated by scoreCutConfidence). */
+  confidence?: CutConfidence;
 }
 
 /**
@@ -274,6 +287,121 @@ export function buildCutSuggestions(
   suggestions.sort((a, b) => b.orderIndex - a.orderIndex);
 
   return suggestions;
+}
+
+// ---------------------------------------------------------------------------
+// Confidence scoring
+// ---------------------------------------------------------------------------
+
+function confidenceLevel(score: number): ConfidenceLevel {
+  if (score >= 0.7) return 'high';
+  if (score >= 0.4) return 'medium';
+  return 'low';
+}
+
+/**
+ * Compute composite confidence scores for cut suggestions by fusing
+ * TAD boundary strength, compartment eigenvector delta, and local
+ * P(s) decay anomaly at each flag position.
+ *
+ * Weights: TAD 0.5, compartment 0.3, decay 0.2.
+ * Each component is normalized to 0-1 before weighting.
+ *
+ * Mutates each suggestion's `confidence` field in-place.
+ */
+export function scoreCutConfidence(
+  suggestions: CutSuggestion[],
+  flags: MisassemblyFlag[],
+  insulationScores: Float32Array | null,
+  eigenvector: Float32Array | null,
+  decayProfile: Float32Array | null,
+  contigRanges: ContigRange[],
+): void {
+  if (suggestions.length === 0) return;
+
+  // Build a lookup from (orderIndex, overviewPixel) → flag
+  const flagMap = new Map<string, MisassemblyFlag>();
+  for (const f of flags) {
+    flagMap.set(`${f.orderIndex}:${f.overviewPixel}`, f);
+  }
+
+  // Find max strength for normalization
+  let maxStrength = 0;
+  for (const f of flags) {
+    if (f.strength > maxStrength) maxStrength = f.strength;
+  }
+  if (maxStrength === 0) maxStrength = 1;
+
+  // Compute genome-wide mean decay slope if profile is available
+  let genomeMeanSlope = 0;
+  if (decayProfile && decayProfile.length > 2) {
+    let sum = 0, count = 0;
+    for (let i = 1; i < decayProfile.length; i++) {
+      if (decayProfile[i] > 0 && decayProfile[i - 1] > 0) {
+        sum += Math.abs(decayProfile[i] - decayProfile[i - 1]);
+        count++;
+      }
+    }
+    genomeMeanSlope = count > 0 ? sum / count : 0;
+  }
+
+  // Build range lookup by orderIndex
+  const rangeByOrder = new Map<number, ContigRange>();
+  for (const r of contigRanges) {
+    rangeByOrder.set(r.orderIndex, r);
+  }
+
+  for (const suggestion of suggestions) {
+    // Find the original flag for this suggestion
+    const range = rangeByOrder.get(suggestion.orderIndex);
+    if (!range) {
+      suggestion.confidence = { score: 0, level: 'low', components: { tad: 0, compartment: 0, decay: 0 } };
+      continue;
+    }
+
+    // Convert suggestion's pixel offset back to overview pixel
+    const contigFraction = suggestion.pixelOffset / Math.max(1, suggestion.strength); // approximate
+    // Use flag map with nearby matching
+    let matchedFlag: MisassemblyFlag | undefined;
+    for (const f of flags) {
+      if (f.orderIndex === suggestion.orderIndex) {
+        if (!matchedFlag || Math.abs(f.overviewPixel - ((range.start + range.end) / 2)) <
+            Math.abs(matchedFlag.overviewPixel - ((range.start + range.end) / 2))) {
+          matchedFlag = f;
+        }
+      }
+    }
+    const overviewPixel = matchedFlag?.overviewPixel ?? Math.round((range.start + range.end) / 2);
+
+    // TAD component: normalized flag strength
+    const tadScore = suggestion.strength / maxStrength;
+
+    // Compartment component: eigenvector delta at the flag position
+    let compScore = 0;
+    if (eigenvector && overviewPixel > 0 && overviewPixel < eigenvector.length) {
+      const delta = Math.abs(eigenvector[overviewPixel] - eigenvector[overviewPixel - 1]);
+      // Normalize: typical deltas range 0-2, use tanh for soft saturation
+      compScore = Math.tanh(delta * 2);
+    }
+
+    // Decay component: local slope anomaly vs genome-wide
+    let decayScore = 0;
+    if (decayProfile && overviewPixel > 0 && overviewPixel < decayProfile.length && genomeMeanSlope > 0) {
+      const localSlope = Math.abs(decayProfile[overviewPixel] - decayProfile[Math.max(0, overviewPixel - 1)]);
+      const anomaly = localSlope / genomeMeanSlope;
+      // Anomaly > 1 means steeper than average → more likely misassembly
+      decayScore = Math.min(1, Math.max(0, (anomaly - 0.5) / 2));
+    }
+
+    const score = 0.5 * tadScore + 0.3 * compScore + 0.2 * decayScore;
+    const clampedScore = Math.min(1, Math.max(0, score));
+
+    suggestion.confidence = {
+      score: clampedScore,
+      level: confidenceLevel(clampedScore),
+      components: { tad: tadScore, compartment: compScore, decay: decayScore },
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------

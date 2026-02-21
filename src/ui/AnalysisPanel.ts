@@ -30,6 +30,7 @@ import {
   detectMisassemblies,
   misassemblyToTrack,
   buildCutSuggestions,
+  scoreCutConfidence,
   type CutSuggestion,
 } from '../analysis/MisassemblyDetector';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
@@ -42,6 +43,8 @@ import type {
 } from '../io/SessionManager';
 import { openCutReview } from './CutReviewPanel';
 import { autoAssignScaffolds } from './Sidebar';
+import { computeProgress, computeTrend } from '../analysis/CurationProgress';
+import type { DetectedPattern } from '../analysis/PatternDetector';
 
 // ---------------------------------------------------------------------------
 // Cached state
@@ -53,6 +56,7 @@ let cachedInsulation: InsulationResult | null = null;
 let cachedCompartments: CompartmentResult | null = null;
 let cachedSuggestions: CutSuggestion[] | null = null;
 let cachedScaffoldDecay: ScaffoldDecayResult[] | null = null;
+let cachedPatterns: DetectedPattern[] | null = null;
 let insulationWindowSize = 10;
 let workerClient: AnalysisWorkerClient | null = null;
 let computing = false;
@@ -155,6 +159,7 @@ function setButtonsDisabled(disabled: boolean): void {
     'btn-compute-decay',
     'btn-compute-compartments',
     'btn-run-all-analysis',
+    'btn-detect-patterns',
   ];
   for (const id of ids) {
     const btn = document.getElementById(id) as HTMLButtonElement | null;
@@ -303,6 +308,19 @@ function showCutSuggestions(ctx: AppContext): void {
     flags, ranges, s.map.contigs, s.contigOrder,
   );
 
+  // Compute composite confidence scores
+  scoreCutConfidence(
+    cachedSuggestions,
+    flags,
+    cachedInsulation?.normalizedScores ?? null,
+    cachedCompartments?.eigenvector ?? null,
+    cachedInsulation?.normalizedScores ?? null,  // reuse insulation as decay proxy
+    ranges,
+  );
+
+  // Sort by confidence (highest first) instead of orderIndex
+  cachedSuggestions.sort((a, b) => (b.confidence?.score ?? 0) - (a.confidence?.score ?? 0));
+
   renderSuggestionCards(ctx);
 }
 
@@ -319,10 +337,17 @@ function renderSuggestionCards(ctx: AppContext): void {
     const reasonLabel =
       s.reason === 'both' ? 'TAD + compartment' :
       s.reason === 'tad_boundary' ? 'TAD boundary' : 'Compartment switch';
+    const conf = s.confidence;
+    const badgeColor = conf?.level === 'high' ? '#4caf50' :
+      conf?.level === 'medium' ? '#f39c12' : '#e94560';
+    const badgeLabel = conf ? `${Math.round(conf.score * 100)}%` : '';
+    const badgeTitle = conf
+      ? `Confidence: ${Math.round(conf.score * 100)}% (TAD: ${Math.round(conf.components.tad * 100)}%, Comp: ${Math.round(conf.components.compartment * 100)}%, Decay: ${Math.round(conf.components.decay * 100)}%)`
+      : '';
     html += `<div class="cut-suggestion-card" data-idx="${i}">
       <div class="cut-suggestion-info">
         <span class="cut-suggestion-name">${s.contigName}</span>
-        <span class="cut-suggestion-detail">${reasonLabel} \u00b7 offset ${s.pixelOffset}px \u00b7 strength ${s.strength.toFixed(2)}</span>
+        <span class="cut-suggestion-detail">${reasonLabel} \u00b7 offset ${s.pixelOffset}px${conf ? ` \u00b7 <span class="confidence-badge" style="background:${badgeColor}" title="${badgeTitle}">${badgeLabel}</span>` : ''}</span>
       </div>
       <div class="cut-suggestion-actions">
         <button class="cut-accept-btn" data-idx="${i}" title="Accept cut">\u2713</button>
@@ -842,6 +867,147 @@ export function getBaselineDecay(): ContactDecayResult | null {
 }
 
 // ---------------------------------------------------------------------------
+// Pattern detection
+// ---------------------------------------------------------------------------
+
+async function runPatternDetection(ctx: AppContext): Promise<void> {
+  const s = state.get();
+  if (!s.map?.contactMap) return;
+
+  const overviewSize = getOverviewSize();
+  const ranges = buildContigRanges();
+
+  cachedPatterns = await getClient().detectPatterns(
+    s.map.contactMap,
+    overviewSize,
+    ranges,
+  );
+
+  const inv = cachedPatterns.filter(p => p.type === 'inversion').length;
+  const trans = cachedPatterns.filter(p => p.type === 'translocation').length;
+  ctx.showToast(`Patterns: ${inv} inversions, ${trans} translocations`);
+
+  renderPatternCards(ctx);
+}
+
+function renderPatternCards(ctx: AppContext): void {
+  const container = document.getElementById('pattern-results');
+  if (!container) return;
+
+  if (!cachedPatterns || cachedPatterns.length === 0) {
+    container.innerHTML = cachedPatterns
+      ? '<div style="color: var(--text-secondary); font-size: 11px; padding: 4px 0;">No patterns detected</div>'
+      : '';
+    return;
+  }
+
+  const s = state.get();
+  const overviewSize = getOverviewSize();
+
+  let html = '';
+  for (let i = 0; i < cachedPatterns.length; i++) {
+    const p = cachedPatterns[i];
+    const icon = p.type === 'inversion' ? '\u{1F504}' : '\u2197\uFE0F';
+    const strengthPct = Math.round(p.strength * 100);
+    const strengthColor = strengthPct >= 70 ? '#4caf50' : strengthPct >= 40 ? '#f39c12' : '#e94560';
+    html += `<div class="pattern-card" data-pattern-idx="${i}">
+      <span class="pattern-icon">${icon}</span>
+      <div class="pattern-info">
+        <span class="pattern-desc">${p.description}</span>
+        <span class="pattern-strength" style="color:${strengthColor}">${strengthPct}%</span>
+      </div>
+      <button class="pattern-nav-btn" data-pattern-idx="${i}">Go</button>
+    </div>`;
+  }
+  container.innerHTML = html;
+
+  // Wire navigation buttons
+  container.querySelectorAll('.pattern-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt((btn as HTMLElement).dataset.patternIdx ?? '-1', 10);
+      if (idx < 0 || !cachedPatterns || !cachedPatterns[idx]) return;
+      const p = cachedPatterns[idx];
+      if (!s.map) return;
+
+      // Navigate camera to the pattern region
+      const midBin = (p.region.startBin + p.region.endBin) / 2;
+      const normPos = midBin / overviewSize;
+      const span = (p.region.endBin - p.region.startBin) / overviewSize;
+      const zoom = Math.min(10, 0.5 / Math.max(span, 0.01));
+      ctx.camera.animateTo({ x: normPos, y: normPos, zoom }, 300);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Curation progress panel
+// ---------------------------------------------------------------------------
+
+/**
+ * Update the curation progress sidebar section.
+ * Shows kendall tau, longest correct run, and trend indicators.
+ */
+export function updateProgressPanel(ctx: AppContext): void {
+  const el = document.getElementById('progress-content');
+  const section = document.getElementById('progress-section');
+  if (!el || !section) return;
+
+  const s = state.get();
+  if (!s.map || !ctx.progressReference) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = '';
+  const score = computeProgress(s.contigOrder, ctx.progressReference, s.undoStack.length);
+  const trend = computeTrend(score, ctx.previousProgress);
+  ctx.previousProgress = score;
+
+  // Map tau from [-1,1] to [0,100]%
+  const tauPct = Math.round(((score.kendallTau + 1) / 2) * 100);
+  const tauColor = tauPct >= 70 ? '#4caf50' : tauPct >= 40 ? '#f39c12' : '#e94560';
+
+  // Trend arrow
+  let trendIcon: string;
+  let trendColor: string;
+  if (trend.tauDelta > 0.001) {
+    trendIcon = '\u25B2'; trendColor = '#4caf50';
+  } else if (trend.tauDelta < -0.001) {
+    trendIcon = '\u25BC'; trendColor = '#e94560';
+  } else {
+    trendIcon = '\u2014'; trendColor = 'var(--text-secondary)';
+  }
+
+  el.innerHTML = `
+    <div class="progress-tau-row">
+      <span>Ordering</span>
+      <span style="color:${tauColor};font-weight:600;">${tauPct}%
+        <span class="progress-trend" style="color:${trendColor}">${trendIcon}</span>
+      </span>
+    </div>
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill" style="width:${tauPct}%;background:${tauColor}"></div>
+    </div>
+    <div class="progress-detail-row">
+      <span>Longest run</span>
+      <span>${score.longestRun}/${score.totalContigs} (${Math.round(score.longestRunPct)}%)</span>
+    </div>
+    <div class="progress-detail-row">
+      <span>Operations</span>
+      <span>${score.operationCount}</span>
+    </div>
+    <button class="analysis-btn progress-set-ref-btn" id="btn-set-progress-ref">Set Reference</button>
+  `;
+
+  document.getElementById('btn-set-progress-ref')?.addEventListener('click', () => {
+    ctx.progressReference = [...s.contigOrder];
+    ctx.previousProgress = null;
+    updateProgressPanel(ctx);
+    ctx.showToast('Progress reference updated to current order');
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Session persistence
 // ---------------------------------------------------------------------------
 
@@ -1018,6 +1184,8 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       <button class="analysis-btn" id="btn-compute-compartments">Compartments</button>
     </div>
     <button class="analysis-btn" id="btn-run-all-analysis" style="margin-bottom:6px;width:100%;">Compute All</button>
+    <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
+    <div id="pattern-results"></div>
     <div id="analysis-results">
       <div style="color: var(--text-secondary); font-size: 11px;">Computing...</div>
     </div>
@@ -1080,6 +1248,16 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       });
     }
   });
+  document.getElementById('btn-detect-patterns')?.addEventListener('click', () => {
+    if (!computing) {
+      computing = true;
+      setButtonsDisabled(true);
+      runPatternDetection(ctx).finally(() => {
+        computing = false;
+        setButtonsDisabled(false);
+      });
+    }
+  });
 
   // Auto-compute all analyses (async, in worker)
   computing = true;
@@ -1118,6 +1296,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedCompartments = null;
   cachedSuggestions = null;
   cachedScaffoldDecay = null;
+  cachedPatterns = null;
   healthScoreHistory.length = 0;
   misassemblyFlags.clearAll();
   ctx.trackRenderer.removeTrack('Insulation Score');
