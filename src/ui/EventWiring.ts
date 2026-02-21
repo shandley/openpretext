@@ -10,7 +10,7 @@ import { events } from '../core/EventBus';
 import { state } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { getContigBoundaries } from '../core/DerivedState';
-import { clearAnalysisTracks, runAllAnalyses } from './AnalysisPanel';
+import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute } from './AnalysisPanel';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -60,6 +60,8 @@ export function refreshAfterCuration(ctx: AppContext): void {
     ctx.metricsTracker.snapshot(s.map.contigs, s.contigOrder, s.undoStack.length);
   }
   ctx.updateStatsPanel();
+  // Schedule debounced analysis recompute (insulation + P(s) only)
+  scheduleAnalysisRecompute(ctx);
 }
 
 /**

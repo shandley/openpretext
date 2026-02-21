@@ -54,6 +54,10 @@ let cachedScaffoldDecay: ScaffoldDecayResult[] | null = null;
 let insulationWindowSize = 10;
 let workerClient: AnalysisWorkerClient | null = null;
 let computing = false;
+let autoRecomputeTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingRecompute = false;
+let autoRecomputing = false;
+const AUTO_RECOMPUTE_DELAY_MS = 1000;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -624,6 +628,9 @@ function updateResultsDisplay(ctx: AppContext): void {
 
   let html = '';
 
+  // Recomputing indicator (hidden by default, shown during auto-recompute)
+  html += '<div id="analysis-recomputing" class="analysis-recomputing" style="display:none;"><span class="recomputing-dot"></span> Updating analysis...</div>';
+
   // Health score card (top of results)
   const healthScore = buildHealthScore(ctx);
   if (healthScore) {
@@ -676,6 +683,9 @@ function updateResultsDisplay(ctx: AppContext): void {
   }
 
   el.innerHTML = html || '<div style="color: var(--text-secondary); font-size: 11px;">Click a button above to compute.</div>';
+
+  // Restore recomputing indicator if auto-recompute is in progress
+  if (autoRecomputing) showRecomputingIndicator(true);
 
   // Wire export buttons
   const overviewSize = getOverviewSize();
@@ -915,6 +925,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       runInsulation(ctx).finally(() => {
         computing = false;
         setButtonsDisabled(false);
+        drainPendingRecompute(ctx);
       });
     }
   });
@@ -925,6 +936,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       runDecay(ctx).finally(() => {
         computing = false;
         setButtonsDisabled(false);
+        drainPendingRecompute(ctx);
       });
     }
   });
@@ -935,6 +947,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       runCompartments(ctx).finally(() => {
         computing = false;
         setButtonsDisabled(false);
+        drainPendingRecompute(ctx);
       });
     }
   });
@@ -949,6 +962,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       ]).finally(() => {
         computing = false;
         setButtonsDisabled(false);
+        drainPendingRecompute(ctx);
       });
     }
   });
@@ -969,6 +983,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       baselineDecay = cachedDecay;
     }
     updateResultsDisplay(ctx);
+    drainPendingRecompute(ctx);
   });
 }
 
@@ -976,6 +991,13 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
  * Clear all analysis tracks and cached results.
  */
 export function clearAnalysisTracks(ctx: AppContext): void {
+  // Cancel any pending auto-recompute
+  if (autoRecomputeTimer !== null) {
+    clearTimeout(autoRecomputeTimer);
+    autoRecomputeTimer = null;
+  }
+  pendingRecompute = false;
+
   cachedDecay = null;
   baselineDecay = null;
   cachedInsulation = null;
@@ -988,4 +1010,72 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   ctx.trackRenderer.removeTrack('A/B Compartments');
   ctx.trackRenderer.removeTrack('Misassembly Flags');
   ctx.updateTrackConfigPanel();
+}
+
+// ---------------------------------------------------------------------------
+// Auto-recompute after curation (debounced)
+// ---------------------------------------------------------------------------
+
+function showRecomputingIndicator(visible: boolean): void {
+  const el = document.getElementById('analysis-recomputing');
+  if (el) el.style.display = visible ? 'flex' : 'none';
+}
+
+/**
+ * Schedule a debounced recompute of insulation + P(s) decay analysis.
+ * Called from refreshAfterCuration() after every curation operation.
+ * Only triggers if at least one analysis has been previously computed.
+ */
+export function scheduleAnalysisRecompute(ctx: AppContext): void {
+  if (!cachedInsulation && !cachedDecay) return;
+
+  if (autoRecomputeTimer !== null) {
+    clearTimeout(autoRecomputeTimer);
+  }
+
+  autoRecomputeTimer = setTimeout(() => {
+    autoRecomputeTimer = null;
+    triggerAutoRecompute(ctx);
+  }, AUTO_RECOMPUTE_DELAY_MS);
+}
+
+function drainPendingRecompute(ctx: AppContext): void {
+  if (pendingRecompute) {
+    pendingRecompute = false;
+    setTimeout(() => triggerAutoRecompute(ctx), 100);
+  }
+}
+
+async function triggerAutoRecompute(ctx: AppContext): Promise<void> {
+  if (computing) {
+    pendingRecompute = true;
+    return;
+  }
+
+  computing = true;
+  autoRecomputing = true;
+  setButtonsDisabled(true);
+  showRecomputingIndicator(true);
+
+  const hadInsulation = cachedInsulation !== null;
+  const tasks: Promise<void>[] = [];
+  if (cachedInsulation) tasks.push(runInsulation(ctx));
+  if (cachedDecay) tasks.push(runDecay(ctx));
+
+  await Promise.all(tasks).finally(() => {
+    if (hadInsulation && cachedInsulation && cachedCompartments) {
+      runMisassemblyDetection(ctx);
+    }
+    updateResultsDisplay(ctx);
+
+    computing = false;
+    autoRecomputing = false;
+    setButtonsDisabled(false);
+    showRecomputingIndicator(false);
+
+    if (pendingRecompute) {
+      pendingRecompute = false;
+      setTimeout(() => triggerAutoRecompute(ctx), 100);
+    }
+  });
 }

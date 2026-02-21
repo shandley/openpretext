@@ -94,7 +94,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1729 unit tests (vitest)
+  unit/                      1737 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -132,6 +132,7 @@ tests/
     misassembly-detector.test.ts  Misassembly detection + flag manager (24 tests)
     cut-suggestions.test.ts      Cut suggestion generation + pixel conversion (18 tests)
     health-score.test.ts         Composite health score computation (26 tests)
+    analysis-recompute.test.ts   Debounced auto-recompute after curation (8 tests)
   e2e/                       34 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
@@ -263,7 +264,9 @@ themselves. The undo stack is the source of truth for curation history.
   `EventWiring`. Buttons are disabled during computation and all three
   analyses run in parallel in the worker. Includes BedGraph/TSV export
   buttons, an inline P(s) decay SVG chart with comparative overlay
-  (baseline vs current), and a health score card.
+  (baseline vs current), a health score card, and debounced auto-recompute
+  of insulation + P(s) after curation operations (1s debounce, compartments
+  excluded).
 - **HealthScore**: Pure `computeHealthScore()` function combining four
   equally-weighted components (contiguity, P(s) decay quality, assembly
   integrity, compartment strength) into a 0–100 composite score. Used by
@@ -303,7 +306,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1729 tests must pass
+- Run `npm test` before committing; all 1737 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls

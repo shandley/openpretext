@@ -1730,6 +1730,20 @@
     }
     .scaffold-decay-row:last-child { border-bottom: none; }
 
+    /* Analysis recomputing indicator */
+    .analysis-recomputing {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: var(--text-secondary); padding: 4px 0;
+    }
+    .recomputing-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      animation: recomputePulse 1s ease-in-out infinite;
+    }
+    @keyframes recomputePulse {
+      0%, 100% { opacity: 0.3; } 50% { opacity: 1; }
+    }
+
     /* Track configuration */
     .track-config-item {
       padding: 6px 0;
