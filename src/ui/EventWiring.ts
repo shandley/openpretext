@@ -19,6 +19,7 @@ import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute } from '
 export function setupEventListeners(ctx: AppContext): void {
   events.on('file:loaded', () => {
     ctx.updateSidebarContigList();
+    ctx.updateSidebarScaffoldList();
     // Take initial metrics snapshot
     const s = state.get();
     if (s.map) {
