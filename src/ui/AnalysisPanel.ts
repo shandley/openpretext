@@ -60,6 +60,7 @@ let autoRecomputeTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingRecompute = false;
 let autoRecomputing = false;
 const AUTO_RECOMPUTE_DELAY_MS = 1000;
+const healthScoreHistory: number[] = [];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -634,13 +635,34 @@ function buildHealthScore(ctx: AppContext): HealthScoreResult | null {
   });
 }
 
+function renderSparkline(values: number[]): string {
+  if (values.length < 2) return '';
+  const w = 80, h = 24, pad = 2;
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
+    const y = h - pad - ((v - min) / range) * (h - 2 * pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const last = values[values.length - 1];
+  const color = last >= 70 ? '#4caf50' : last >= 40 ? '#f39c12' : '#e94560';
+  return `<svg class="health-sparkline" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/>
+  </svg>`;
+}
+
 function renderHealthScoreCard(score: HealthScoreResult): string {
+  // Track score in history
+  healthScoreHistory.push(score.overall);
   const color = score.overall >= 70 ? '#4caf50' :
     score.overall >= 40 ? '#f39c12' : '#e94560';
   const c = score.components;
+  const sparkline = renderSparkline(healthScoreHistory);
   return `<div class="health-score-card">
     <div class="health-score-value" style="color:${color}">${score.overall}</div>
     <div class="health-score-label">Health Score</div>
+    ${sparkline}
     <div class="health-score-breakdown">
       <span title="Contiguity (N50)">N50: ${Math.round(c.contiguity)}</span>
       <span title="P(s) decay quality">P(s): ${Math.round(c.decayQuality)}</span>
@@ -1096,6 +1118,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedCompartments = null;
   cachedSuggestions = null;
   cachedScaffoldDecay = null;
+  healthScoreHistory.length = 0;
   misassemblyFlags.clearAll();
   ctx.trackRenderer.removeTrack('Insulation Score');
   ctx.trackRenderer.removeTrack('TAD Boundaries');
