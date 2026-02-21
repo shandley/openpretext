@@ -217,6 +217,32 @@ async function runDecay(ctx: AppContext): Promise<void> {
   updateResultsDisplay(ctx);
 }
 
+/**
+ * Recompute per-scaffold P(s) decay from already-cached genome-wide decay.
+ * Called after scaffold assignment changes (e.g. auto-assign) to refresh
+ * the scaffold decay table without re-running the full decay computation.
+ */
+export function recomputeScaffoldDecay(ctx: AppContext): void {
+  if (!cachedDecay) return;
+
+  const s = state.get();
+  if (!s.map?.contactMap) return;
+
+  const overviewSize = getOverviewSize();
+  const ranges = buildContigRanges();
+  const scaffoldGroups = buildScaffoldGroups(ctx);
+
+  if (scaffoldGroups.length >= 2) {
+    cachedScaffoldDecay = computeDecayByScaffold(
+      s.map.contactMap, overviewSize, ranges, scaffoldGroups,
+    );
+  } else {
+    cachedScaffoldDecay = null;
+  }
+
+  updateResultsDisplay(ctx);
+}
+
 async function runCompartments(ctx: AppContext): Promise<void> {
   const s = state.get();
   if (!s.map?.contactMap) return;

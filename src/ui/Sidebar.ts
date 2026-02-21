@@ -9,6 +9,7 @@ import { contigExclusion } from '../curation/ContigExclusion';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { move } from '../curation/CurationEngine';
 import { detectChromosomeBlocks } from '../analysis/ScaffoldDetection';
+import { recomputeScaffoldDecay } from './AnalysisPanel';
 
 export function formatBp(bp: number): string {
   if (bp >= 1_000_000_000) return `${(bp / 1_000_000_000).toFixed(1)} Gb`;
@@ -169,6 +170,9 @@ export function autoAssignScaffolds(ctx: AppContext): void {
   ctx.updateSidebarScaffoldList();
   ctx.updateSidebarContigList();
   ctx.showToast(`Auto-assigned ${sorted.length} scaffolds`);
+
+  // Recompute per-scaffold P(s) decay from cached genome-wide decay
+  recomputeScaffoldDecay(ctx);
 }
 
 export function updateSidebarScaffoldList(ctx: AppContext): void {

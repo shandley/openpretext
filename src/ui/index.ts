@@ -89,7 +89,7 @@ export { setupAssessmentPanel } from './AssessmentPanel';
 export { togglePatternGallery, setupPatternGallery } from './PatternGallery';
 
 // AnalysisPanel
-export { setupAnalysisPanel, runAllAnalyses, clearAnalysisTracks } from './AnalysisPanel';
+export { setupAnalysisPanel, runAllAnalyses, clearAnalysisTracks, recomputeScaffoldDecay } from './AnalysisPanel';
 
 // CutReviewPanel
 export { openCutReview, closeCutReview, isCutReviewActive } from './CutReviewPanel';
