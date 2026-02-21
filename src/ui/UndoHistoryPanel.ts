@@ -153,6 +153,9 @@ export function updateUndoHistoryPanel(ctx: AppContext): void {
       const count = parseInt(htmlItem.dataset.count ?? '0', 10);
       if (count <= 0) return;
 
+      const verb = stack === 'undo' ? 'Undo' : 'Redo';
+      if (count > 10 && !confirm(`${verb} ${count} operations?`)) return;
+
       const fn = stack === 'undo' ? undo : redo;
       for (let k = 0; k < count; k++) fn();
       ctx.refreshAfterCuration();
