@@ -174,6 +174,9 @@ import {
   scheduleAnalysisRecompute,
   runAllAnalyses,
   clearAnalysisTracks,
+  snapshotBaseline,
+  resetBaseline,
+  getBaselineDecay,
 } from '../../src/ui/AnalysisPanel';
 import type { AppContext } from '../../src/ui/AppContext';
 
@@ -384,5 +387,90 @@ describe('scheduleAnalysisRecompute', () => {
 describe('integration: refreshAfterCuration triggers recompute', () => {
   it('scheduleAnalysisRecompute is exported and callable', () => {
     expect(typeof scheduleAnalysisRecompute).toBe('function');
+  });
+});
+
+describe('baseline decay management', () => {
+  let ctx: AppContext;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    ctx = createMockCtx();
+    mockComputeInsulation.mockClear();
+    mockComputeDecay.mockClear();
+    mockComputeCompartments.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    clearAnalysisTracks(ctx);
+  });
+
+  it('captures baseline on first runAllAnalyses', async () => {
+    expect(getBaselineDecay()).toBeNull();
+    await runAllAnalyses(ctx);
+    expect(getBaselineDecay()).not.toBeNull();
+    expect(getBaselineDecay()!.decayExponent).toBe(-1.1);
+  });
+
+  it('does not overwrite baseline on subsequent runAllAnalyses', async () => {
+    await runAllAnalyses(ctx);
+    const first = getBaselineDecay();
+
+    // Change mock to return different exponent
+    mockComputeDecay.mockResolvedValueOnce({
+      distances: Float64Array.from([1, 2, 3]),
+      meanContacts: Float64Array.from([0.5, 0.3, 0.2]),
+      logDistances: Float64Array.from([0, 0.301, 0.477]),
+      logContacts: Float64Array.from([-0.301, -0.523, -0.699]),
+      decayExponent: -1.5,
+      rSquared: 0.90,
+      maxDistance: 32,
+    });
+
+    await runAllAnalyses(ctx);
+    // Baseline should still be the first capture
+    expect(getBaselineDecay()).toBe(first);
+    expect(getBaselineDecay()!.decayExponent).toBe(-1.1);
+  });
+
+  it('clearAnalysisTracks clears baseline', async () => {
+    await runAllAnalyses(ctx);
+    expect(getBaselineDecay()).not.toBeNull();
+    clearAnalysisTracks(ctx);
+    expect(getBaselineDecay()).toBeNull();
+  });
+
+  it('snapshotBaseline captures current decay', async () => {
+    await runAllAnalyses(ctx);
+    clearAnalysisTracks(ctx);
+    expect(getBaselineDecay()).toBeNull();
+
+    // Re-run to get a new cachedDecay
+    await runAllAnalyses(ctx);
+    // Clear baseline only (not cachedDecay)
+    resetBaseline();
+    expect(getBaselineDecay()).toBeNull();
+
+    // Snapshot should capture the current cached decay
+    snapshotBaseline();
+    expect(getBaselineDecay()).not.toBeNull();
+    expect(getBaselineDecay()!.decayExponent).toBe(-1.1);
+  });
+
+  it('resetBaseline clears baseline without affecting decay', async () => {
+    await runAllAnalyses(ctx);
+    expect(getBaselineDecay()).not.toBeNull();
+    resetBaseline();
+    expect(getBaselineDecay()).toBeNull();
+    // Decay should still be computed (we can verify by snapshotting)
+    snapshotBaseline();
+    expect(getBaselineDecay()).not.toBeNull();
+  });
+
+  it('snapshotBaseline is a no-op when no decay is cached', () => {
+    clearAnalysisTracks(ctx);
+    snapshotBaseline();
+    expect(getBaselineDecay()).toBeNull();
   });
 });

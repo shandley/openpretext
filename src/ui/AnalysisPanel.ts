@@ -667,7 +667,26 @@ function updateResultsDisplay(ctx: AppContext): void {
 
   if (cachedDecay) {
     html += formatDecayStats(cachedDecay);
+
+    // Baseline comparison stats (when baseline differs from current)
+    const hasBaseline = baselineDecay != null && baselineDecay !== cachedDecay;
+    if (hasBaseline) {
+      const delta = cachedDecay.decayExponent - baselineDecay!.decayExponent;
+      const sign = delta >= 0 ? '+' : '';
+      const deltaColor = Math.abs(delta) < 0.05 ? '#4caf50' : '#f39c12';
+      html += `<div class="stats-row"><span>Baseline exponent</span><span style="color:var(--text-secondary)">${baselineDecay!.decayExponent.toFixed(2)}</span></div>`;
+      html += `<div class="stats-row"><span>\u0394 exponent</span><span style="color:${deltaColor}">${sign}${delta.toFixed(2)}</span></div>`;
+    }
+
     html += renderDecayChart(cachedDecay, baselineDecay, cachedScaffoldDecay);
+
+    // Baseline control buttons
+    html += '<div class="baseline-controls">';
+    if (hasBaseline) {
+      html += '<button class="analysis-btn" id="btn-reset-baseline">Clear Baseline</button>';
+    }
+    html += '<button class="analysis-btn" id="btn-snapshot-baseline">Snapshot Baseline</button>';
+    html += '</div>';
 
     // Per-scaffold exponent table
     if (cachedScaffoldDecay && cachedScaffoldDecay.length > 0) {
@@ -758,6 +777,20 @@ function updateResultsDisplay(ctx: AppContext): void {
   document.getElementById('btn-auto-scaffold-analysis')?.addEventListener('click', () => {
     autoAssignScaffolds(ctx);
   });
+
+  // Wire baseline control buttons
+  document.getElementById('btn-reset-baseline')?.addEventListener('click', () => {
+    baselineDecay = null;
+    updateResultsDisplay(ctx);
+    ctx.showToast('Baseline cleared');
+  });
+  document.getElementById('btn-snapshot-baseline')?.addEventListener('click', () => {
+    if (cachedDecay) {
+      baselineDecay = cachedDecay;
+      updateResultsDisplay(ctx);
+      ctx.showToast('Current P(s) saved as baseline');
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -769,6 +802,21 @@ function updateResultsDisplay(ctx: AppContext): void {
  */
 export function getHealthScore(ctx: AppContext): HealthScoreResult | null {
   return buildHealthScore(ctx);
+}
+
+/** Save the current P(s) decay as the comparison baseline. */
+export function snapshotBaseline(): void {
+  if (cachedDecay) baselineDecay = cachedDecay;
+}
+
+/** Clear the comparison baseline. */
+export function resetBaseline(): void {
+  baselineDecay = null;
+}
+
+/** Get the current baseline decay result (for testing). */
+export function getBaselineDecay(): ContactDecayResult | null {
+  return baselineDecay;
 }
 
 // ---------------------------------------------------------------------------
