@@ -103,7 +103,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     minimap: {} as any,
     camera: {} as any,
     dragReorder: {} as any,
-    scaffoldManager: {} as any,
+    scaffoldManager: { getAllScaffolds: () => [] } as any,
     waypointManager: {} as any,
     metricsTracker: {} as any,
     tileManager: null,

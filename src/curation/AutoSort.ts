@@ -781,18 +781,10 @@ export function hierarchicalChainMerge(
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the proposed contig ordering using Hi-C link scores
- * and Union Find chaining.
- *
- * @param contactMap - The overview contact map.
- * @param size - Contact map dimension.
- * @param contigs - Full contigs array from MapData.
- * @param contigOrder - Current contig ordering.
- * @param textureSize - The texture size from MapData.
- * @param params - Algorithm parameters.
- * @returns AutoSortResult with proposed chains.
+ * Core sort algorithm: link scoring → threshold → union-find → merge.
+ * No minimum-contig guard — usable for per-scaffold subsets of any size.
  */
-export function autoSort(
+export function autoSortCore(
   contactMap: Float32Array,
   size: number,
   contigs: ContigInfo[],
@@ -802,8 +794,35 @@ export function autoSort(
 ): AutoSortResult {
   const p = { ...DEFAULT_PARAMS, ...params };
 
-  // If there are very few contigs, the assembly is already near-chromosome-scale.
-  // AutoSort produces noise in this case — return each contig as its own chain.
+  const links = computeAllLinkScores(contactMap, size, contigs, contigOrder, textureSize, p);
+
+  let threshold = p.hardThreshold;
+  if (links.length > 0) {
+    const idx85 = Math.floor(links.length * 0.15);
+    const p85 = links[idx85]?.score ?? 0;
+    threshold = Math.min(p85, p.hardThreshold);
+  }
+
+  const initial = unionFindSort(links, contigOrder.length, threshold);
+  return hierarchicalChainMerge(initial, links, p.mergeThreshold ?? 0.05, threshold);
+}
+
+/**
+ * Compute the proposed contig ordering using Hi-C link scores
+ * and Union Find chaining.
+ *
+ * For assemblies with < 60 contigs, returns a trivial identity ordering
+ * (the algorithm is noise-prone at low contig counts). Use autoSortCore()
+ * to bypass this guard for per-scaffold sorting.
+ */
+export function autoSort(
+  contactMap: Float32Array,
+  size: number,
+  contigs: ContigInfo[],
+  contigOrder: number[],
+  textureSize: number,
+  params?: Partial<AutoSortParams>,
+): AutoSortResult {
   if (contigOrder.length < 60) {
     const trivialChains: ChainEntry[][] = contigOrder.map((_, idx) => [
       { orderIndex: idx, inverted: false }
@@ -815,20 +834,5 @@ export function autoSort(
     };
   }
 
-  // Compute all pairwise link scores
-  const links = computeAllLinkScores(contactMap, size, contigs, contigOrder, textureSize, p);
-
-  // Derive threshold: min of 85th percentile score and hard threshold
-  let threshold = p.hardThreshold;
-  if (links.length > 0) {
-    const idx85 = Math.floor(links.length * 0.15); // 85th percentile (sorted descending)
-    const p85 = links[idx85]?.score ?? 0;
-    threshold = Math.min(p85, p.hardThreshold);
-  }
-
-  // Run Union Find chaining
-  const initial = unionFindSort(links, contigOrder.length, threshold);
-
-  // Hierarchical chain merge replaces the old mergeSmallChains
-  return hierarchicalChainMerge(initial, links, p.mergeThreshold ?? 0.05, threshold);
+  return autoSortCore(contactMap, size, contigs, contigOrder, textureSize, params);
 }

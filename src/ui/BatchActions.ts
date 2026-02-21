@@ -14,6 +14,7 @@ import {
   batchInvertSelected,
   sortByLength,
   autoSortContigs,
+  scaffoldAwareAutoSort,
   autoCutContigs,
 } from '../curation/BatchOperations';
 
@@ -106,9 +107,14 @@ export function runAutoSort(ctx: AppContext): void {
   if (hardThreshold !== undefined && (isNaN(hardThreshold) || hardThreshold <= 0 || hardThreshold > 1)) {
     ctx.showToast('Invalid threshold'); return;
   }
-  ctx.showToast('Auto sorting...');
+
+  const hasScaffolds = ctx.scaffoldManager.getAllScaffolds().length >= 2;
+  ctx.showToast(hasScaffolds ? 'Sorting within scaffolds...' : 'Auto sorting...');
   setTimeout(() => {
-    const result = autoSortContigs(hardThreshold !== undefined ? { hardThreshold } : undefined);
+    const sortParams = hardThreshold !== undefined ? { hardThreshold } : undefined;
+    const result = hasScaffolds
+      ? scaffoldAwareAutoSort(ctx.scaffoldManager, sortParams)
+      : autoSortContigs(sortParams);
     ctx.refreshAfterCuration();
     ctx.showToast(result.description);
   }, 50);

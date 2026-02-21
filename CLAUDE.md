@@ -95,7 +95,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1762 unit tests (vitest)
+  unit/                      1769 unit tests (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -207,6 +207,9 @@ themselves. The undo stack is the source of truth for curation history.
   the order array for export pipelines. UI shows EXC badges in sidebar.
 - **BatchOperations**: All functions read from `state.get()` directly and call
   `CurationEngine` methods. They return `BatchResult` with operation counts.
+  `scaffoldAwareAutoSort(scaffoldManager, params?)` sorts contigs within each
+  scaffold independently using `autoSortCore()` (bypasses the 60-contig guard).
+  Falls back to global `autoSortContigs()` when < 2 scaffolds exist.
 - **QualityMetrics**: `MetricsTracker.snapshot()` is called in
   `refreshAfterCuration()` and on `file:loaded`. Stats panel reads `getSummary()`.
 - **BedGraphParser**: `bedGraphToTrack()` converts parsed data to `TrackConfig`

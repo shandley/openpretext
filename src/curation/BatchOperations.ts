@@ -14,7 +14,8 @@ import { CurationEngine } from './CurationEngine';
 import { state } from '../core/State';
 import type { ContigInfo } from '../core/State';
 import { autoCut, type AutoCutParams } from './AutoCut';
-import { autoSort, type AutoSortParams } from './AutoSort';
+import { autoSort, autoSortCore, type AutoSortParams } from './AutoSort';
+import type { ScaffoldManager } from './ScaffoldManager';
 
 export interface BatchResult {
   operationsPerformed: number;
@@ -432,6 +433,153 @@ export function autoSortContigs(params?: Partial<AutoSortParams>): BatchResult {
   return {
     operationsPerformed: opCount,
     description: `Auto sort: ${opCount} operation(s) (${result.chains.length} chain(s))`,
+    batchId,
+  };
+}
+
+/**
+ * Sort contigs within each scaffold independently, preserving scaffold
+ * boundaries. Falls back to global autoSort when no scaffolds exist.
+ *
+ * For each scaffold with >= 3 contigs, runs the AutoSort core algorithm
+ * on just that scaffold's contigs. Contigs in small scaffolds (< 3) and
+ * unscaffolded contigs are left in place.
+ */
+export function scaffoldAwareAutoSort(
+  scaffoldManager: ScaffoldManager,
+  params?: Partial<AutoSortParams>,
+): BatchResult {
+  const s = state.get();
+  if (!s.map) {
+    return { operationsPerformed: 0, description: 'No map loaded' };
+  }
+
+  const map = s.map;
+  if (!map.contactMap) {
+    return { operationsPerformed: 0, description: 'No contact map available' };
+  }
+
+  const scaffolds = scaffoldManager.getAllScaffolds();
+  if (scaffolds.length < 2) {
+    return autoSortContigs(params);
+  }
+
+  const overviewSize = map.contactMap.length === map.textureSize * map.textureSize
+    ? map.textureSize
+    : Math.round(Math.sqrt(map.contactMap.length));
+
+  const batchId = 'scaffold-autosort-' + Date.now();
+  const resolvedParams = { maxDiagonalDistance: 50, signalCutoff: 0.05, hardThreshold: 0.2, ...params };
+  state.setBatchContext(batchId, { algorithm: 'scaffold-autosort', algorithmParams: resolvedParams });
+
+  // Build per-scaffold proposed orderings
+  // Map from global order-index → { contigId, inverted }
+  const proposedAt = new Map<number, { contigId: number; inverted: boolean }>();
+  let scaffoldsSorted = 0;
+
+  // Collect unscaffolded contigs
+  const unscaffolded: number[] = [];
+  for (let i = 0; i < s.contigOrder.length; i++) {
+    const contigId = s.contigOrder[i];
+    if (map.contigs[contigId].scaffoldId === null) {
+      unscaffolded.push(i);
+    }
+  }
+
+  // Process each scaffold + unscaffolded group
+  const groups: Array<{ orderIndices: number[] }> = [];
+  for (const scaffold of scaffolds) {
+    const orderIndices = scaffoldManager.getContigsInScaffold(scaffold.id);
+    groups.push({ orderIndices });
+  }
+  if (unscaffolded.length > 0) {
+    groups.push({ orderIndices: unscaffolded });
+  }
+
+  for (const group of groups) {
+    const { orderIndices } = group;
+    if (orderIndices.length < 3) continue;
+
+    // Build sub-order: contig IDs at these positions
+    const subOrder = orderIndices.map(idx => s.contigOrder[idx]);
+
+    // Run core sort on this subset
+    const result = autoSortCore(
+      map.contactMap, overviewSize, map.contigs, subOrder, map.textureSize, params,
+    );
+
+    // Flatten chains → proposed sub-order
+    const proposed: Array<{ contigId: number; inverted: boolean }> = [];
+    for (const chain of result.chains) {
+      for (const entry of chain) {
+        proposed.push({
+          contigId: subOrder[entry.orderIndex],
+          inverted: entry.inverted,
+        });
+      }
+    }
+
+    // Map back to global positions: sorted contigs fill the same slots
+    const sortedPositions = [...orderIndices].sort((a, b) => a - b);
+    for (let k = 0; k < sortedPositions.length; k++) {
+      proposedAt.set(sortedPositions[k], proposed[k]);
+    }
+    scaffoldsSorted++;
+  }
+
+  // Build complete proposed order
+  const desiredOrder: Array<{ contigId: number; inverted: boolean }> = [];
+  for (let i = 0; i < s.contigOrder.length; i++) {
+    const entry = proposedAt.get(i);
+    if (entry) {
+      desiredOrder.push(entry);
+    } else {
+      // Keep in place (small scaffold or unscaffolded singleton)
+      desiredOrder.push({
+        contigId: s.contigOrder[i],
+        inverted: map.contigs[s.contigOrder[i]].inverted,
+      });
+    }
+  }
+
+  let opCount = 0;
+
+  // Phase 1: Apply inversions
+  for (const entry of desiredOrder) {
+    const contig = map.contigs[entry.contigId];
+    if (entry.inverted !== contig.inverted) {
+      const currentOrder = state.get().contigOrder;
+      const currentIdx = currentOrder.indexOf(entry.contigId);
+      if (currentIdx >= 0) {
+        CurationEngine.invert(currentIdx);
+        opCount++;
+      }
+    }
+  }
+
+  // Phase 2: Reorder via selection sort
+  const desiredContigIds = desiredOrder.map(e => e.contigId);
+  const working = [...state.get().contigOrder];
+  const n = working.length;
+
+  for (let i = 0; i < n; i++) {
+    const desired = desiredContigIds[i];
+    if (desired === undefined) continue;
+    const currentPos = working.indexOf(desired);
+
+    if (currentPos !== i && currentPos >= 0) {
+      CurationEngine.move(currentPos, i);
+      working.splice(currentPos, 1);
+      working.splice(i, 0, desired);
+      opCount++;
+    }
+  }
+
+  state.clearBatchContext();
+
+  return {
+    operationsPerformed: opCount,
+    description: `Scaffold sort: ${opCount} operation(s) across ${scaffoldsSorted} group(s)`,
     batchId,
   };
 }

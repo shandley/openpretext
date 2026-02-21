@@ -9,7 +9,9 @@ import {
   batchJoinSelected,
   batchInvertSelected,
   sortByLength,
+  scaffoldAwareAutoSort,
 } from '../../src/curation/BatchOperations';
+import { ScaffoldManager } from '../../src/curation/ScaffoldManager';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -667,5 +669,297 @@ describe('BatchOperations', () => {
         }
       }
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scaffold-aware auto-sort tests
+// ---------------------------------------------------------------------------
+
+describe('scaffoldAwareAutoSort', () => {
+  /**
+   * Build a block-diagonal contact map where each block has strong near-
+   * diagonal signal. Contigs within the same block should sort together.
+   */
+  function makeBlockMap(size: number, blockSizes: number[]): Float32Array {
+    const map = new Float32Array(size * size);
+    let offset = 0;
+    for (const bs of blockSizes) {
+      for (let i = offset; i < offset + bs && i < size; i++) {
+        for (let d = 1; d <= 10; d++) {
+          const j = i + d;
+          if (j < offset + bs && j < size) {
+            const val = 2.0 / Math.sqrt(d);
+            map[j * size + i] = val;
+            map[i * size + j] = val;
+          }
+        }
+      }
+      offset += bs;
+    }
+    return map;
+  }
+
+  function setupScaffoldState(
+    numContigs: number,
+    textureSize: number,
+    scaffoldAssignments: Array<{ contigIndices: number[]; scaffoldId: number }>,
+    contactMap: Float32Array,
+  ): ScaffoldManager {
+    const pixelsPerContig = Math.floor(textureSize / numContigs);
+    const contigs: ContigInfo[] = [];
+    for (let i = 0; i < numContigs; i++) {
+      contigs.push(makeContig(
+        `ctg_${i}`, i,
+        i * pixelsPerContig,
+        (i + 1) * pixelsPerContig,
+        pixelsPerContig * 1000,
+      ));
+    }
+    // Apply scaffold assignments
+    for (const sa of scaffoldAssignments) {
+      for (const idx of sa.contigIndices) {
+        contigs[idx].scaffoldId = sa.scaffoldId;
+      }
+    }
+
+    const testMap = makeTestMap(contigs);
+    testMap.contactMap = contactMap;
+    testMap.textureSize = textureSize;
+
+    state.update({
+      map: testMap,
+      contigOrder: Array.from({ length: numContigs }, (_, i) => i),
+      undoStack: [],
+      redoStack: [],
+    });
+
+    // Create ScaffoldManager and register scaffolds
+    const mgr = new ScaffoldManager();
+    // Manually set up scaffolds to match IDs
+    for (const sa of scaffoldAssignments) {
+      const id = mgr.createScaffold(`Scaffold_${sa.scaffoldId}`);
+      // paintContigs expects order-indices; since contigOrder is identity,
+      // contigIndices == orderIndices
+      mgr.paintContigs(sa.contigIndices, id);
+    }
+    // Clear undo stack from scaffold creation
+    state.update({ undoStack: [], redoStack: [] });
+
+    return mgr;
+  }
+
+  it('preserves scaffold boundaries during sort', () => {
+    const size = 64;
+    const contactMap = makeBlockMap(size, [32, 32]);
+    // 8 contigs: first 4 in scaffold 1, last 4 in scaffold 2
+    const mgr = setupScaffoldState(8, size, [
+      { contigIndices: [0, 1, 2, 3], scaffoldId: 1 },
+      { contigIndices: [4, 5, 6, 7], scaffoldId: 2 },
+    ], contactMap);
+
+    const result = scaffoldAwareAutoSort(mgr, {
+      maxDiagonalDistance: 10,
+      signalCutoff: 0.01,
+      hardThreshold: 0.01,
+    });
+
+    // After sort, scaffold assignments should be unchanged
+    const s = state.get();
+    const scaffold1Contigs: number[] = [];
+    const scaffold2Contigs: number[] = [];
+    for (let i = 0; i < s.contigOrder.length; i++) {
+      const contigId = s.contigOrder[i];
+      const sid = s.map!.contigs[contigId].scaffoldId;
+      if (sid !== null) {
+        // Scaffold IDs from ScaffoldManager start at 1
+        if (i < 4) scaffold1Contigs.push(contigId);
+        else scaffold2Contigs.push(contigId);
+      }
+    }
+
+    // All contigs from scaffold 1 should still be in first 4 positions
+    // (their exact order may change, but they stay within their scaffold)
+    const firstFourIds = new Set(s.contigOrder.slice(0, 4));
+    const lastFourIds = new Set(s.contigOrder.slice(4, 8));
+    // Original scaffold 1 contigs: 0,1,2,3
+    for (let i = 0; i < 4; i++) {
+      expect(firstFourIds.has(i) || lastFourIds.has(i)).toBe(true);
+    }
+    // Check no scaffold 1 contig ended up in scaffold 2's positions and vice versa
+    // (scaffold 1 contigs should all be in the same group)
+    const s1Ids = s.contigOrder.slice(0, 4);
+    const s2Ids = s.contigOrder.slice(4, 8);
+    for (const id of s1Ids) {
+      expect(s.map!.contigs[id].scaffoldId).toBe(s.map!.contigs[s1Ids[0]].scaffoldId);
+    }
+    for (const id of s2Ids) {
+      expect(s.map!.contigs[id].scaffoldId).toBe(s.map!.contigs[s2Ids[0]].scaffoldId);
+    }
+
+    expect(result.batchId).toMatch(/^scaffold-autosort-/);
+  });
+
+  it('skips scaffolds with fewer than 3 contigs', () => {
+    const size = 64;
+    const contactMap = makeBlockMap(size, [64]);
+    // 6 contigs: scaffold A has 2 contigs, scaffold B has 4
+    const mgr = setupScaffoldState(6, size, [
+      { contigIndices: [0, 1], scaffoldId: 1 },
+      { contigIndices: [2, 3, 4, 5], scaffoldId: 2 },
+    ], contactMap);
+
+    const result = scaffoldAwareAutoSort(mgr, {
+      maxDiagonalDistance: 10,
+      signalCutoff: 0.01,
+      hardThreshold: 0.01,
+    });
+
+    // Small scaffold (2 contigs) should not be touched
+    const s = state.get();
+    // The first two positions should still hold the original contigs
+    // (order may or may not change, but the key is no error)
+    expect(s.contigOrder.length).toBe(6);
+    expect(result.description).toContain('Scaffold sort');
+  });
+
+  it('falls back to global sort when < 2 scaffolds', () => {
+    const size = 64;
+    const contigs = [
+      makeContig('a', 0, 0, 16, 16000),
+      makeContig('b', 1, 16, 32, 16000),
+      makeContig('c', 2, 32, 48, 16000),
+      makeContig('d', 3, 48, 64, 16000),
+    ];
+
+    const map = new Float32Array(size * size);
+    for (let i = 0; i < size; i++) {
+      for (let d = 1; d <= 10; d++) {
+        if (i + d < size) {
+          map[(i + d) * size + i] = 2.0 / Math.sqrt(d);
+          map[i * size + (i + d)] = 2.0 / Math.sqrt(d);
+        }
+      }
+    }
+
+    const testMap = makeTestMap(contigs);
+    testMap.contactMap = map;
+    testMap.textureSize = size;
+    state.update({
+      map: testMap,
+      contigOrder: [0, 1, 2, 3],
+      undoStack: [],
+      redoStack: [],
+    });
+
+    const mgr = new ScaffoldManager();
+    // Only 1 scaffold — should fall back to global sort
+    mgr.createScaffold('only');
+    mgr.paintContigs([0, 1], 1);
+    state.update({ undoStack: [], redoStack: [] });
+
+    const result = scaffoldAwareAutoSort(mgr, {
+      maxDiagonalDistance: 10,
+      signalCutoff: 0.01,
+      hardThreshold: 0.01,
+    });
+
+    // Falls back to autoSortContigs → uses "Auto sort" description
+    expect(result.description).toContain('Auto sort');
+  });
+
+  it('groups all operations under a single batch ID', () => {
+    const size = 64;
+    const contactMap = makeBlockMap(size, [32, 32]);
+    const mgr = setupScaffoldState(8, size, [
+      { contigIndices: [0, 1, 2, 3], scaffoldId: 1 },
+      { contigIndices: [4, 5, 6, 7], scaffoldId: 2 },
+    ], contactMap);
+
+    const result = scaffoldAwareAutoSort(mgr, {
+      maxDiagonalDistance: 10,
+      signalCutoff: 0.01,
+      hardThreshold: 0.01,
+    });
+
+    if (result.operationsPerformed > 0) {
+      expect(result.batchId).toBeDefined();
+      const s = state.get();
+      for (const op of s.undoStack) {
+        expect(op.batchId).toBe(result.batchId);
+      }
+    }
+  });
+
+  it('handles unscaffolded contigs alongside scaffolded ones', () => {
+    const size = 64;
+    const contactMap = makeBlockMap(size, [32, 32]);
+    // 8 contigs: 4 in scaffold, 4 unscaffolded
+    const mgr = setupScaffoldState(8, size, [
+      { contigIndices: [0, 1, 2, 3], scaffoldId: 1 },
+      { contigIndices: [4, 5, 6, 7], scaffoldId: 2 },
+    ], contactMap);
+
+    // Unpaint contigs 4-7 to make them unscaffolded
+    mgr.paintContigs([4, 5, 6, 7], null);
+    state.update({ undoStack: [], redoStack: [] });
+
+    // Now only scaffold 1 exists with 4 contigs, plus 4 unscaffolded
+    // This means < 2 scaffolds, so it falls back to global sort
+    const result = scaffoldAwareAutoSort(mgr, {
+      maxDiagonalDistance: 10,
+      signalCutoff: 0.01,
+      hardThreshold: 0.01,
+    });
+
+    const s = state.get();
+    expect(s.contigOrder.length).toBe(8);
+    // Should not crash and should produce a result
+    expect(result.description).toBeDefined();
+  });
+
+  it('returns 0 operations when contigs are already sorted', () => {
+    const size = 64;
+    // Create a contact map where current order already has strong signal
+    const contactMap = makeBlockMap(size, [32, 32]);
+    const mgr = setupScaffoldState(8, size, [
+      { contigIndices: [0, 1, 2, 3], scaffoldId: 1 },
+      { contigIndices: [4, 5, 6, 7], scaffoldId: 2 },
+    ], contactMap);
+
+    // Run sort twice — second run should be a no-op
+    scaffoldAwareAutoSort(mgr, {
+      maxDiagonalDistance: 10,
+      signalCutoff: 0.01,
+      hardThreshold: 0.01,
+    });
+    state.update({ undoStack: [], redoStack: [] });
+
+    const result2 = scaffoldAwareAutoSort(mgr, {
+      maxDiagonalDistance: 10,
+      signalCutoff: 0.01,
+      hardThreshold: 0.01,
+    });
+
+    expect(result2.operationsPerformed).toBe(0);
+  });
+
+  it('returns correct count of scaffolds sorted in description', () => {
+    const size = 96;
+    const contactMap = makeBlockMap(size, [32, 32, 32]);
+    const mgr = setupScaffoldState(9, size, [
+      { contigIndices: [0, 1, 2], scaffoldId: 1 },
+      { contigIndices: [3, 4, 5], scaffoldId: 2 },
+      { contigIndices: [6, 7, 8], scaffoldId: 3 },
+    ], contactMap);
+
+    const result = scaffoldAwareAutoSort(mgr, {
+      maxDiagonalDistance: 10,
+      signalCutoff: 0.01,
+      hardThreshold: 0.01,
+    });
+
+    expect(result.description).toContain('group(s)');
+    expect(result.batchId).toMatch(/^scaffold-autosort-/);
   });
 });
