@@ -17,7 +17,7 @@ export { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 export { toggleShortcutsModal, setupShortcutsModal } from './ShortcutsModal';
 
 // Sidebar
-export { formatBp, updateSidebarContigList, updateSidebarScaffoldList, setupContigSearch, autoAssignScaffolds } from './Sidebar';
+export { formatBp, updateSidebarContigList, updateSidebarScaffoldList, setupContigSearch, autoAssignScaffolds, getContigColorMetric } from './Sidebar';
 
 // StatsPanel
 export { updateStatsPanel } from './StatsPanel';

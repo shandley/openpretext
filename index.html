@@ -1643,6 +1643,38 @@
       color: #fff;
     }
 
+    /* Drag-drop scaffold targets */
+    .drag-over-scaffold {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+      background: rgba(233, 69, 96, 0.15);
+    }
+    .scaffold-drop-zone {
+      padding: 6px 8px;
+      border: 1px dashed var(--border);
+      border-radius: 4px;
+      text-align: center;
+      margin-top: 4px;
+      transition: background 0.1s;
+    }
+    .scaffold-drop-zone.drag-over-scaffold {
+      border-color: var(--accent);
+      background: rgba(233, 69, 96, 0.15);
+    }
+
+    /* Contig color metric dropdown */
+    #contig-color-metric {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+
     /* Cut suggestion cards */
     .cut-suggestion-card {
       display: flex;
@@ -2003,6 +2035,12 @@
         <div class="sidebar-section">
           <h3>Contigs</h3>
           <input type="text" id="contig-search" placeholder="Search contigs...">
+          <select id="contig-color-metric">
+            <option value="none">Color: None</option>
+            <option value="length">Color: Length</option>
+            <option value="scaffold">Color: Scaffold</option>
+            <option value="misassembly">Color: Misassembly</option>
+          </select>
           <div id="contig-list"></div>
         </div>
         <div class="sidebar-section">
