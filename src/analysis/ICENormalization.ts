@@ -120,21 +120,21 @@ export function sinkhornKnopp(
   let iterations = 0;
   let maxDev = Infinity;
 
+  // Compute initial row sums once before the loop — O(n²)
+  let rowSums = new Float64Array(size);
+  for (let i = 0; i < size; i++) {
+    if (maskedBins.has(i)) continue;
+    let s = 0;
+    for (let j = 0; j < size; j++) {
+      if (!maskedBins.has(j)) {
+        s += matrix[i * size + j];
+      }
+    }
+    rowSums[i] = s;
+  }
+
   for (let iter = 0; iter < maxIterations; iter++) {
     iterations = iter + 1;
-
-    // Compute row sums of current matrix (excluding masked bins)
-    const rowSums = new Float64Array(size);
-    for (let i = 0; i < size; i++) {
-      if (maskedBins.has(i)) continue;
-      let s = 0;
-      for (let j = 0; j < size; j++) {
-        if (!maskedBins.has(j)) {
-          s += matrix[i * size + j];
-        }
-      }
-      rowSums[i] = s;
-    }
 
     // Compute per-bin correction factor: sqrt(rowSum)
     const correction = new Float64Array(size);
@@ -146,13 +146,19 @@ export function sinkhornKnopp(
       }
     }
 
-    // Apply correction: matrix[i][j] /= (correction[i] * correction[j])
+    // Fused pass: apply correction AND compute new row sums — single O(n²) pass
+    const newRowSums = new Float64Array(size);
     for (let i = 0; i < size; i++) {
       if (maskedBins.has(i)) continue;
+      const ci = correction[i];
+      let s = 0;
       for (let j = 0; j < size; j++) {
         if (maskedBins.has(j)) continue;
-        matrix[i * size + j] /= (correction[i] * correction[j]);
+        const idx = i * size + j;
+        matrix[idx] /= (ci * correction[j]);
+        s += matrix[idx];
       }
+      newRowSums[i] = s;
     }
 
     // Accumulate bias
@@ -160,20 +166,15 @@ export function sinkhornKnopp(
       bias[i] *= correction[i];
     }
 
-    // Check convergence: max |rowSum - 1|
+    // Check convergence from new row sums — O(n)
     maxDev = 0;
     for (let i = 0; i < size; i++) {
       if (maskedBins.has(i)) continue;
-      let s = 0;
-      for (let j = 0; j < size; j++) {
-        if (!maskedBins.has(j)) {
-          s += matrix[i * size + j];
-        }
-      }
-      const dev = Math.abs(s - 1.0);
+      const dev = Math.abs(newRowSums[i] - 1.0);
       if (dev > maxDev) maxDev = dev;
     }
 
+    rowSums = newRowSums;
     if (maxDev < epsilon) break;
   }
 
@@ -204,15 +205,21 @@ export function computeICENormalization(
     };
   }
 
+  // Sanitize NaN/Infinity values in input
+  const sanitized = Float32Array.from(contactMap);
+  for (let i = 0; i < sanitized.length; i++) {
+    if (!isFinite(sanitized[i])) sanitized[i] = 0;
+  }
+
   // Step 1: Row sums
-  const rowSums = computeRowSums(contactMap, size);
+  const rowSums = computeRowSums(sanitized, size);
 
   // Step 2: Filter low-coverage bins
   const maskedBins = filterLowCoverageBins(rowSums, p.sparseFilterQuantile);
   const maskedSet = new Set(maskedBins);
 
-  // Step 3: Copy matrix and run Sinkhorn-Knopp
-  const normalizedMatrix = Float32Array.from(contactMap);
+  // Step 3: Copy sanitized matrix and run Sinkhorn-Knopp
+  const normalizedMatrix = Float32Array.from(sanitized);
 
   // Zero out masked bins in the copy
   for (const bin of maskedBins) {

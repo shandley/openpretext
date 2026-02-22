@@ -45,6 +45,10 @@ import type {
   SessionAnalysisData,
   SessionDecay,
   SessionScaffoldDecay,
+  SessionICE,
+  SessionDirectionality,
+  SessionQuality,
+  SessionSaddle,
 } from '../io/SessionManager';
 import { openCutReview } from './CutReviewPanel';
 import { autoAssignScaffolds } from './Sidebar';
@@ -217,8 +221,9 @@ async function runDecay(ctx: AppContext): Promise<void> {
 
   const overviewSize = getOverviewSize();
   const ranges = buildContigRanges();
+  const contactMap = cachedNormalizedMap ?? s.map.contactMap;
   cachedDecay = await getClient().computeContactDecay(
-    s.map.contactMap,
+    contactMap,
     overviewSize,
     ranges,
   );
@@ -227,7 +232,7 @@ async function runDecay(ctx: AppContext): Promise<void> {
   const scaffoldGroups = buildScaffoldGroups(ctx);
   if (scaffoldGroups.length >= 2) {
     cachedScaffoldDecay = computeDecayByScaffold(
-      s.map.contactMap, overviewSize, ranges, scaffoldGroups,
+      contactMap, overviewSize, ranges, scaffoldGroups,
     );
   } else {
     cachedScaffoldDecay = null;
@@ -251,10 +256,11 @@ export function recomputeScaffoldDecay(ctx: AppContext): void {
   const overviewSize = getOverviewSize();
   const ranges = buildContigRanges();
   const scaffoldGroups = buildScaffoldGroups(ctx);
+  const contactMap = cachedNormalizedMap ?? s.map.contactMap;
 
   if (scaffoldGroups.length >= 2) {
     cachedScaffoldDecay = computeDecayByScaffold(
-      s.map.contactMap, overviewSize, ranges, scaffoldGroups,
+      contactMap, overviewSize, ranges, scaffoldGroups,
     );
   } else {
     cachedScaffoldDecay = null;
@@ -305,6 +311,12 @@ async function runICENormalization(ctx: AppContext): Promise<void> {
     const compTrack = compartmentToTrack(compResult, overviewSize, s.map.textureSize);
     ctx.trackRenderer.addTrack(compTrack);
     ctx.updateTrackConfigPanel();
+  }
+
+  // Re-run P(s) decay on normalized matrix if already computed
+  if (cachedDecay) {
+    await runDecay(ctx);
+    ctx.showToast('P(s) recomputed on ICE-normalized map');
   }
 
   updateResultsDisplay(ctx);
@@ -1240,7 +1252,8 @@ function sessionToDecay(s: SessionDecay): ContactDecayResult {
  * Returns null if no analysis has been computed.
  */
 export function exportAnalysisState(): SessionAnalysisData | null {
-  if (!cachedInsulation && !cachedDecay && !cachedCompartments) return null;
+  if (!cachedInsulation && !cachedDecay && !cachedCompartments
+      && !cachedICE && !cachedDI && !cachedQuality && !cachedSaddle) return null;
 
   const data: SessionAnalysisData = {
     insulationWindowSize,
@@ -1280,6 +1293,55 @@ export function exportAnalysisState(): SessionAnalysisData | null {
       decay: decayToSession(sr.decay),
       contigCount: sr.contigCount,
     }));
+  }
+
+  // ICE normalization (persist bias vector only — matrix re-derived on restore)
+  if (cachedICE) {
+    data.ice = {
+      biasVector: Array.from(cachedICE.biasVector),
+      maskedBins: [...cachedICE.maskedBins],
+      iterations: cachedICE.iterations,
+      maxDeviation: cachedICE.maxDeviation,
+    };
+  }
+
+  // Directionality index
+  if (cachedDI) {
+    data.directionality = {
+      diScores: Array.from(cachedDI.diScores),
+      normalizedScores: Array.from(cachedDI.normalizedScores),
+      boundaries: [...cachedDI.boundaries],
+      strengths: [...cachedDI.strengths],
+    };
+  }
+
+  // Hi-C quality metrics
+  if (cachedQuality) {
+    data.quality = {
+      cisTransRatio: cachedQuality.cisTransRatio,
+      cisPercentage: cachedQuality.cisPercentage,
+      longShortRatio: cachedQuality.longShortRatio,
+      contactDensity: cachedQuality.contactDensity,
+      perContigCisRatio: Array.from(cachedQuality.perContigCisRatio),
+      perScaffoldCis: cachedQuality.perScaffoldCis.map(psc => ({
+        scaffoldId: psc.scaffoldId,
+        name: psc.name,
+        cisRatio: psc.cisRatio,
+        contactCount: psc.contactCount,
+      })),
+      flaggedContigs: [...cachedQuality.flaggedContigs],
+    };
+  }
+
+  // Saddle plot
+  if (cachedSaddle) {
+    data.saddle = {
+      saddleMatrix: Array.from(cachedSaddle.saddleMatrix),
+      nBins: cachedSaddle.nBins,
+      strength: cachedSaddle.strength,
+      strengthProfile: Array.from(cachedSaddle.strengthProfile),
+      binEdges: Array.from(cachedSaddle.binEdges),
+    };
   }
 
   return data;
@@ -1337,6 +1399,81 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
     };
     const track = compartmentToTrack(cachedCompartments, overviewSize, s.map.textureSize);
     ctx.trackRenderer.addTrack(track);
+  }
+
+  // Restore ICE normalization (re-derive normalized matrix from bias vector)
+  if (data.ice && s.map.contactMap) {
+    const biasVector = Float32Array.from(data.ice.biasVector);
+    const normalizedMatrix = Float32Array.from(s.map.contactMap);
+    const iceSize = biasVector.length;
+    for (let i = 0; i < iceSize; i++) {
+      for (let j = 0; j < iceSize; j++) {
+        const bi = biasVector[i];
+        const bj = biasVector[j];
+        if (bi > 0 && bj > 0) {
+          normalizedMatrix[i * iceSize + j] /= (bi * bj);
+        } else {
+          normalizedMatrix[i * iceSize + j] = 0;
+        }
+      }
+    }
+    cachedICE = {
+      biasVector,
+      normalizedMatrix,
+      maskedBins: [...data.ice.maskedBins],
+      iterations: data.ice.iterations,
+      maxDeviation: data.ice.maxDeviation,
+    };
+    cachedNormalizedMap = normalizedMatrix;
+    const iceTrack = iceToTrack(cachedICE, overviewSize, s.map.textureSize);
+    ctx.trackRenderer.addTrack(iceTrack);
+  }
+
+  // Restore directionality index
+  if (data.directionality) {
+    cachedDI = {
+      diScores: Float32Array.from(data.directionality.diScores),
+      normalizedScores: Float32Array.from(data.directionality.normalizedScores),
+      boundaries: [...data.directionality.boundaries],
+      strengths: [...data.directionality.strengths],
+    };
+    const { diTrack, diBoundaryTrack } = directionalityToTracks(
+      cachedDI, overviewSize, s.map.textureSize,
+    );
+    ctx.trackRenderer.addTrack(diTrack);
+    ctx.trackRenderer.addTrack(diBoundaryTrack);
+  }
+
+  // Restore quality metrics
+  if (data.quality) {
+    cachedQuality = {
+      cisTransRatio: data.quality.cisTransRatio,
+      cisPercentage: data.quality.cisPercentage,
+      longShortRatio: data.quality.longShortRatio,
+      contactDensity: data.quality.contactDensity,
+      perContigCisRatio: Float32Array.from(data.quality.perContigCisRatio),
+      perScaffoldCis: data.quality.perScaffoldCis.map(psc => ({
+        scaffoldId: psc.scaffoldId,
+        name: psc.name,
+        cisRatio: psc.cisRatio,
+        contactCount: psc.contactCount,
+      })),
+      flaggedContigs: [...data.quality.flaggedContigs],
+    };
+    const ranges = buildContigRanges();
+    const qTrack = qualityToTrack(cachedQuality, ranges, overviewSize, s.map.textureSize);
+    ctx.trackRenderer.addTrack(qTrack);
+  }
+
+  // Restore saddle plot
+  if (data.saddle) {
+    cachedSaddle = {
+      saddleMatrix: Float32Array.from(data.saddle.saddleMatrix),
+      nBins: data.saddle.nBins,
+      strength: data.saddle.strength,
+      strengthProfile: Float32Array.from(data.saddle.strengthProfile),
+      binEdges: Float32Array.from(data.saddle.binEdges),
+    };
   }
 
   // Re-derive misassembly detection from restored insulation + compartments

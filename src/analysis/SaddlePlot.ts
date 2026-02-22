@@ -49,6 +49,22 @@ const DEFAULT_PARAMS: SaddleParams = {
 // ---------------------------------------------------------------------------
 
 /**
+ * Compute sorted finite values and quantile thresholds from an eigenvector.
+ * Returns { sorted, lo, hi } or null if no valid data.
+ */
+function computeQuantileThresholds(
+  eigenvector: Float32Array,
+  qRange: [number, number],
+): { sorted: number[]; lo: number; hi: number } | null {
+  const sorted = Array.from(eigenvector).filter(v => isFinite(v)).sort((a, b) => a - b);
+  if (sorted.length === 0) return null;
+
+  const lo = sorted[Math.floor(qRange[0] * sorted.length)];
+  const hi = sorted[Math.min(sorted.length - 1, Math.ceil(qRange[1] * sorted.length))];
+  return { sorted, lo, hi };
+}
+
+/**
  * Assign each bin to a quantile rank based on eigenvector values.
  * Returns an array of quantile bin indices (0 to nBins-1).
  * Bins outside qRange or with NaN eigenvector get -1 (excluded).
@@ -63,14 +79,11 @@ export function digitizeBins(
 
   if (n === 0) return assignments;
 
-  // Sort eigenvector values to get quantile edges
-  const sorted = Array.from(eigenvector).filter(v => isFinite(v)).sort((a, b) => a - b);
-  if (sorted.length === 0) return assignments;
+  const thresholds = computeQuantileThresholds(eigenvector, qRange);
+  if (!thresholds) return assignments;
 
-  const lo = sorted[Math.floor(qRange[0] * sorted.length)];
-  const hi = sorted[Math.min(sorted.length - 1, Math.ceil(qRange[1] * sorted.length))];
+  const { lo, hi } = thresholds;
   const range = hi - lo;
-
   if (range <= 0) return assignments;
 
   for (let i = 0; i < n; i++) {
@@ -148,10 +161,10 @@ export function computeSaddlePlot(
     saddleMatrix[i] = saddleCounts[i] > 0 ? saddleSums[i] / saddleCounts[i] : 0;
   }
 
-  // Compute bin edges for reference
-  const sorted = Array.from(eigenvector).filter(v => isFinite(v)).sort((a, b) => a - b);
-  const lo = sorted.length > 0 ? sorted[Math.floor(qRange[0] * sorted.length)] : 0;
-  const hi = sorted.length > 0 ? sorted[Math.min(sorted.length - 1, Math.ceil(qRange[1] * sorted.length))] : 1;
+  // Compute bin edges for reference (reuses quantile thresholds)
+  const thresholds = computeQuantileThresholds(eigenvector, qRange);
+  const lo = thresholds ? thresholds.lo : 0;
+  const hi = thresholds ? thresholds.hi : 1;
   const binEdges = new Float32Array(nBins + 1);
   for (let i = 0; i <= nBins; i++) {
     binEdges[i] = lo + (i / nBins) * (hi - lo);

@@ -252,6 +252,22 @@ describe('computeICENormalization', () => {
     expect(result.iterations).toBeGreaterThan(0);
   });
 
+  it('sanitizes NaN values in input matrix', () => {
+    const size = 4;
+    const m = buildUniformMap(size, 1);
+    m[0] = NaN;
+    m[5] = Infinity;
+    m[10] = -Infinity;
+    const result = computeICENormalization(m, size, { sparseFilterQuantile: 0 });
+    // Should not produce NaN in output
+    for (let i = 0; i < result.normalizedMatrix.length; i++) {
+      expect(isFinite(result.normalizedMatrix[i])).toBe(true);
+    }
+    for (let i = 0; i < result.biasVector.length; i++) {
+      expect(isFinite(result.biasVector[i])).toBe(true);
+    }
+  });
+
   it('respects maxIterations param', () => {
     const size = 8;
     const m = buildDiagonalDecay(size);

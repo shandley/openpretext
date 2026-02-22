@@ -13,6 +13,10 @@ import type {
   SessionData,
   SessionWaypoint,
   SessionAnalysisData,
+  SessionICE,
+  SessionDirectionality,
+  SessionQuality,
+  SessionSaddle,
   WaypointManagerLike,
 } from '../../src/io/SessionManager';
 
@@ -962,6 +966,251 @@ describe('analysis persistence', () => {
       const typed = Float32Array.from(original);
       const back = Array.from(typed);
       expect(back).toEqual(original);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// New analysis persistence (ICE, Directionality, Quality, Saddle)
+// ---------------------------------------------------------------------------
+
+function makeValidICE(): SessionICE {
+  return {
+    biasVector: [1.2, 0.8, 1.1, 0.9],
+    maskedBins: [2],
+    iterations: 10,
+    maxDeviation: 0.0001,
+  };
+}
+
+function makeValidDirectionality(): SessionDirectionality {
+  return {
+    diScores: [0.5, -0.3, 0.2, -0.1],
+    normalizedScores: [0.75, 0.35, 0.6, 0.45],
+    boundaries: [1, 3],
+    strengths: [0.8, 0.6],
+  };
+}
+
+function makeValidQuality(): SessionQuality {
+  return {
+    cisTransRatio: 0.85,
+    cisPercentage: 85.0,
+    longShortRatio: 2.5,
+    contactDensity: 0.15,
+    perContigCisRatio: [0.9, 0.8, 0.7],
+    perScaffoldCis: [
+      { scaffoldId: 0, name: 'Chr1', cisRatio: 0.9, contactCount: 1000 },
+    ],
+    flaggedContigs: [2],
+  };
+}
+
+function makeValidSaddle(): SessionSaddle {
+  return {
+    saddleMatrix: [1.2, 0.8, 0.8, 1.3],
+    nBins: 2,
+    strength: 1.5,
+    strengthProfile: [1.1, 1.2],
+    binEdges: [-1, 0, 1],
+  };
+}
+
+describe('new analysis persistence (ICE, DI, Quality, Saddle)', () => {
+  describe('validation', () => {
+    it('accepts session with ICE field', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ ice: makeValidICE() }),
+      });
+      expect(validateSession(data)).toBe(true);
+    });
+
+    it('accepts session with directionality field', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ directionality: makeValidDirectionality() }),
+      });
+      expect(validateSession(data)).toBe(true);
+    });
+
+    it('accepts session with quality field', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ quality: makeValidQuality() }),
+      });
+      expect(validateSession(data)).toBe(true);
+    });
+
+    it('accepts session with saddle field', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ saddle: makeValidSaddle() }),
+      });
+      expect(validateSession(data)).toBe(true);
+    });
+
+    it('accepts session with all new analysis fields', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({
+          ice: makeValidICE(),
+          directionality: makeValidDirectionality(),
+          quality: makeValidQuality(),
+          saddle: makeValidSaddle(),
+        }),
+      });
+      expect(validateSession(data)).toBe(true);
+    });
+
+    it('rejects ICE with NaN in biasVector', () => {
+      const ice = makeValidICE();
+      ice.biasVector = [1.0, NaN, 0.9];
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ ice }),
+      });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects ICE with negative maskedBins entry', () => {
+      const ice = makeValidICE();
+      ice.maskedBins = [-1];
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ ice }),
+      });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects ICE with non-finite iterations', () => {
+      const ice = makeValidICE();
+      ice.iterations = Infinity;
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ ice }),
+      });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects directionality with non-array diScores', () => {
+      const di = makeValidDirectionality();
+      (di as any).diScores = 'bad';
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ directionality: di }),
+      });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects quality with NaN cisTransRatio', () => {
+      const q = makeValidQuality();
+      q.cisTransRatio = NaN;
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ quality: q }),
+      });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects quality with invalid perScaffoldCis entry', () => {
+      const q = makeValidQuality();
+      (q.perScaffoldCis as any) = [{ scaffoldId: 'bad' }];
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ quality: q }),
+      });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects saddle with negative nBins', () => {
+      const s = makeValidSaddle();
+      s.nBins = -1;
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ saddle: s }),
+      });
+      expect(validateSession(data)).toBe(false);
+    });
+
+    it('rejects saddle with NaN in saddleMatrix', () => {
+      const s = makeValidSaddle();
+      s.saddleMatrix = [1.0, NaN];
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ saddle: s }),
+      });
+      expect(validateSession(data)).toBe(false);
+    });
+  });
+
+  describe('round-trip serialization', () => {
+    it('round-trips ICE data', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ ice: makeValidICE() }),
+      });
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis!.ice).toBeDefined();
+      expect(restored.analysis!.ice!.biasVector).toEqual([1.2, 0.8, 1.1, 0.9]);
+      expect(restored.analysis!.ice!.maskedBins).toEqual([2]);
+      expect(restored.analysis!.ice!.iterations).toBe(10);
+    });
+
+    it('round-trips directionality data', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ directionality: makeValidDirectionality() }),
+      });
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis!.directionality).toBeDefined();
+      expect(restored.analysis!.directionality!.boundaries).toEqual([1, 3]);
+    });
+
+    it('round-trips quality data', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ quality: makeValidQuality() }),
+      });
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis!.quality).toBeDefined();
+      expect(restored.analysis!.quality!.cisTransRatio).toBe(0.85);
+      expect(restored.analysis!.quality!.perScaffoldCis[0].name).toBe('Chr1');
+    });
+
+    it('round-trips saddle data', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({ saddle: makeValidSaddle() }),
+      });
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis!.saddle).toBeDefined();
+      expect(restored.analysis!.saddle!.strength).toBe(1.5);
+      expect(restored.analysis!.saddle!.nBins).toBe(2);
+    });
+
+    it('round-trips all new fields together', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData({
+          ice: makeValidICE(),
+          directionality: makeValidDirectionality(),
+          quality: makeValidQuality(),
+          saddle: makeValidSaddle(),
+        }),
+      });
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis!.ice).toBeDefined();
+      expect(restored.analysis!.directionality).toBeDefined();
+      expect(restored.analysis!.quality).toBeDefined();
+      expect(restored.analysis!.saddle).toBeDefined();
+    });
+
+    it('backward compat: old sessions without new fields load fine', () => {
+      const data = makeValidSessionData({
+        analysis: makeValidAnalysisData(),
+      });
+      // Ensure no new fields
+      delete (data.analysis as any).ice;
+      delete (data.analysis as any).directionality;
+      delete (data.analysis as any).quality;
+      delete (data.analysis as any).saddle;
+      const json = JSON.stringify(data);
+      const restored = importSession(json);
+      expect(restored.analysis!.ice).toBeUndefined();
+      expect(restored.analysis!.directionality).toBeUndefined();
+      expect(restored.analysis!.quality).toBeUndefined();
+      expect(restored.analysis!.saddle).toBeUndefined();
+      // Original fields still present
+      expect(restored.analysis!.insulation).toBeDefined();
+      expect(restored.analysis!.decay).toBeDefined();
     });
   });
 });

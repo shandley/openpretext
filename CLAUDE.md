@@ -18,6 +18,7 @@ src/
   core/
     State.ts                 Global AppState with undo/redo stacks
     EventBus.ts              Typed event emitter for inter-module comms
+    DerivedState.ts          Computed state selectors
   formats/
     PretextParser.ts         Binary .pretext parser (BC4 + deflate)
     SyntheticData.ts         Demo contact map generator
@@ -43,6 +44,8 @@ src/
     WaypointManager.ts       Named position markers
     ContigExclusion.ts       Set-based contig hide/exclude management
     MisassemblyFlags.ts      Singleton manager for flagged misassembly contigs
+    AutoCut.ts               Diagonal signal breakpoint detection
+    AutoSort.ts              Union Find link scoring and chaining
     BatchOperations.ts       Batch select/cut/join/invert/sort operations
     QualityMetrics.ts        N50/L50/N90/L90 assembly statistics + tracking
     OrderingMetrics.ts       Shared pure-math ordering metrics (kendallTau, ARI)
@@ -50,9 +53,16 @@ src/
     InsulationScore.ts       Insulation score + TAD boundary detection
     ContactDecay.ts          P(s) contact decay curve + exponent fitting
     CompartmentAnalysis.ts   A/B compartment eigenvector (O/E + PCA)
+    ICENormalization.ts      ICE (Sinkhorn-Knopp) matrix balancing
+    DirectionalityIndex.ts   Directionality index + TAD boundary detection
+    HiCQualityMetrics.ts     Library quality (cis/trans, short/long, density)
+    SaddlePlot.ts            Saddle plot (compartment strength visualization)
+    Virtual4C.ts             Virtual 4C locus contact profiling
     MisassemblyDetector.ts   TAD/compartment-based chimeric contig detection
     HealthScore.ts           Composite assembly quality score (0–100)
     ScaffoldDetection.ts     Auto-detect chromosome blocks from block-diagonal
+    PatternDetector.ts       Inversion + translocation detection algorithms
+    CurationProgress.ts      Real-time ordering progress scoring + trends
     AnalysisWorker.ts        Background Web Worker for analysis computation
     AnalysisWorkerClient.ts  Promise-based main-thread worker client
   ai/
@@ -78,6 +88,23 @@ src/
     CurationLog.ts           JSON operation history export
   io/
     SessionManager.ts        Session save/load (JSON with undo stack + analysis)
+  ui/                        35 UI modules (pure DOM, no framework)
+    AppContext.ts             Shared context object passed between UI modules
+    EventWiring.ts           Event subscriptions + refresh-after-curation logic
+    AnalysisPanel.ts         3D analysis sidebar (compute, export, health, patterns)
+    Sidebar.ts               Contig list, scaffold panel, sidebar sections
+    StatsPanel.ts            Assembly metrics display
+    CutReviewPanel.ts        Step-by-step guided cut review
+    UndoHistoryPanel.ts      Undo history list with expandable entries
+    CommandPalette.ts        Cmd+K fuzzy search command palette
+    KeyboardShortcuts.ts     Global keyboard shortcut handler
+    ModeManager.ts           Navigate/Edit/Scaffold/Waypoint mode switching
+    BatchActions.ts          Batch operation UI (select by pattern/size)
+    FileLoading.ts           File open, drag-drop, FASTA/BedGraph loading
+    AIAssistPanel.ts         AI curation assistant panel
+    AIFeedbackUI.ts          Per-suggestion thumbs up/down UI
+    ComparisonMode.ts        Original vs curated boundary overlay
+    index.ts                 Barrel exports for UI modules
 data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
   lessons/                   Tutorial lesson JSON files (6 lessons)
@@ -95,7 +122,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1800 unit tests (vitest)
+  unit/                      1980 unit tests across 76 files (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -118,6 +145,8 @@ tests/
     specimen-catalog.test.ts Catalog loading, validation (15 tests)
     ordering-metrics.test.ts kendallTau, ARI, longestCorrectRun (22 tests)
     tutorial-manager.test.ts Lesson schema, step navigation (10 tests)
+    auto-cut.test.ts         AutoCut breakpoint detection
+    auto-sort.test.ts        AutoSort Union Find chaining
     ai-client.test.ts        AIClient fetch, errors (7 tests)
     ai-context.test.ts       Context building, formatting (13 tests)
     ai-prompts.test.ts       System prompt, DSL coverage (13 tests)
@@ -130,15 +159,50 @@ tests/
     contact-decay.test.ts    P(s) decay curve + exponent fitting (15 tests)
     per-chromosome-decay.test.ts  Per-scaffold P(s) computation + session persistence (16 tests)
     compartment-analysis.test.ts  A/B compartment eigenvector pipeline (31 tests)
-    misassembly-detector.test.ts  Misassembly detection + flag manager (24 tests)
+    ice-normalization.test.ts     ICE normalization (32 tests)
+    directionality-index.test.ts  Directionality index (26 tests)
+    hic-quality-metrics.test.ts   Hi-C quality metrics + health score (18 tests)
+    saddle-plot.test.ts           Saddle plot (20 tests)
+    virtual-4c.test.ts            Virtual 4C (22 tests)
+    misassembly-detector.test.ts  Misassembly detection + confidence scoring (31 tests)
     cut-suggestions.test.ts      Cut suggestion generation + pixel conversion (18 tests)
-    health-score.test.ts         Composite health score computation (26 tests)
+    health-score.test.ts         Composite health score computation (28 tests)
     analysis-recompute.test.ts   Debounced auto-recompute after curation (8 tests)
+    analysis-export.test.ts      BedGraph/TSV analysis data export
     cut-review.test.ts           Cut review panel lifecycle + queue (10 tests)
     scaffold-detection.test.ts   Chromosome block detection algorithm (15 tests)
+    curation-progress.test.ts    Progress scoring + trend tracking (11 tests)
+    pattern-detector.test.ts     Inversion + translocation detection (14 tests)
+    state-select.test.ts         State selectors + derived state
+    derived-state.test.ts        Computed state properties
+    benchmark-metrics.test.ts    Benchmark metric computations
+    benchmark-loader.test.ts     Benchmark data loading
+    ui-sidebar.test.ts           Sidebar contig list + sections
+    ui-undo-history.test.ts      Undo history panel
+    ui-event-wiring.test.ts      Event subscription + refresh logic
+    ui-batch-actions.test.ts     Batch operation UI
+    ui-click-interactions.test.ts  Click handler routing
+    ui-toolbar.test.ts           Toolbar button state
+    ui-command-palette.test.ts   Command palette fuzzy search
+    ui-export-session.test.ts    Export + session UI
+    ui-mouse-tracking.test.ts    Mouse position tracking
+    ui-mode-manager.test.ts      Mode switching logic
+    ui-script-console.test.ts    Script console UI
+    ui-track-config.test.ts      Track configuration UI
+    ui-stats-panel.test.ts       Stats panel rendering
+    ui-tooltip.test.ts           Tooltip display logic
+    ui-curation-actions.test.ts  Curation action handlers
+    ui-keyboard-shortcuts.test.ts  Keyboard shortcut bindings
+    ui-file-drop.test.ts         File drop zone handling
+    ui-comparison-mode.test.ts   Comparison mode overlay
+    ui-toast.test.ts             Toast notification system
+    ui-loading.test.ts           Loading overlay
+    ui-color-map.test.ts         Color map controls
+    ui-shortcuts-modal.test.ts   Shortcuts reference modal
   e2e/                       34 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
+    auto-curation.spec.ts    AutoCut + AutoSort E2E
     tile-streaming.spec.ts   Tile LOD with real .pretext file
     features-integration.spec.ts  Stats, exclusion, comparison, batch, tracks
 ```
@@ -261,15 +325,44 @@ themselves. The undo stack is the source of truth for curation history.
   contig ranges per scaffold. Compartment analysis computes O/E → correlation →
   first eigenvector via power iteration. All three produce `TrackConfig`
   objects registered with `TrackRenderer`.
+- **ICENormalization**: Sinkhorn-Knopp iterative matrix balancing (Imakaev
+  et al. 2012). Computes bias vector and normalized matrix. Input is sanitized
+  (NaN/Infinity → 0) before processing. Low-coverage bins masked by quantile
+  filtering. Worker-integrated via `AnalysisWorkerClient.normalizeICE()`.
+  When ICE completes, compartment analysis is re-run on the normalized matrix.
+  Produces "ICE Bias" line track.
+- **DirectionalityIndex**: Dixon et al. 2012 signed chi-square statistic.
+  Computes per-bin directionality scores with configurable window size.
+  Boundary detection at negative-to-positive zero crossings. Worker-integrated
+  via `AnalysisWorkerClient.computeDirectionality()`. Produces "Directionality
+  Index" (line) and "DI Boundaries" (marker) tracks.
+- **HiCQualityMetrics**: Library-level quality assessment. Computes cis/trans
+  ratio, short/long range ratio, contact density, and per-contig cis ratios.
+  Requires scaffold assignments. Feeds `cisTransRatio` into HealthScore for the
+  5th component (libraryQuality). Produces "Per-Contig Cis Ratio" line track.
+- **SaddlePlot**: Compartment strength visualization. Digitizes bins by
+  eigenvector quantile, computes mean O/E per quantile pair to build saddle
+  matrix. Reuses `computeExpectedContacts` and `computeOEMatrix` from
+  CompartmentAnalysis. Renders inline SVG heatmap with blue-white-red scale.
+  Runs synchronously (no worker needed). Requires compartments to be computed
+  first.
+- **Virtual4C**: Interactive locus contact profiling. Extracts contact row at a
+  viewpoint bin, normalizes by distance-expected, scales to [0,1]. Triggered by
+  Alt+click on the contact map via `ClickInteractions.ts`. Produces "Virtual 4C
+  (bin X)" line track. Cleared on curation operations or via Clear V4C button.
+  Runs synchronously (no worker needed).
 - **AnalysisWorkerClient**: Runs analysis computations in a background Web
   Worker (`AnalysisWorker.ts`) via `postMessage`. Falls back to synchronous
-  main-thread execution if workers are unavailable. Result typed arrays are
+  main-thread execution if workers are unavailable. Also handles ICE
+  normalization and directionality index requests. Result typed arrays are
   transferred (zero-copy) from worker to main thread.
 - **AnalysisPanel**: Sidebar section "3D Analysis" with compute buttons,
   insulation window size slider, and auto-computation on `file:loaded` via
   `EventWiring`. Buttons are disabled during computation and all three
-  analyses run in parallel in the worker. Includes BedGraph/TSV export
-  buttons, an inline P(s) decay SVG chart with comparative overlay
+  core analyses run in parallel in the worker. Also includes 5 additional
+  buttons (Directionality, Library Quality, Normalize ICE, Compute Saddle
+  Plot, Clear V4C) with 5 additional result caches. Includes BedGraph/TSV
+  export buttons, an inline P(s) decay SVG chart with comparative overlay
   (baseline vs current), a health score card, and debounced auto-recompute
   of insulation + P(s) after curation operations (1s debounce, compartments
   excluded). "Review Cuts" button opens `CutReviewPanel`.
@@ -285,10 +378,12 @@ themselves. The undo stack is the source of truth for curation history.
   (median * 0.3). `autoAssignScaffolds()` in Sidebar.ts creates scaffolds
   via ScaffoldManager, naming them Chr1-ChrN by size (largest first).
   Buttons in both Sidebar (when no scaffolds) and AnalysisPanel (after P(s)).
-- **HealthScore**: Pure `computeHealthScore()` function combining four
-  equally-weighted components (contiguity, P(s) decay quality, assembly
-  integrity, compartment strength) into a 0–100 composite score. Used by
-  both AnalysisPanel (detailed card) and StatsPanel (summary row).
+- **HealthScore**: Pure `computeHealthScore()` function combining five
+  weighted components (contiguity 20%, P(s) decay quality 25%, assembly
+  integrity 20%, compartment strength 15%, library quality 20%) into a
+  0–100 composite score. Contiguity uses log-scaled N50/totalLength
+  (score = (1 + log10(ratio)) * 100, where ratio < 0.1 scores 0).
+  Used by both AnalysisPanel (detailed card) and StatsPanel (summary row).
 - **Analysis persistence**: Analysis results (insulation, P(s) decay,
   compartments, baseline P(s)) are serialized in session files via optional
   `SessionAnalysisData` field. `exportAnalysisState()` converts typed arrays
@@ -307,6 +402,22 @@ themselves. The undo stack is the source of truth for curation history.
   "Suggest Cuts" button converts flags to executable cut operations
   (`buildCutSuggestions` in MisassemblyDetector). Accept/Skip per suggestion,
   or Accept All for batch execution (right-to-left for index stability).
+  `scoreCutConfidence()` computes composite confidence (0.5 * TAD + 0.3 *
+  compartment + 0.2 * decay) for each suggestion; UI shows colored badges
+  (green/yellow/red) sorted by confidence descending.
+- **PatternDetector**: `detectInversions()` compares anti-diagonal to diagonal
+  signal ratio at large genomic distances within each contig block; threshold
+  defaults to 2.0. `detectTranslocations()` computes observed/expected contact
+  ratio for non-adjacent contig pairs (skips adjacent). Both run in the
+  analysis Web Worker via `AnalysisWorkerClient.detectPatterns()`. Results
+  shown as clickable cards in AnalysisPanel with "Go" buttons for camera
+  navigation.
+- **CurationProgress**: `computeProgress()` calculates Kendall tau and longest
+  correct run comparing current contig order to a reference order (captured on
+  file load). `computeTrend()` compares current vs previous score. Sidebar
+  section shows ordering percentage bar, longest run count, trend arrow
+  (green up / red down / grey neutral), and "Set Reference" button.
+  Updated after every curation operation via `refreshAfterCuration()`.
 
 ## Companion Repository
 
@@ -324,7 +435,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1747 tests must pass
+- Run `npm test` before committing; all 1980 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls

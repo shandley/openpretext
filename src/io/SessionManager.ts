@@ -123,6 +123,55 @@ export interface SessionScaffoldDecay {
 }
 
 /**
+ * Serialized ICE normalization result (bias only — matrix re-derived on restore).
+ */
+export interface SessionICE {
+  biasVector: number[];
+  maskedBins: number[];
+  iterations: number;
+  maxDeviation: number;
+}
+
+/**
+ * Serialized directionality index result.
+ */
+export interface SessionDirectionality {
+  diScores: number[];
+  normalizedScores: number[];
+  boundaries: number[];
+  strengths: number[];
+}
+
+/**
+ * Serialized Hi-C quality metrics result.
+ */
+export interface SessionQuality {
+  cisTransRatio: number;
+  cisPercentage: number;
+  longShortRatio: number;
+  contactDensity: number;
+  perContigCisRatio: number[];
+  perScaffoldCis: Array<{
+    scaffoldId: number;
+    name: string;
+    cisRatio: number;
+    contactCount: number;
+  }>;
+  flaggedContigs: number[];
+}
+
+/**
+ * Serialized saddle plot result.
+ */
+export interface SessionSaddle {
+  saddleMatrix: number[];
+  nBins: number;
+  strength: number;
+  strengthProfile: number[];
+  binEdges: number[];
+}
+
+/**
  * Persisted analysis state for session save/restore.
  */
 export interface SessionAnalysisData {
@@ -132,6 +181,10 @@ export interface SessionAnalysisData {
   baselineDecay?: SessionDecay;
   compartments?: SessionCompartments;
   scaffoldDecay?: SessionScaffoldDecay[];
+  ice?: SessionICE;
+  directionality?: SessionDirectionality;
+  quality?: SessionQuality;
+  saddle?: SessionSaddle;
 }
 
 /**
@@ -255,6 +308,56 @@ function validateSessionAnalysis(v: unknown): boolean {
       if (!validateSessionDecay(sd.decay)) return false;
       if (!Number.isInteger(sd.contigCount) || (sd.contigCount as number) < 0) return false;
     }
+  }
+
+  // Optional ICE normalization
+  if (v.ice !== undefined) {
+    if (!isObject(v.ice)) return false;
+    if (!isFiniteNumberArray(v.ice.biasVector)) return false;
+    if (!Array.isArray(v.ice.maskedBins)) return false;
+    for (const b of v.ice.maskedBins as unknown[]) {
+      if (!Number.isInteger(b) || (b as number) < 0) return false;
+    }
+    if (!isFiniteNumber(v.ice.iterations)) return false;
+    if (!isFiniteNumber(v.ice.maxDeviation)) return false;
+  }
+
+  // Optional directionality index
+  if (v.directionality !== undefined) {
+    if (!isObject(v.directionality)) return false;
+    if (!isFiniteNumberArray(v.directionality.diScores)) return false;
+    if (!isFiniteNumberArray(v.directionality.normalizedScores)) return false;
+    if (!isFiniteNumberArray(v.directionality.boundaries)) return false;
+    if (!isFiniteNumberArray(v.directionality.strengths)) return false;
+  }
+
+  // Optional quality metrics
+  if (v.quality !== undefined) {
+    if (!isObject(v.quality)) return false;
+    if (!isFiniteNumber(v.quality.cisTransRatio)) return false;
+    if (!isFiniteNumber(v.quality.cisPercentage)) return false;
+    if (!isFiniteNumber(v.quality.longShortRatio)) return false;
+    if (!isFiniteNumber(v.quality.contactDensity)) return false;
+    if (!isFiniteNumberArray(v.quality.perContigCisRatio)) return false;
+    if (!Array.isArray(v.quality.perScaffoldCis)) return false;
+    for (const psc of v.quality.perScaffoldCis as unknown[]) {
+      if (!isObject(psc)) return false;
+      if (!Number.isInteger((psc as Record<string, unknown>).scaffoldId)) return false;
+      if (typeof (psc as Record<string, unknown>).name !== 'string') return false;
+      if (!isFiniteNumber((psc as Record<string, unknown>).cisRatio)) return false;
+      if (!isFiniteNumber((psc as Record<string, unknown>).contactCount)) return false;
+    }
+    if (!isFiniteNumberArray(v.quality.flaggedContigs)) return false;
+  }
+
+  // Optional saddle plot
+  if (v.saddle !== undefined) {
+    if (!isObject(v.saddle)) return false;
+    if (!isFiniteNumberArray(v.saddle.saddleMatrix)) return false;
+    if (!Number.isInteger(v.saddle.nBins) || (v.saddle.nBins as number) < 0) return false;
+    if (!isFiniteNumber(v.saddle.strength)) return false;
+    if (!isFiniteNumberArray(v.saddle.strengthProfile)) return false;
+    if (!isFiniteNumberArray(v.saddle.binEdges)) return false;
   }
 
   return true;

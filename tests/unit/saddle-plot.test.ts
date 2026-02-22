@@ -82,6 +82,17 @@ describe('digitizeBins', () => {
     // Negative values should be in lower bins, positive in higher bins
     expect(bins[0]).toBeLessThan(bins[5]);
   });
+
+  it('excludes NaN and Infinity values', () => {
+    const ev = new Float32Array([0, NaN, 2, Infinity, 4, -Infinity, 6, 8, 9, 10]);
+    const bins = digitizeBins(ev, 5, [0, 1]);
+    expect(bins[1]).toBe(-1); // NaN excluded
+    expect(bins[3]).toBe(-1); // Infinity excluded
+    expect(bins[5]).toBe(-1); // -Infinity excluded
+    // Finite values should be assigned
+    expect(bins[0]).toBeGreaterThanOrEqual(0);
+    expect(bins[9]).toBeGreaterThanOrEqual(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

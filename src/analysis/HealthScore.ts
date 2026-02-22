@@ -46,13 +46,19 @@ export interface HealthScoreResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Contiguity: N50 relative to total length, scaled by contig count.
- * If N50 = totalLength (single contig), score = 100.
+ * Contiguity: N50 as a fraction of total length.
+ * A single-contig assembly (N50 = totalLength) scores 100.
+ * Uses a log-scaled approach so the score degrades gracefully:
+ *   score = 100 * (1 + log10(N50/totalLength)) / 1
+ * N50/total = 1.0 → 100, N50/total = 0.1 → 0, N50/total < 0.1 → 0
  */
-function scoreContiguity(n50: number, totalLength: number, contigCount: number): number {
-  if (totalLength <= 0 || contigCount <= 0) return 0;
+function scoreContiguity(n50: number, totalLength: number, _contigCount: number): number {
+  if (totalLength <= 0 || n50 <= 0) return 0;
   const ratio = n50 / totalLength;
-  const score = ratio * contigCount * 100;
+  if (ratio >= 1) return 100;
+  if (ratio <= 0.1) return 0;
+  // log10(0.1) = -1, log10(1) = 0 → maps to [0, 100]
+  const score = (1 + Math.log10(ratio)) * 100;
   return Math.max(0, Math.min(100, score));
 }
 

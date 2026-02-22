@@ -137,23 +137,35 @@ describe('contiguity component', () => {
     expect(result.components.contiguity).toBe(100);
   });
 
-  it('scores reasonably for N50 = totalLength/10 with 10 contigs', () => {
+  it('scores ~0 when N50/total = 0.1 (log10 boundary)', () => {
     const result = computeHealthScore(makeInput({
       n50: 10_000_000,
       totalLength: 100_000_000,
       contigCount: 10,
     }));
-    // (10M / 100M) * 10 * 100 = 100
-    expect(result.components.contiguity).toBe(100);
+    // N50/total = 0.1 → log10(0.1) = -1 → (1 + -1) * 100 = 0
+    expect(result.components.contiguity).toBe(0);
   });
 
-  it('scores lower for fragmented assembly', () => {
+  it('scores 0 for highly fragmented assembly', () => {
     const result = computeHealthScore(makeInput({
       n50: 1_000,
       totalLength: 100_000_000,
       contigCount: 100_000,
     }));
-    expect(result.components.contiguity).toBe(100); // 1000/100M * 100000 * 100 = 100
+    // N50/total = 1e-5 → far below 0.1 threshold → 0
+    expect(result.components.contiguity).toBe(0);
+  });
+
+  it('scores ~50 when N50/total ≈ 0.316 (sqrt of 0.1)', () => {
+    const result = computeHealthScore(makeInput({
+      n50: 31_600_000,
+      totalLength: 100_000_000,
+      contigCount: 4,
+    }));
+    // log10(0.316) ≈ -0.5 → (1 + -0.5) * 100 = 50
+    expect(result.components.contiguity).toBeGreaterThan(45);
+    expect(result.components.contiguity).toBeLessThan(55);
   });
 
   it('scores 0 when totalLength is 0', () => {
@@ -163,6 +175,26 @@ describe('contiguity component', () => {
       contigCount: 0,
     }));
     expect(result.components.contiguity).toBe(0);
+  });
+
+  it('monotonically increases with N50/total ratio', () => {
+    const low = computeHealthScore(makeInput({
+      n50: 20_000_000,
+      totalLength: 100_000_000,
+      contigCount: 5,
+    }));
+    const mid = computeHealthScore(makeInput({
+      n50: 50_000_000,
+      totalLength: 100_000_000,
+      contigCount: 2,
+    }));
+    const high = computeHealthScore(makeInput({
+      n50: 90_000_000,
+      totalLength: 100_000_000,
+      contigCount: 2,
+    }));
+    expect(mid.components.contiguity).toBeGreaterThan(low.components.contiguity);
+    expect(high.components.contiguity).toBeGreaterThan(mid.components.contiguity);
   });
 });
 
@@ -246,12 +278,11 @@ describe('compartments component', () => {
 
 describe('health score responds to curation changes', () => {
   it('score changes when N50 improves', () => {
-    const before = computeHealthScore(makeInput({ n50: 5_000_000, contigCount: 20 }));
-    const after = computeHealthScore(makeInput({ n50: 25_000_000, contigCount: 5 }));
-    // After has higher N50 ratio but fewer contigs
-    // before: 5M/100M * 20 * 100 = 100, after: 25M/100M * 5 * 100 = 125 → clamped to 100
-    // Both max out contiguity, but with different misassembly or decay values they'd differ
-    expect(after.overall).toBeGreaterThanOrEqual(before.overall);
+    const before = computeHealthScore(makeInput({ n50: 20_000_000, contigCount: 20 }));
+    const after = computeHealthScore(makeInput({ n50: 80_000_000, contigCount: 2 }));
+    // After has much higher N50/total ratio → higher contiguity score
+    expect(after.components.contiguity).toBeGreaterThan(before.components.contiguity);
+    expect(after.overall).toBeGreaterThan(before.overall);
   });
 
   it('score drops when misassemblies increase after cuts', () => {

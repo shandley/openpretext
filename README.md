@@ -67,6 +67,53 @@ required.
   repository directly from the AI panel
 - Per-suggestion feedback (thumbs up/down) with aggregate strategy ratings
 
+### 3D Genomics Analysis
+
+- **Insulation score + TAD boundaries** — sliding off-diagonal window (Crane et al. 2015) computes
+  insulation profile and detects topologically associating domain boundaries as prominent local minima
+- **P(s) contact decay curve** — intra-chromosomal contact frequency vs genomic distance with
+  power-law exponent fitting in log-log space; inline SVG chart with comparative baseline overlay
+- **Per-chromosome P(s)** — scaffold-aware decay curves computed independently per chromosome
+- **A/B compartments** — observed/expected normalization, correlation matrix, first eigenvector
+  via power iteration; rendered as a heatmap track
+- **ICE normalization** — Sinkhorn-Knopp iterative matrix balancing for bias correction; computes
+  per-bin bias vector and normalized contact matrix with low-coverage bins masked by quantile filtering
+- **Directionality index** — Dixon et al. 2012 signed chi-square directionality scores with
+  configurable window size; detects TAD boundaries at sign-change zero crossings
+- **Hi-C library quality** — cis/trans contact ratio, short/long range ratio, contact density,
+  and per-contig cis ratios; integrates into the 5-component assembly health score
+- **Saddle plot** — compartment strength visualization showing O/E enrichment by eigenvector
+  quantile; inline SVG heatmap with strength metric
+- **Virtual 4C** — interactive locus contact profiling from any viewpoint bin via Alt+click;
+  distance-expected normalization with optional log2 transform
+- **Composite health score** — 0-100 score combining contiguity (N50), P(s) decay quality,
+  assembly integrity, compartment strength, and Hi-C library quality; displayed as a prominent
+  card in the sidebar
+- All analyses run in a background Web Worker to avoid blocking the UI
+- Adjustable insulation window size; auto-computation on file load
+- BedGraph and TSV export for all analysis tracks
+
+### Misassembly Detection and Curation
+
+- Automatic detection of potential chimeric contigs using TAD boundary and compartment
+  switch signals that fall inside (not at edges of) contigs
+- Misassembly flags shown as orange "MIS" badges in the contig sidebar
+- **Cut suggestions** with composite confidence scoring (TAD 50% + compartment 30% + decay 20%)
+  shown as sorted cards with colored badges (green/yellow/red)
+- **Cut review panel** — step-by-step guided walkthrough of each cut suggestion with
+  camera navigation, accept/skip/back controls
+- **Pattern detection** — algorithmic inversion (anti-diagonal butterfly) and translocation
+  (off-diagonal enrichment) detection with clickable result cards and "Go" navigation
+- **Scaffold auto-detection** — detects chromosome block boundaries from the block-diagonal
+  structure of the contact map and assigns scaffolds automatically
+
+### Curation Progress Tracking
+
+- Real-time ordering quality feedback using Kendall tau rank correlation vs reference
+- Longest correct contiguous run counter
+- Trend arrows (improving/declining/neutral) after each curation operation
+- Resettable reference ordering baseline
+
 ### Annotation Tracks
 
 - Coverage, telomere, gap, and GC content tracks from embedded `.pretext` graph extensions
@@ -80,7 +127,8 @@ required.
 - **BED6** export (scaffold-aware genomic intervals)
 - **FASTA** export with reverse complement for inverted contigs
 - **PNG** screenshot export
-- **Session save/load** (JSON with full undo/redo stack)
+- **BedGraph/TSV** export of analysis tracks (insulation, P(s), compartments)
+- **Session save/load** (JSON with full undo/redo stack + analysis data)
 - **Curation log** export (JSON operation history)
 - **Strategy JSON** export/import for AI prompt strategies
 - Reference FASTA loading for curated sequence export
@@ -139,7 +187,7 @@ required.
 - Jump to diagonal, reset view, zoom to specific contigs
 - Responsive layout with mobile and tablet breakpoints
 - Searchable contig list with scaffold badges, exclusion indicators, and inversion markers
-- Sidebar panels: contigs, scaffolds, assembly metrics, track configuration
+- Sidebar panels: contigs, scaffolds, assembly metrics, history, 3D analysis, curation progress, tracks
 - Toast notifications, detailed hover tooltips, loading progress overlay
 - Drag-and-drop file opening
 
@@ -324,7 +372,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev          # Start development server with hot reload
-npm test             # Run unit tests (1,534 tests across 56 files)
+npm test             # Run unit tests (1,980 tests across 71 files)
 npm run test:visual  # Run E2E tests (34 tests, Playwright + Chromium)
 npm run build        # Production build to dist/
 npm run preview      # Preview the production build
@@ -346,7 +394,7 @@ src/
   main.ts                    Application entry point and orchestrator
   core/
     State.ts                 Application state with undo/redo
-    EventBus.ts              Typed event emitter for inter-module comms
+    EventBus.ts              Typed event emitter
     DerivedState.ts          Computed state selectors
   formats/
     PretextParser.ts         .pretext binary format parser (BC4/deflate)
@@ -372,11 +420,12 @@ src/
     ScaffoldManager.ts       Scaffold (chromosome) assignment CRUD
     WaypointManager.ts       Named position markers
     ContigExclusion.ts       Contig hide/exclude management
+    MisassemblyFlags.ts      Singleton manager for flagged contigs
+    AutoCut.ts               Diagonal signal breakpoint detection
+    AutoSort.ts              Union Find link scoring and chaining
     BatchOperations.ts       Batch select/cut/join/invert/sort
     QualityMetrics.ts        N50/L50/N90/L90 assembly statistics
     OrderingMetrics.ts       Shared ordering metrics (kendallTau, ARI)
-    AutoCut.ts               Diagonal signal breakpoint detection
-    AutoSort.ts              Union Find link scoring and chaining
   ai/
     AIClient.ts              Anthropic Messages API wrapper (vision)
     AIContext.ts             Assembly state context builder for AI prompts
@@ -391,22 +440,34 @@ src/
     ScriptParser.ts          Tokenizer + parser for 18-command DSL
     ScriptExecutor.ts        Executes parsed AST via ScriptContext DI
     ScriptReplay.ts          Converts operation logs to DSL scripts
+  analysis/
+    InsulationScore.ts       Insulation score + TAD boundary detection
+    ContactDecay.ts          P(s) contact decay curve + exponent fitting
+    CompartmentAnalysis.ts   A/B compartment eigenvector (O/E + PCA)
+    MisassemblyDetector.ts   Chimeric contig detection + confidence scoring
+    HealthScore.ts           Composite assembly quality score (0-100)
+    ScaffoldDetection.ts     Auto-detect chromosome blocks from contact map
+    PatternDetector.ts       Inversion + translocation detection
+    CurationProgress.ts      Real-time ordering progress scoring
+    AnalysisWorker.ts        Background Web Worker for analysis
+    AnalysisWorkerClient.ts  Promise-based main-thread worker client
   export/
     AGPWriter.ts             AGP 2.1 format generation
     BEDWriter.ts             BED6 format export (scaffold-aware)
     FASTAWriter.ts           FASTA export with reverse complement
+    AnalysisExport.ts        BedGraph/TSV export for analysis tracks
     SnapshotExporter.ts      PNG screenshot via canvas.toBlob
     CurationLog.ts           JSON operation history export
   io/
-    SessionManager.ts        Session save/load (JSON with undo stack)
-  ui/                        32 UI modules (pure DOM, no framework)
+    SessionManager.ts        Session save/load (JSON with undo stack + analysis)
+  ui/                        35 UI modules (pure DOM, no framework)
 data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
   lessons/                   Tutorial lesson JSON files (6 lessons)
   pattern-gallery.json       Hi-C pattern reference gallery (8 patterns)
   prompt-strategies.json     AI prompt strategy library (5 strategies)
 tests/
-  unit/                      1,534 unit tests across 56 test files
+  unit/                      1,980 unit tests across 71 test files
   e2e/                       34 E2E tests (Playwright + Chromium)
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)
