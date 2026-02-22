@@ -13,6 +13,8 @@ import { computeInsulation } from './InsulationScore';
 import { computeContactDecay } from './ContactDecay';
 import { computeCompartments } from './CompartmentAnalysis';
 import { detectInversions, detectTranslocations, type DetectedPattern } from './PatternDetector';
+import { computeICENormalization, type ICEParams, type ICEResult } from './ICENormalization';
+import { computeDirectionality, type DIParams, type DIResult } from './DirectionalityIndex';
 import type { ContigRange } from '../curation/AutoSort';
 import type {
   AnalysisRequest,
@@ -21,6 +23,8 @@ import type {
   DecayResponse,
   CompartmentResponse,
   PatternResponse,
+  ICEResponse,
+  DIResponse,
 } from './AnalysisWorker';
 
 // ---------------------------------------------------------------------------
@@ -229,6 +233,71 @@ export class AnalysisWorkerClient {
     const inversions = detectInversions(contactMap, size, contigRanges, inversionThreshold);
     const translocations = detectTranslocations(contactMap, size, contigRanges, translocationThreshold);
     return [...inversions, ...translocations];
+  }
+
+  /**
+   * Compute directionality index in the worker.
+   * Falls back to synchronous if worker is unavailable.
+   */
+  async computeDirectionality(
+    contactMap: Float32Array,
+    size: number,
+    params?: Partial<DIParams>,
+  ): Promise<DIResult> {
+    if (!this.workerFailed && this.worker) {
+      try {
+        const id = this.nextId++;
+        const resp = await this.postRequest({
+          type: 'directionality',
+          id,
+          contactMap,
+          size,
+          params,
+        }) as DIResponse;
+        return {
+          diScores: resp.diScores,
+          normalizedScores: resp.normalizedScores,
+          boundaries: resp.boundaries,
+          strengths: resp.strengths,
+        };
+      } catch {
+        // Fall through to synchronous
+      }
+    }
+    return computeDirectionality(contactMap, size, params);
+  }
+
+  /**
+   * Compute ICE normalization in the worker.
+   * Falls back to synchronous if worker is unavailable.
+   */
+  async normalizeICE(
+    contactMap: Float32Array,
+    size: number,
+    params?: Partial<ICEParams>,
+  ): Promise<ICEResult> {
+    if (!this.workerFailed && this.worker) {
+      try {
+        const id = this.nextId++;
+        const resp = await this.postRequest({
+          type: 'ice',
+          id,
+          contactMap,
+          size,
+          params,
+        }) as ICEResponse;
+        return {
+          biasVector: resp.biasVector,
+          normalizedMatrix: resp.normalizedMatrix,
+          maskedBins: resp.maskedBins,
+          iterations: resp.iterations,
+          maxDeviation: resp.maxDeviation,
+        };
+      } catch {
+        // Fall through to synchronous
+      }
+    }
+    return computeICENormalization(contactMap, size, params);
   }
 
   /**

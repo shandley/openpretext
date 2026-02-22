@@ -20,6 +20,7 @@ function makeInput(overrides: Partial<HealthScoreInput> = {}): HealthScoreInput 
     decayRSquared: 0.98,
     misassemblyCount: 0,
     eigenvalue: 0.5,
+    cisTransRatio: 0.7,
     ...overrides,
   };
 }
@@ -117,6 +118,8 @@ describe('computeHealthScore', () => {
     expect(c.integrity).toBeLessThanOrEqual(100);
     expect(c.compartments).toBeGreaterThanOrEqual(0);
     expect(c.compartments).toBeLessThanOrEqual(100);
+    expect(c.libraryQuality).toBeGreaterThanOrEqual(0);
+    expect(c.libraryQuality).toBeLessThanOrEqual(100);
   });
 });
 

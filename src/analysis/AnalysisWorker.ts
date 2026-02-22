@@ -12,6 +12,8 @@ import { computeInsulation, type InsulationParams } from './InsulationScore';
 import { computeContactDecay, type ContactDecayParams } from './ContactDecay';
 import { computeCompartments, type CompartmentParams } from './CompartmentAnalysis';
 import { detectInversions, detectTranslocations, type DetectedPattern } from './PatternDetector';
+import { computeICENormalization, type ICEParams } from './ICENormalization';
+import { computeDirectionality, type DIParams } from './DirectionalityIndex';
 import type { ContigRange } from '../curation/AutoSort';
 
 // ---------------------------------------------------------------------------
@@ -53,7 +55,23 @@ export interface PatternRequest {
   translocationThreshold?: number;
 }
 
-export type AnalysisRequest = InsulationRequest | DecayRequest | CompartmentRequest | PatternRequest;
+export interface ICERequest {
+  type: 'ice';
+  id: number;
+  contactMap: Float32Array;
+  size: number;
+  params?: Partial<ICEParams>;
+}
+
+export interface DIRequest {
+  type: 'directionality';
+  id: number;
+  contactMap: Float32Array;
+  size: number;
+  params?: Partial<DIParams>;
+}
+
+export type AnalysisRequest = InsulationRequest | DecayRequest | CompartmentRequest | PatternRequest | ICERequest | DIRequest;
 
 export interface InsulationResponse {
   type: 'insulation';
@@ -91,6 +109,25 @@ export interface PatternResponse {
   patterns: DetectedPattern[];
 }
 
+export interface ICEResponse {
+  type: 'ice';
+  id: number;
+  biasVector: Float32Array;
+  normalizedMatrix: Float32Array;
+  maskedBins: number[];
+  iterations: number;
+  maxDeviation: number;
+}
+
+export interface DIResponse {
+  type: 'directionality';
+  id: number;
+  diScores: Float32Array;
+  normalizedScores: Float32Array;
+  boundaries: number[];
+  strengths: number[];
+}
+
 export interface ErrorResponse {
   type: 'error';
   id: number;
@@ -102,6 +139,8 @@ export type AnalysisResponse =
   | DecayResponse
   | CompartmentResponse
   | PatternResponse
+  | ICEResponse
+  | DIResponse
   | ErrorResponse;
 
 // ---------------------------------------------------------------------------
@@ -188,6 +227,41 @@ self.onmessage = (event: MessageEvent<AnalysisRequest>) => {
           patterns: [...inversions, ...translocations],
         };
         self.postMessage(response);
+        break;
+      }
+
+      case 'directionality': {
+        const result = computeDirectionality(msg.contactMap, msg.size, msg.params);
+        const response: DIResponse = {
+          type: 'directionality',
+          id: msg.id,
+          diScores: result.diScores,
+          normalizedScores: result.normalizedScores,
+          boundaries: result.boundaries,
+          strengths: result.strengths,
+        };
+        self.postMessage(response, [
+          response.diScores.buffer,
+          response.normalizedScores.buffer,
+        ] as any);
+        break;
+      }
+
+      case 'ice': {
+        const result = computeICENormalization(msg.contactMap, msg.size, msg.params);
+        const response: ICEResponse = {
+          type: 'ice',
+          id: msg.id,
+          biasVector: result.biasVector,
+          normalizedMatrix: result.normalizedMatrix,
+          maskedBins: result.maskedBins,
+          iterations: result.iterations,
+          maxDeviation: result.maxDeviation,
+        };
+        self.postMessage(response, [
+          response.biasVector.buffer,
+          response.normalizedMatrix.buffer,
+        ] as any);
         break;
       }
     }

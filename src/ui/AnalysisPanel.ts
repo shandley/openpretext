@@ -20,6 +20,8 @@ import {
   type ScaffoldGroup,
 } from '../analysis/ContactDecay';
 import { compartmentToTrack, type CompartmentResult } from '../analysis/CompartmentAnalysis';
+import { iceToTrack, type ICEResult } from '../analysis/ICENormalization';
+import { directionalityToTracks, type DIResult } from '../analysis/DirectionalityIndex';
 import { AnalysisWorkerClient } from '../analysis/AnalysisWorkerClient';
 import {
   downloadInsulationBedGraph,
@@ -36,6 +38,7 @@ import {
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { cut } from '../curation/CurationEngine';
 import { computeHealthScore, type HealthScoreResult } from '../analysis/HealthScore';
+import { qualityToTrack, type HiCQualityResult } from '../analysis/HiCQualityMetrics';
 import type {
   SessionAnalysisData,
   SessionDecay,
@@ -57,6 +60,10 @@ let cachedCompartments: CompartmentResult | null = null;
 let cachedSuggestions: CutSuggestion[] | null = null;
 let cachedScaffoldDecay: ScaffoldDecayResult[] | null = null;
 let cachedPatterns: DetectedPattern[] | null = null;
+let cachedICE: ICEResult | null = null;
+let cachedNormalizedMap: Float32Array | null = null;
+let cachedDI: DIResult | null = null;
+let cachedQuality: HiCQualityResult | null = null;
 let insulationWindowSize = 10;
 let workerClient: AnalysisWorkerClient | null = null;
 let computing = false;
@@ -160,6 +167,9 @@ function setButtonsDisabled(disabled: boolean): void {
     'btn-compute-compartments',
     'btn-run-all-analysis',
     'btn-detect-patterns',
+    'btn-normalize-ice',
+    'btn-compute-directionality',
+    'btn-compute-quality',
   ];
   for (const id of ids) {
     const btn = document.getElementById(id) as HTMLButtonElement | null;
@@ -266,6 +276,92 @@ async function runCompartments(ctx: AppContext): Promise<void> {
   ctx.updateTrackConfigPanel();
   ctx.showToast(`Compartments: ${result.iterations} iterations, eigenvalue ${result.eigenvalue.toFixed(2)}`);
   runMisassemblyDetection(ctx);
+  updateResultsDisplay(ctx);
+}
+
+async function runICENormalization(ctx: AppContext): Promise<void> {
+  const s = state.get();
+  if (!s.map?.contactMap) return;
+
+  const overviewSize = getOverviewSize();
+  const result = await getClient().normalizeICE(s.map.contactMap, overviewSize);
+  cachedICE = result;
+  cachedNormalizedMap = result.normalizedMatrix;
+
+  const track = iceToTrack(result, overviewSize, s.map.textureSize);
+  ctx.trackRenderer.addTrack(track);
+  ctx.tracksVisible = true;
+  ctx.updateTrackConfigPanel();
+  ctx.showToast(`ICE: ${result.iterations} iterations, ${result.maskedBins.length} masked bins`);
+
+  // Re-run compartments on normalized matrix if already computed
+  if (cachedCompartments) {
+    const compResult = await getClient().computeCompartments(cachedNormalizedMap, overviewSize);
+    cachedCompartments = compResult;
+    const compTrack = compartmentToTrack(compResult, overviewSize, s.map.textureSize);
+    ctx.trackRenderer.addTrack(compTrack);
+    ctx.updateTrackConfigPanel();
+  }
+
+  updateResultsDisplay(ctx);
+}
+
+async function runQualityMetrics(ctx: AppContext): Promise<void> {
+  const s = state.get();
+  if (!s.map?.contactMap) return;
+
+  const overviewSize = getOverviewSize();
+  const ranges = buildContigRanges();
+
+  // Build scaffold ID array and name map from current state
+  const scaffoldIds: number[] = [];
+  const scaffoldNames = new Map<number, string>();
+  for (let i = 0; i < s.contigOrder.length; i++) {
+    const contigId = s.contigOrder[i];
+    const contig = s.map.contigs[contigId];
+    scaffoldIds.push(contig.scaffoldId ?? -1);
+  }
+  for (const scaffold of ctx.scaffoldManager.getAllScaffolds()) {
+    scaffoldNames.set(scaffold.id, scaffold.name);
+  }
+
+  // Import computeHiCQuality dynamically to keep the worker clean
+  const { computeHiCQuality } = await import('../analysis/HiCQualityMetrics');
+  cachedQuality = computeHiCQuality(
+    s.map.contactMap, overviewSize, ranges, scaffoldIds, scaffoldNames,
+  );
+
+  // Add per-contig cis ratio track
+  const track = qualityToTrack(cachedQuality, ranges, overviewSize, s.map.textureSize);
+  ctx.trackRenderer.addTrack(track);
+  ctx.tracksVisible = true;
+  ctx.updateTrackConfigPanel();
+
+  const flagCount = cachedQuality.flaggedContigs.length;
+  ctx.showToast(`Library: ${cachedQuality.cisPercentage.toFixed(1)}% cis${flagCount > 0 ? `, ${flagCount} flagged contigs` : ''}`);
+  updateResultsDisplay(ctx);
+}
+
+async function runDirectionality(ctx: AppContext): Promise<void> {
+  const s = state.get();
+  if (!s.map?.contactMap) return;
+
+  const overviewSize = getOverviewSize();
+  const result = await getClient().computeDirectionality(
+    s.map.contactMap,
+    overviewSize,
+    { windowSize: insulationWindowSize },
+  );
+  cachedDI = result;
+  const { diTrack, diBoundaryTrack } = directionalityToTracks(
+    result, overviewSize, s.map.textureSize,
+  );
+
+  ctx.trackRenderer.addTrack(diTrack);
+  ctx.trackRenderer.addTrack(diBoundaryTrack);
+  ctx.tracksVisible = true;
+  ctx.updateTrackConfigPanel();
+  ctx.showToast(`Directionality: ${result.boundaries.length} boundaries detected`);
   updateResultsDisplay(ctx);
 }
 
@@ -657,6 +753,7 @@ function buildHealthScore(ctx: AppContext): HealthScoreResult | null {
     decayRSquared: cachedDecay?.rSquared ?? null,
     misassemblyCount: misassemblyFlags.getFlaggedCount(),
     eigenvalue: cachedCompartments?.eigenvalue ?? null,
+    cisTransRatio: cachedQuality?.cisTransRatio ?? null,
   });
 }
 
@@ -693,6 +790,7 @@ function renderHealthScoreCard(score: HealthScoreResult): string {
       <span title="P(s) decay quality">P(s): ${Math.round(c.decayQuality)}</span>
       <span title="Assembly integrity">Int: ${Math.round(c.integrity)}</span>
       <span title="A/B compartments">A/B: ${Math.round(c.compartments)}</span>
+      <span title="Library quality (cis/trans)">Lib: ${Math.round(c.libraryQuality)}</span>
     </div>
   </div>`;
 }
@@ -710,6 +808,21 @@ function updateResultsDisplay(ctx: AppContext): void {
   const healthScore = buildHealthScore(ctx);
   if (healthScore) {
     html += renderHealthScoreCard(healthScore);
+  }
+
+  // Library quality stats
+  if (cachedQuality) {
+    html += `<div class="stats-row"><span>Cis contacts</span><span style="color:#64b4ff;">${cachedQuality.cisPercentage.toFixed(1)}%</span></div>`;
+    html += `<div class="stats-row"><span>Long/short ratio</span><span>${cachedQuality.longShortRatio.toFixed(2)}</span></div>`;
+    html += `<div class="stats-row"><span>Contact density</span><span>${cachedQuality.contactDensity.toFixed(3)}</span></div>`;
+    if (cachedQuality.flaggedContigs.length > 0) {
+      html += `<div class="stats-row"><span>Low-cis contigs</span><span style="color:#e67e22;">${cachedQuality.flaggedContigs.length}</span></div>`;
+    }
+  }
+
+  // ICE normalization status
+  if (cachedICE) {
+    html += `<div class="stats-row"><span>ICE Normalization</span><span style="color:#6c5ce7;">${cachedICE.iterations} iters, ${cachedICE.maskedBins.length} masked</span></div>`;
   }
 
   if (cachedDecay) {
@@ -849,6 +962,16 @@ function updateResultsDisplay(ctx: AppContext): void {
  */
 export function getHealthScore(ctx: AppContext): HealthScoreResult | null {
   return buildHealthScore(ctx);
+}
+
+/** Get the ICE-normalized contact map, or null if not computed. */
+export function getNormalizedMap(): Float32Array | null {
+  return cachedNormalizedMap;
+}
+
+/** Get the cached compartment result. */
+export function getCachedCompartments(): CompartmentResult | null {
+  return cachedCompartments;
 }
 
 /** Save the current P(s) decay as the comparison baseline. */
@@ -1184,6 +1307,9 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       <button class="analysis-btn" id="btn-compute-compartments">Compartments</button>
     </div>
     <button class="analysis-btn" id="btn-run-all-analysis" style="margin-bottom:6px;width:100%;">Compute All</button>
+    <button class="analysis-btn" id="btn-compute-directionality" style="margin-bottom:2px;width:100%;">Directionality</button>
+    <button class="analysis-btn" id="btn-compute-quality" style="margin-bottom:2px;width:100%;">Library Quality</button>
+    <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:6px;width:100%;background:#6c5ce7;color:#fff;">Normalize (ICE)</button>
     <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
     <div id="pattern-results"></div>
     <div id="analysis-results">
@@ -1248,6 +1374,36 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       });
     }
   });
+  document.getElementById('btn-compute-quality')?.addEventListener('click', () => {
+    if (!computing) {
+      computing = true;
+      setButtonsDisabled(true);
+      runQualityMetrics(ctx).finally(() => {
+        computing = false;
+        setButtonsDisabled(false);
+      });
+    }
+  });
+  document.getElementById('btn-compute-directionality')?.addEventListener('click', () => {
+    if (!computing) {
+      computing = true;
+      setButtonsDisabled(true);
+      runDirectionality(ctx).finally(() => {
+        computing = false;
+        setButtonsDisabled(false);
+      });
+    }
+  });
+  document.getElementById('btn-normalize-ice')?.addEventListener('click', () => {
+    if (!computing) {
+      computing = true;
+      setButtonsDisabled(true);
+      runICENormalization(ctx).finally(() => {
+        computing = false;
+        setButtonsDisabled(false);
+      });
+    }
+  });
   document.getElementById('btn-detect-patterns')?.addEventListener('click', () => {
     if (!computing) {
       computing = true;
@@ -1297,12 +1453,20 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedSuggestions = null;
   cachedScaffoldDecay = null;
   cachedPatterns = null;
+  cachedICE = null;
+  cachedNormalizedMap = null;
+  cachedDI = null;
+  cachedQuality = null;
   healthScoreHistory.length = 0;
   misassemblyFlags.clearAll();
   ctx.trackRenderer.removeTrack('Insulation Score');
   ctx.trackRenderer.removeTrack('TAD Boundaries');
   ctx.trackRenderer.removeTrack('A/B Compartments');
   ctx.trackRenderer.removeTrack('Misassembly Flags');
+  ctx.trackRenderer.removeTrack('ICE Bias');
+  ctx.trackRenderer.removeTrack('Directionality Index');
+  ctx.trackRenderer.removeTrack('DI Boundaries');
+  ctx.trackRenderer.removeTrack('Per-Contig Cis Ratio');
   ctx.updateTrackConfigPanel();
 }
 
@@ -1321,7 +1485,7 @@ function showRecomputingIndicator(visible: boolean): void {
  * Only triggers if at least one analysis has been previously computed.
  */
 export function scheduleAnalysisRecompute(ctx: AppContext): void {
-  if (!cachedInsulation && !cachedDecay) return;
+  if (!cachedInsulation && !cachedDecay && !cachedDI) return;
 
   if (autoRecomputeTimer !== null) {
     clearTimeout(autoRecomputeTimer);
@@ -1355,6 +1519,7 @@ async function triggerAutoRecompute(ctx: AppContext): Promise<void> {
   const tasks: Promise<void>[] = [];
   if (cachedInsulation) tasks.push(runInsulation(ctx));
   if (cachedDecay) tasks.push(runDecay(ctx));
+  if (cachedDI) tasks.push(runDirectionality(ctx));
 
   await Promise.all(tasks).finally(() => {
     if (hadInsulation && cachedInsulation && cachedCompartments) {

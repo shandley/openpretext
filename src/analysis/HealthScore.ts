@@ -1,8 +1,9 @@
 /**
  * HealthScore — Composite assembly quality score (0–100).
  *
- * Combines four quality dimensions: contiguity (N50), P(s) decay exponent,
- * misassembly count, and compartment eigenvalue into a single score.
+ * Combines five quality dimensions: contiguity (N50), P(s) decay exponent,
+ * misassembly count, compartment eigenvalue, and library quality (cis/trans)
+ * into a single score.
  *
  * Pure algorithm — no side effects or state mutations.
  */
@@ -23,6 +24,8 @@ export interface HealthScoreInput {
   misassemblyCount: number;
   /** First eigenvalue from compartment analysis. Null if not computed. */
   eigenvalue: number | null;
+  /** Cis/trans ratio from Hi-C quality metrics. Null if not computed. */
+  cisTransRatio: number | null;
 }
 
 export interface HealthScoreResult {
@@ -34,6 +37,7 @@ export interface HealthScoreResult {
     decayQuality: number;
     integrity: number;
     compartments: number;
+    libraryQuality: number;
   };
 }
 
@@ -81,6 +85,15 @@ function scoreCompartments(eigenvalue: number | null): number {
   return Math.max(0, Math.min(100, eigenvalue * 200));
 }
 
+/**
+ * Library quality: Cis/trans ratio indicates Hi-C library quality.
+ * Good libraries have cis ratio >= 0.7 (70% intra-chromosomal).
+ */
+function scoreLibraryQuality(cisTransRatio: number | null): number {
+  if (cisTransRatio === null) return 50;
+  return Math.max(0, Math.min(100, (cisTransRatio / 0.7) * 100));
+}
+
 // ---------------------------------------------------------------------------
 // Main computation
 // ---------------------------------------------------------------------------
@@ -88,24 +101,30 @@ function scoreCompartments(eigenvalue: number | null): number {
 /**
  * Compute a composite assembly health score (0–100).
  *
- * Four equally-weighted components (25% each):
- * - Contiguity: N50 relative to total assembly length
- * - Decay quality: P(s) exponent proximity to ideal Hi-C range
- * - Integrity: Penalty for detected misassemblies
- * - Compartments: A/B compartment eigenvalue strength
+ * Five weighted components:
+ * - Contiguity (20%): N50 relative to total assembly length
+ * - Decay quality (25%): P(s) exponent proximity to ideal Hi-C range
+ * - Integrity (20%): Penalty for detected misassemblies
+ * - Compartments (15%): A/B compartment eigenvalue strength
+ * - Library quality (20%): Cis/trans ratio
  */
 export function computeHealthScore(input: HealthScoreInput): HealthScoreResult {
   const contiguity = scoreContiguity(input.n50, input.totalLength, input.contigCount);
   const decayQuality = scoreDecayQuality(input.decayExponent);
   const integrity = scoreIntegrity(input.misassemblyCount);
   const compartments = scoreCompartments(input.eigenvalue);
+  const libraryQuality = scoreLibraryQuality(input.cisTransRatio);
 
   const overall = Math.round(
-    (contiguity + decayQuality + integrity + compartments) / 4,
+    contiguity * 0.20 +
+    decayQuality * 0.25 +
+    integrity * 0.20 +
+    compartments * 0.15 +
+    libraryQuality * 0.20,
   );
 
   return {
     overall: Math.max(0, Math.min(100, overall)),
-    components: { contiguity, decayQuality, integrity, compartments },
+    components: { contiguity, decayQuality, integrity, compartments, libraryQuality },
   };
 }
