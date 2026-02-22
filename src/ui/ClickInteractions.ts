@@ -5,6 +5,7 @@
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { SelectionManager } from '../curation/SelectionManager';
+import { triggerVirtual4C } from './AnalysisPanel';
 
 export function setupClickInteractions(ctx: AppContext, canvas: HTMLCanvasElement): void {
   let mouseDownPos = { x: 0, y: 0 };
@@ -58,6 +59,16 @@ export function setupClickInteractions(ctx: AppContext, canvas: HTMLCanvasElemen
       }
       ctx.updateSidebarContigList();
       ctx.updateSidebarScaffoldList();
+    }
+
+    // Alt+click: Virtual 4C viewpoint selection (any mode)
+    if (e.altKey && ctx.mouseMapPos.x >= 0 && ctx.mouseMapPos.x <= 1) {
+      const overviewSize = Math.round(Math.sqrt(state.get().map?.contactMap?.length ?? 0));
+      if (overviewSize > 0) {
+        const bin = Math.floor(ctx.mouseMapPos.x * overviewSize);
+        triggerVirtual4C(ctx, bin);
+        return;
+      }
     }
 
     // Waypoint mode: click to place waypoint, shift+click to remove nearest

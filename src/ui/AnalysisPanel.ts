@@ -39,6 +39,8 @@ import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { cut } from '../curation/CurationEngine';
 import { computeHealthScore, type HealthScoreResult } from '../analysis/HealthScore';
 import { qualityToTrack, type HiCQualityResult } from '../analysis/HiCQualityMetrics';
+import { computeSaddlePlot, renderSaddleSVG, type SaddleResult } from '../analysis/SaddlePlot';
+import { computeVirtual4C, virtual4CToTrack, type Virtual4CResult } from '../analysis/Virtual4C';
 import type {
   SessionAnalysisData,
   SessionDecay,
@@ -64,6 +66,8 @@ let cachedICE: ICEResult | null = null;
 let cachedNormalizedMap: Float32Array | null = null;
 let cachedDI: DIResult | null = null;
 let cachedQuality: HiCQualityResult | null = null;
+let cachedSaddle: SaddleResult | null = null;
+let cachedV4C: Virtual4CResult | null = null;
 let insulationWindowSize = 10;
 let workerClient: AnalysisWorkerClient | null = null;
 let computing = false;
@@ -303,6 +307,17 @@ async function runICENormalization(ctx: AppContext): Promise<void> {
     ctx.updateTrackConfigPanel();
   }
 
+  updateResultsDisplay(ctx);
+}
+
+function runSaddlePlot(ctx: AppContext): void {
+  const s = state.get();
+  if (!s.map?.contactMap || !cachedCompartments) return;
+
+  const overviewSize = getOverviewSize();
+  const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+  cachedSaddle = computeSaddlePlot(contactMap, overviewSize, cachedCompartments.eigenvector);
+  ctx.showToast(`Saddle: strength ${cachedSaddle.strength.toFixed(2)}`);
   updateResultsDisplay(ctx);
 }
 
@@ -865,6 +880,22 @@ function updateResultsDisplay(ctx: AppContext): void {
     }
   }
 
+  // Virtual 4C status
+  if (cachedV4C) {
+    html += `<div class="stats-row"><span>Virtual 4C</span><span style="color:#ff8c32;">Bin ${cachedV4C.viewpoint}</span></div>`;
+    html += `<button class="analysis-btn" id="btn-clear-v4c" style="width:100%;margin:2px 0;">Clear V4C</button>`;
+  } else {
+    html += `<div style="color:var(--text-secondary);font-size:10px;margin:2px 0;">Alt+click map for Virtual 4C</div>`;
+  }
+
+  // Saddle plot (after compartments computed)
+  if (cachedCompartments && !cachedSaddle) {
+    html += `<button class="analysis-btn" id="btn-compute-saddle" style="width:100%;margin:4px 0;background:#00b894;color:#fff;">Compute Saddle Plot</button>`;
+  }
+  if (cachedSaddle) {
+    html += `<div class="saddle-container">${renderSaddleSVG(cachedSaddle)}</div>`;
+  }
+
   // Auto-assign scaffolds button (when P(s) computed but no scaffolds)
   if (cachedDecay && ctx.scaffoldManager.getAllScaffolds().length === 0) {
     html += `<button class="analysis-btn" id="btn-auto-scaffold-analysis" style="width:100%;margin:4px 0;">Auto-assign Scaffolds</button>`;
@@ -933,6 +964,22 @@ function updateResultsDisplay(ctx: AppContext): void {
     openCutReview(ctx);
   });
 
+  // Wire clear V4C button
+  document.getElementById('btn-clear-v4c')?.addEventListener('click', () => {
+    if (cachedV4C) {
+      ctx.trackRenderer.removeTrack(`Virtual 4C (bin ${cachedV4C.viewpoint})`);
+      cachedV4C = null;
+      ctx.updateTrackConfigPanel();
+      updateResultsDisplay(ctx);
+      ctx.showToast('Virtual 4C cleared');
+    }
+  });
+
+  // Wire saddle plot button
+  document.getElementById('btn-compute-saddle')?.addEventListener('click', () => {
+    runSaddlePlot(ctx);
+  });
+
   // Wire auto-assign scaffolds button
   document.getElementById('btn-auto-scaffold-analysis')?.addEventListener('click', () => {
     autoAssignScaffolds(ctx);
@@ -962,6 +1009,36 @@ function updateResultsDisplay(ctx: AppContext): void {
  */
 export function getHealthScore(ctx: AppContext): HealthScoreResult | null {
   return buildHealthScore(ctx);
+}
+
+/**
+ * Trigger Virtual 4C from a viewpoint bin (called by Alt+click handler).
+ */
+export function triggerVirtual4C(ctx: AppContext, viewpointBin: number): void {
+  const s = state.get();
+  if (!s.map?.contactMap) return;
+
+  const overviewSize = getOverviewSize();
+  if (viewpointBin < 0 || viewpointBin >= overviewSize) return;
+
+  // Remove previous V4C track if any
+  if (cachedV4C) {
+    ctx.trackRenderer.removeTrack(`Virtual 4C (bin ${cachedV4C.viewpoint})`);
+  }
+
+  const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+  cachedV4C = computeVirtual4C(contactMap, overviewSize, {
+    viewpoint: viewpointBin,
+    normalize: true,
+    logTransform: false,
+  });
+
+  const track = virtual4CToTrack(cachedV4C, overviewSize, s.map.textureSize);
+  ctx.trackRenderer.addTrack(track);
+  ctx.tracksVisible = true;
+  ctx.updateTrackConfigPanel();
+  ctx.showToast(`Virtual 4C: viewpoint bin ${viewpointBin}`);
+  updateResultsDisplay(ctx);
 }
 
 /** Get the ICE-normalized contact map, or null if not computed. */
@@ -1457,6 +1534,11 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedNormalizedMap = null;
   cachedDI = null;
   cachedQuality = null;
+  cachedSaddle = null;
+  if (cachedV4C) {
+    ctx.trackRenderer.removeTrack(`Virtual 4C (bin ${cachedV4C.viewpoint})`);
+    cachedV4C = null;
+  }
   healthScoreHistory.length = 0;
   misassemblyFlags.clearAll();
   ctx.trackRenderer.removeTrack('Insulation Score');
