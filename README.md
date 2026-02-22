@@ -36,6 +36,7 @@ required.
 - Scaffold painting mode for chromosome assignment (create, rename, delete, paint, unpaint)
 - Waypoint markers for positions of interest with keyboard navigation
 - Batch operations: select by name pattern or size range, batch cut/join/invert, sort by length
+- Contig meta tags: classify contigs as haplotig, contaminant, unlocalised, or sex chromosome with colored sidebar badges
 
 ### Automated Curation Algorithms
 
@@ -53,12 +54,15 @@ required.
 - Captures a screenshot of the current map state, builds assembly context from
   contig ordering, metrics, and scaffold assignments, and sends it for analysis
 - Returns executable DSL command suggestions with one-click "Run" buttons
-- Prompt strategy system with 5 built-in strategies:
+- Prompt strategy system with 8 built-in strategies:
   - **General Analysis** — balanced, suitable for any assembly
   - **Inversion Detection** — specialized for anti-diagonal inversion patterns
   - **Scaffold Assignment** — guides chromosome-level organization
   - **Fragmented Assembly** — optimized for many-contig assemblies, emphasizes autosort/autocut
   - **Micro-chromosomes** — for bird and reptile genomes with micro-chromosomes
+  - **Analysis-Guided Curation** — uses computed analysis tracks and health score to guide decisions
+  - **Haplotig Detection** — identifies haplotigs in dual-haplotype or partially phased assemblies
+  - **Telomere-Aware Curation** — uses telomere detection to assess chromosome completeness
 - Custom strategy editor: create, edit, and delete your own strategies with
   supplementary prompt text and few-shot examples
 - Strategy export/import as JSON files for sharing between users
@@ -86,6 +90,12 @@ required.
   quantile; inline SVG heatmap with strength metric
 - **Virtual 4C** — interactive locus contact profiling from any viewpoint bin via Alt+click;
   distance-expected normalization with optional log2 transform
+- **KR normalization** — Knight-Ruiz iterative matrix balancing (Knight & Ruiz 2013); faster
+  convergence than ICE; produces "KR Bias" line track and re-runs downstream analysis on the
+  normalized matrix
+- **Telomere repeat detection** — scans loaded FASTA sequences for TTAGGG/CCCTAA repeat motifs
+  at contig ends; computes genome-wide density profiles and identifies telomere-positive ends;
+  requires loading a reference FASTA first
 - **Composite health score** — 0-100 score combining contiguity (N50), P(s) decay quality,
   assembly integrity, compartment strength, and Hi-C library quality; displayed as a prominent
   card in the sidebar
@@ -117,6 +127,7 @@ required.
 ### Annotation Tracks
 
 - Coverage, telomere, gap, and GC content tracks from embedded `.pretext` graph extensions
+- Telomere density track from loaded reference FASTA sequences
 - BedGraph file upload with automatic contig coordinate mapping
 - Per-track configuration: color picker, rendering mode (line/heatmap/marker), visibility toggle
 - Track management panel in sidebar
@@ -127,7 +138,8 @@ required.
 - **BED6** export (scaffold-aware genomic intervals)
 - **FASTA** export with reverse complement for inverted contigs
 - **PNG** screenshot export
-- **BedGraph/TSV** export of analysis tracks (insulation, P(s), compartments)
+- **BedGraph/TSV** export of all analysis tracks (insulation, P(s), compartments,
+  directionality, ICE bias, KR bias, quality metrics, saddle plot)
 - **Session save/load** (JSON with full undo/redo stack + analysis data)
 - **Curation log** export (JSON operation history)
 - **Strategy JSON** export/import for AI prompt strategies
@@ -153,13 +165,16 @@ required.
 
 ### Tutorial System
 
-- 6 interactive lessons covering the full curation workflow:
+- 9 interactive lessons covering the full curation workflow:
   1. Reading the Contact Map
   2. Understanding Chromosomes
   3. Detecting Misassembly
   4. Cutting and Joining
   5. Scaffold Assignment
   6. Full Curation Exercise
+  7. 3D Genomics Analysis
+  8. Classifying Contigs with Meta Tags
+  9. Automated Misassembly Detection
 - Step-based progression with instructions, hints, and UI element highlighting
 - Auto-advance when the expected user action is detected
 - Assessment scoring using Kendall tau similarity against ground-truth orderings
@@ -171,7 +186,7 @@ required.
   fish, amphibians, and invertebrates, loadable from the welcome screen:
   - Koala, Bluehead Wrasse, King Quail, Zebra Finch, Nile Crocodile, Spinyfin,
     Wait's Blind Snake, Couch's Spadefoot Toad, European Lancelet, Great Fruit-eating Bat
-- **Hi-C pattern gallery** with 8 reference patterns (strong diagonal, chromosome
+- **Hi-C pattern gallery** with 11 reference patterns (strong diagonal, chromosome
   blocks, inversions, translocations, micro-chromosomes, low coverage, unplaced
   contigs, A/B compartments) with visual descriptions and click-to-navigate
 - Each specimen includes metadata: species name, genome size, chromosome count,
@@ -186,7 +201,7 @@ required.
 - Touch and trackpad gesture support (pinch-zoom, two-finger pan)
 - Jump to diagonal, reset view, zoom to specific contigs
 - Responsive layout with mobile and tablet breakpoints
-- Searchable contig list with scaffold badges, exclusion indicators, and inversion markers
+- Searchable contig list with scaffold badges, meta tag badges, exclusion indicators, and inversion markers
 - Sidebar panels: contigs, scaffolds, assembly metrics, history, 3D analysis, curation progress, tracks
 - Toast notifications, detailed hover tooltips, loading progress overlay
 - Drag-and-drop file opening
@@ -372,8 +387,8 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev          # Start development server with hot reload
-npm test             # Run unit tests (1,980 tests across 71 files)
-npm run test:visual  # Run E2E tests (34 tests, Playwright + Chromium)
+npm test             # Run unit tests (2,139 tests across 79 files)
+npm run test:visual  # Run E2E tests (35 tests, Playwright + Chromium)
 npm run build        # Production build to dist/
 npm run preview      # Preview the production build
 ```
@@ -421,6 +436,7 @@ src/
     WaypointManager.ts       Named position markers
     ContigExclusion.ts       Contig hide/exclude management
     MisassemblyFlags.ts      Singleton manager for flagged contigs
+    MetaTagManager.ts        Contig classification meta tags
     AutoCut.ts               Diagonal signal breakpoint detection
     AutoSort.ts              Union Find link scoring and chaining
     BatchOperations.ts       Batch select/cut/join/invert/sort
@@ -444,6 +460,13 @@ src/
     InsulationScore.ts       Insulation score + TAD boundary detection
     ContactDecay.ts          P(s) contact decay curve + exponent fitting
     CompartmentAnalysis.ts   A/B compartment eigenvector (O/E + PCA)
+    ICENormalization.ts      ICE (Sinkhorn-Knopp) matrix balancing
+    KRNormalization.ts       Knight-Ruiz matrix balancing
+    DirectionalityIndex.ts   Directionality index + TAD boundaries
+    HiCQualityMetrics.ts     Library-level quality metrics
+    SaddlePlot.ts            Compartment strength visualization
+    Virtual4C.ts             Interactive locus contact profiling
+    TelomereDetector.ts      Telomere repeat detection from FASTA
     MisassemblyDetector.ts   Chimeric contig detection + confidence scoring
     HealthScore.ts           Composite assembly quality score (0-100)
     ScaffoldDetection.ts     Auto-detect chromosome blocks from contact map
@@ -463,12 +486,12 @@ src/
   ui/                        35 UI modules (pure DOM, no framework)
 data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
-  lessons/                   Tutorial lesson JSON files (6 lessons)
-  pattern-gallery.json       Hi-C pattern reference gallery (8 patterns)
-  prompt-strategies.json     AI prompt strategy library (5 strategies)
+  lessons/                   Tutorial lesson JSON files (9 lessons)
+  pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
+  prompt-strategies.json     AI prompt strategy library (8 strategies)
 tests/
-  unit/                      1,980 unit tests across 71 test files
-  e2e/                       34 E2E tests (Playwright + Chromium)
+  unit/                      2,139 unit tests across 79 test files
+  e2e/                       35 E2E tests (Playwright + Chromium)
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)
   runner.ts                  Benchmark pipeline orchestrator

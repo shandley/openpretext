@@ -1,0 +1,68 @@
+{
+  "id": "07-analysis-workflow",
+  "title": "3D Genomics Analysis",
+  "difficulty": "intermediate",
+  "estimatedMinutes": 20,
+  "specimenId": "koala",
+  "introduction": "OpenPretext includes a suite of 3D genomics analysis tools that reveal structural properties of the genome beyond what's visible in the raw contact map. These analyses help you assess assembly quality, detect misassemblies, and understand chromatin organization.\n\nIn this lesson, you'll learn to:\n\u2022 Run the core analysis pipeline (insulation, P(s) decay, compartments)\n\u2022 Read and interpret analysis tracks and metrics\n\u2022 Understand the composite health score\n\u2022 Normalize the contact matrix with ICE\n\u2022 Export analysis results for external use\n\nWe'll use the koala genome, which has a clean chromosome structure ideal for demonstrating these tools.",
+  "steps": [
+    {
+      "id": "open-sidebar",
+      "title": "Open the Sidebar",
+      "instruction": "First, open the sidebar by pressing **I** or clicking the **Info** button in the toolbar. Scroll down to find the **3D Analysis** section. This is your analysis command center \u2014 it contains compute buttons, result displays, and export options.",
+      "expectedAction": { "type": "observe" },
+      "hint": "The 3D Analysis section is near the bottom of the sidebar, below Assembly Metrics and History."
+    },
+    {
+      "id": "compute-all",
+      "title": "Run the Core Analysis Pipeline",
+      "instruction": "Click **Compute All** to run all three core analyses simultaneously:\n\n\u2022 **Insulation score** \u2014 measures how well each genomic region is insulated from its neighbors (detects TAD boundaries)\n\u2022 **P(s) decay** \u2014 measures how contact frequency drops with genomic distance (indicates genome compaction)\n\u2022 **A/B compartments** \u2014 identifies active (A) and inactive (B) chromatin compartments\n\nAll three run in a background Web Worker so the UI stays responsive. Watch for the results to appear below the buttons.",
+      "highlight": { "type": "ui-element", "selector": "#btn-compute-all" },
+      "expectedAction": { "type": "observe" },
+      "hint": "The computation may take a few seconds. Buttons are disabled during computation to prevent conflicts."
+    },
+    {
+      "id": "read-health-score",
+      "title": "Read the Health Score",
+      "instruction": "After computation, a **Health Score** card appears showing a composite 0\u2013100 score. This combines five components:\n\n\u2022 **N50** (20%) \u2014 contiguity, how large your contigs are\n\u2022 **P(s)** (25%) \u2014 contact decay quality, how well the power-law fits\n\u2022 **Int** (20%) \u2014 assembly integrity, fewer misassembly flags is better\n\u2022 **A/B** (15%) \u2014 compartment strength, how distinct A and B compartments are\n\u2022 **Lib** (20%) \u2014 library quality (cis/trans ratio), requires scaffold assignments\n\nA score above 70 indicates a well-assembled genome. The koala should score reasonably well. Note which components are strong and which are weak.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Hover over the component abbreviations to see their full names and scores."
+    },
+    {
+      "id": "ps-chart",
+      "title": "Understand the P(s) Decay Chart",
+      "instruction": "Below the health score, find the **P(s) decay chart** \u2014 a log-log plot showing contact frequency vs genomic distance. Key things to look for:\n\n\u2022 The **exponent** (slope) should be between -1.0 and -1.5 for a well-compacted genome\n\u2022 The **R\u00b2** value indicates how well the power-law fits \u2014 above 0.9 is good\n\u2022 The **range** shows how many distance bins were used for fitting\n\nYou can click **Snapshot Baseline** to save the current P(s) curve. After curation operations, a new curve will overlay the baseline so you can see if your edits improved compaction.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Shallow exponents (closer to 0) suggest poor compaction or misassembly. Steep exponents (closer to -2) suggest over-corrected data."
+    },
+    {
+      "id": "view-tracks",
+      "title": "Examine Analysis Tracks",
+      "instruction": "The analysis results are also rendered as **tracks** along the edges of the contact map. Toggle tracks on with **X** or the **Tracks** button. You should see:\n\n\u2022 **Insulation Score** (green line) \u2014 dips indicate TAD boundaries\n\u2022 **TAD Boundaries** (red markers) \u2014 detected boundary positions\n\u2022 **A/B Compartments** (red heatmap) \u2014 positive = A (active), negative = B (inactive)\n\nZoom into a chromosome to see how these tracks relate to the contact map structure.",
+      "expectedAction": { "type": "zoom" },
+      "hint": "Compare the insulation dips with the visual boundaries between bright contact blocks in the map."
+    },
+    {
+      "id": "normalize-ice",
+      "title": "Normalize with ICE",
+      "instruction": "Contact maps have systematic biases (GC content, mappability, restriction site density). **ICE normalization** corrects these biases by iteratively balancing row and column sums.\n\nClick **Normalize (ICE)** to run the normalization. After it completes, notice:\n\u2022 A new 'ICE Bias' track appears showing per-bin correction factors\n\u2022 The P(s) curve and compartments are automatically recomputed on the normalized data\n\u2022 The P(s) exponent may change \u2014 this is the bias-corrected value",
+      "highlight": { "type": "ui-element", "selector": "#btn-normalize-ice" },
+      "expectedAction": { "type": "observe" },
+      "hint": "ICE typically runs 10-50 iterations. Bins with very low coverage are masked (excluded from normalization)."
+    },
+    {
+      "id": "export-results",
+      "title": "Export Analysis Data",
+      "instruction": "Analysis results can be exported for use in external tools (R, Python, IGV). Scroll to the bottom of the 3D Analysis section to find export buttons:\n\n\u2022 **Export Insulation** \u2014 BedGraph format, loadable in genome browsers\n\u2022 **Export P(s)** \u2014 TSV format with distance and contact frequency columns\n\u2022 **Export Compartments** \u2014 BedGraph format with eigenvector values\n\nThese files use genomic coordinates derived from your contig ordering and sizes.",
+      "expectedAction": { "type": "observe" },
+      "hint": "BedGraph files can be loaded back into OpenPretext via the Load Track button to compare analyses across different sessions."
+    },
+    {
+      "id": "summary",
+      "title": "Analysis Summary",
+      "instruction": "You've learned the core analysis workflow:\n\n1. **Compute All** runs insulation, P(s), and compartments in parallel\n2. The **health score** gives a quick quality overview\n3. The **P(s) chart** shows genome compaction quality with baseline comparison\n4. **Analysis tracks** overlay results on the contact map for visual inspection\n5. **ICE normalization** corrects systematic biases\n6. **Export** saves results for external analysis\n\nIn your curation workflow, run analysis early to identify problems, curate to fix them, and re-run analysis to verify improvement. The health score is your compass \u2014 aim to increase it with each round of curation.",
+      "expectedAction": { "type": "observe" }
+    }
+  ],
+  "assessment": null
+}

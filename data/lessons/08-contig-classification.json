@@ -1,0 +1,52 @@
+{
+  "id": "08-contig-classification",
+  "title": "Classifying Contigs with Meta Tags",
+  "difficulty": "intermediate",
+  "estimatedMinutes": 15,
+  "specimenId": "koala",
+  "introduction": "Not all contigs in an assembly are equal. Some may be haplotigs (duplicate copies from both parental haplotypes), contaminants (sequences from other organisms), unlocalised fragments (real sequences that can't be placed), or sex chromosomes (which need special handling).\n\nOpenPretext's meta tag system lets you classify contigs into these categories. Tags are shown as colored badges in the sidebar and can be used to color-code the contig list for visual clarity.\n\nIn this lesson, you'll learn to:\n\u2022 Understand the four meta tag types and when to use each\n\u2022 Apply and remove tags from contigs\n\u2022 Use the color metric view to visualize classification\n\u2022 Work with batch tagging for efficiency",
+  "steps": [
+    {
+      "id": "understand-tags",
+      "title": "Understanding Meta Tag Types",
+      "instruction": "OpenPretext supports four meta tag types, matching the PretextView rapid curation workflow:\n\n\u2022 **Haplotig** (HAP, blue) \u2014 a duplicate copy of a genomic region from the alternate haplotype. These inflate assembly size and should typically be excluded from the primary assembly.\n\u2022 **Contaminant** (CON, red) \u2014 sequences from other organisms (bacteria, adapter sequences, etc.) that were accidentally assembled. Should be excluded.\n\u2022 **Unlocalised** (UNL, grey) \u2014 real sequences that belong to the organism but can't be confidently placed into a chromosome. Common for repetitive regions.\n\u2022 **Sex Chromosome** (SEX, magenta) \u2014 sex-linked chromosomes (X/Y, Z/W) that may need special handling during scaffolding.\n\nOpen the sidebar (press **I**) and scroll to find the **Meta Tags** section.",
+      "expectedAction": { "type": "observe" },
+      "hint": "The Meta Tags section has a dropdown for tag type, and Apply/Clear buttons."
+    },
+    {
+      "id": "select-contig",
+      "title": "Select a Contig to Tag",
+      "instruction": "Let's practice tagging a contig. In the sidebar contig list, click on one of the smaller contigs to select it. In a real curation session, you would identify candidates by looking at:\n\n\u2022 Off-diagonal mirror patterns (haplotigs)\n\u2022 Weak or absent diagonal signal (contaminants)\n\u2022 Small isolated contigs with no clear chromosome assignment (unlocalised)\n\u2022 Distinctively sized chromosomes with unusual contact patterns (sex chromosomes)\n\nFor now, select any contig to practice the workflow.",
+      "expectedAction": { "type": "select-contig" },
+      "hint": "Click a contig name in the sidebar list. Selected contigs are highlighted."
+    },
+    {
+      "id": "apply-tag",
+      "title": "Apply a Meta Tag",
+      "instruction": "With a contig selected:\n\n1. In the **Meta Tags** section, choose a tag type from the dropdown (try 'Unlocalised' for practice)\n2. Click **Apply Tag**\n\nYou should see a colored badge appear next to the contig name in the sidebar list. A summary showing the count of each tag type appears below the buttons.\n\nYou can tag multiple contigs with the same or different types. Each contig can only have one tag at a time \u2014 applying a new tag replaces the old one.",
+      "expectedAction": { "type": "observe" },
+      "hint": "The tag badges are: HAP (blue), CON (red), UNL (grey), SEX (magenta). A toast notification confirms the action."
+    },
+    {
+      "id": "color-metric",
+      "title": "Use the Meta Tag Color View",
+      "instruction": "To visualize your classification at a glance, change the contig color metric. Find the dropdown at the top of the contig list (currently showing 'Color: None') and select **Color: Meta Tag**.\n\nTagged contigs will be color-coded by their tag type, while untagged contigs remain neutral. This makes it easy to scan the assembly and see which contigs have been classified.",
+      "expectedAction": { "type": "observe" },
+      "hint": "The color metric dropdown is near the search box at the top of the Contigs section."
+    },
+    {
+      "id": "clear-tag",
+      "title": "Clear a Tag",
+      "instruction": "Made a mistake? Select the tagged contig again and click **Clear Tag** to remove its classification. The badge disappears and the summary count updates.\n\nIn a real workflow, you might tag contigs as you investigate them, then clear and re-tag as your understanding of the assembly improves.",
+      "expectedAction": { "type": "observe" },
+      "hint": "You can also replace a tag by selecting a different type and clicking Apply again."
+    },
+    {
+      "id": "summary",
+      "title": "Meta Tags Summary",
+      "instruction": "You've learned to use the meta tag system:\n\n\u2022 **Haplotig** for duplicate haplotype copies\n\u2022 **Contaminant** for foreign sequences\n\u2022 **Unlocalised** for unplaceable fragments\n\u2022 **Sex Chromosome** for sex-linked sequences\n\nTags are visual annotations \u2014 they help you organize your thinking during curation. In combination with contig exclusion (press **H** to hide contigs from exports), tags help you track which contigs need special handling.\n\nTip: In bird and reptile assemblies, look for one distinctively large chromosome block (Z) and a small noisy one (W) to tag as sex chromosomes.",
+      "expectedAction": { "type": "observe" }
+    }
+  ],
+  "assessment": null
+}

@@ -64,6 +64,30 @@
       "whatToLookFor": "Checkerboard-like alternating bright and dark patches within a chromosome block.",
       "specimenId": "koala",
       "exampleRegion": { "x1": 0.0, "y1": 0.0, "x2": 0.12, "y2": 0.12 }
+    },
+    {
+      "id": "telomere-signal",
+      "title": "Telomere Signal",
+      "description": "Telomere repeat sequences (TTAGGG in vertebrates) mark the physical ends of chromosomes. When a reference FASTA is loaded, telomere detection scans for these motifs at contig ends. Green peaks in the telomere density track indicate telomere-enriched regions. Telomere presence at both ends of a chromosome block suggests the chromosome is fully assembled from end to end.",
+      "whatToLookFor": "Green peaks in the Telomere Repeats track at contig boundaries, particularly at the outermost contigs of chromosome blocks.",
+      "specimenId": "koala",
+      "exampleRegion": { "x1": 0.0, "y1": 0.0, "x2": 0.05, "y2": 0.05 }
+    },
+    {
+      "id": "sex-chromosomes",
+      "title": "Sex Chromosomes",
+      "description": "Sex chromosomes (X/Y in mammals, Z/W in birds) often show distinctive Hi-C patterns. The heterogametic chromosome (Y or W) is typically small, repeat-rich, and shows weak or noisy signal. In birds, the Z chromosome is large and well-assembled while the W is small and fragmented. Off-diagonal contact between sex chromosomes may indicate pseudoautosomal regions. Use the meta tag system to classify these as 'sex_chromosome'.",
+      "whatToLookFor": "One chromosome block notably smaller or noisier than others, or asymmetric off-diagonal signal between two specific blocks. In birds, look for a large Z and small W.",
+      "specimenId": "quail",
+      "exampleRegion": { "x1": 0.08, "y1": 0.08, "x2": 0.25, "y2": 0.25 }
+    },
+    {
+      "id": "haplotig-mirror",
+      "title": "Haplotig (Dual Haplotype)",
+      "description": "In phased or dual-haplotype assemblies, haplotigs appear as mirror-image off-diagonal blocks. Each haplotype copy of a chromosome shows strong self-contact on the diagonal, plus contact with its homologous region creating symmetric off-diagonal squares. These haplotigs should be classified using meta tags and either separated or excluded from the primary haploid assembly.",
+      "whatToLookFor": "Pairs of chromosome blocks with symmetric off-diagonal signal between them, suggesting they are homologous haplotype copies. The haplotig copy is typically shorter and may show noisier signal.",
+      "specimenId": "bat",
+      "exampleRegion": { "x1": 0.0, "y1": 0.3, "x2": 0.25, "y2": 0.55 }
     }
   ]
 }

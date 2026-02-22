@@ -44,6 +44,7 @@ src/
     WaypointManager.ts       Named position markers
     ContigExclusion.ts       Set-based contig hide/exclude management
     MisassemblyFlags.ts      Singleton manager for flagged misassembly contigs
+    MetaTagManager.ts        Contig classification meta tags (singleton)
     AutoCut.ts               Diagonal signal breakpoint detection
     AutoSort.ts              Union Find link scoring and chaining
     BatchOperations.ts       Batch select/cut/join/invert/sort operations
@@ -58,6 +59,8 @@ src/
     HiCQualityMetrics.ts     Library quality (cis/trans, short/long, density)
     SaddlePlot.ts            Saddle plot (compartment strength visualization)
     Virtual4C.ts             Virtual 4C locus contact profiling
+    TelomereDetector.ts      Telomere repeat detection from FASTA sequences
+    KRNormalization.ts       Knight-Ruiz (KR) matrix balancing
     MisassemblyDetector.ts   TAD/compartment-based chimeric contig detection
     HealthScore.ts           Composite assembly quality score (0–100)
     ScaffoldDetection.ts     Auto-detect chromosome blocks from block-diagonal
@@ -107,9 +110,9 @@ src/
     index.ts                 Barrel exports for UI modules
 data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
-  lessons/                   Tutorial lesson JSON files (6 lessons)
-  pattern-gallery.json       Hi-C pattern reference gallery (8 patterns)
-  prompt-strategies.json     AI prompt strategy library (5 strategies)
+  lessons/                   Tutorial lesson JSON files (9 lessons)
+  pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
+  prompt-strategies.json     AI prompt strategy library (8 strategies)
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)
   runner.ts                  Benchmark pipeline orchestrator
@@ -122,7 +125,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1999 unit tests across 76 files (vitest)
+  unit/                      2139 unit tests across 79 files (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -164,6 +167,9 @@ tests/
     hic-quality-metrics.test.ts   Hi-C quality metrics + health score (18 tests)
     saddle-plot.test.ts           Saddle plot (20 tests)
     virtual-4c.test.ts            Virtual 4C (22 tests)
+    meta-tag.test.ts              MetaTagManager CRUD + events (61 tests)
+    telomere-detector.test.ts     Telomere repeat detection + track (40 tests)
+    kr-normalization.test.ts      KR matrix balancing + track (39 tests)
     misassembly-detector.test.ts  Misassembly detection + confidence scoring (31 tests)
     cut-suggestions.test.ts      Cut suggestion generation + pixel conversion (18 tests)
     health-score.test.ts         Composite health score computation (28 tests)
@@ -218,8 +224,8 @@ tests/
 4. **Single runtime dependency** -- only `pako` for deflate decompression
 5. **Dependency injection** -- ScriptExecutor uses a ScriptContext interface
    so tests can run without DOM or GPU
-6. **Singleton patterns** -- `contigExclusion`, `misassemblyFlags`, and `state`
-   are singletons; batch operations read directly from state
+6. **Singleton patterns** -- `contigExclusion`, `misassemblyFlags`, `metaTags`,
+   and `state` are singletons; batch operations read directly from state
 7. **Web Worker for analysis** -- 3D genomics computations (insulation,
    compartments) run in a background worker to avoid blocking the UI;
    `AnalysisWorkerClient` provides a Promise-based API with automatic
@@ -357,16 +363,17 @@ themselves. The undo stack is the source of truth for curation history.
 - **AnalysisWorkerClient**: Runs analysis computations in a background Web
   Worker (`AnalysisWorker.ts`) via `postMessage`. Falls back to synchronous
   main-thread execution if workers are unavailable. Also handles ICE
-  normalization and directionality index requests. Result typed arrays are
-  transferred (zero-copy) from worker to main thread.
+  normalization, KR normalization, and directionality index requests.
+  Result typed arrays are transferred (zero-copy) from worker to main thread.
 - **AnalysisPanel**: Sidebar section "3D Analysis" with compute buttons,
   insulation window size slider, and auto-computation on `file:loaded` via
   `EventWiring`. Buttons are disabled during computation and all three
-  core analyses run in parallel in the worker. Also includes 5 additional
-  buttons (Directionality, Library Quality, Normalize ICE, Compute Saddle
-  Plot, Clear V4C) with 5 additional result caches. Includes 7 export
-  buttons (Insulation BedGraph, P(s) TSV, Compartments BedGraph,
-  Directionality BedGraph, ICE Bias BedGraph, Quality TSV, Saddle TSV),
+  core analyses run in parallel in the worker. Also includes 6 additional
+  buttons (Directionality, Library Quality, Normalize ICE, Normalize KR,
+  Compute Saddle Plot, Clear V4C) with 6 additional result caches
+  (including KR and telomere). Includes 8 export buttons (Insulation
+  BedGraph, P(s) TSV, Compartments BedGraph, Directionality BedGraph,
+  ICE Bias BedGraph, KR Bias BedGraph, Quality TSV, Saddle TSV),
   an inline P(s) decay SVG chart with comparative overlay (baseline vs
   current), a health score card, and debounced auto-recompute of insulation
   + P(s) after curation operations (1s debounce, compartments excluded).
@@ -392,7 +399,7 @@ themselves. The undo stack is the source of truth for curation history.
   (score = (1 + log10(ratio)) * 100, where ratio < 0.1 scores 0).
   Used by both AnalysisPanel (detailed card) and StatsPanel (summary row).
 - **Analysis persistence**: Analysis results (insulation, P(s) decay,
-  compartments, baseline P(s), ICE, directionality, quality, saddle) are
+  compartments, baseline P(s), ICE, KR, directionality, quality, saddle) are
   serialized in session files via optional `SessionAnalysisData` field.
   `exportAnalysisState()` converts typed arrays to `number[]`;
   `restoreAnalysisState()` reconstructs them and re-registers tracks.
@@ -406,6 +413,26 @@ themselves. The undo stack is the source of truth for curation history.
   to avoid false positives at true assembly breaks. Merges nearby TAD +
   compartment signals within a merge radius into higher-confidence `'both'`
   flags. Produces a marker `TrackConfig` for overlay rendering.
+- **MetaTagManager**: Singleton manager (mirrors `ContigExclusion` pattern)
+  for classifying contigs with meta tags. Types: `haplotig`, `contaminant`,
+  `unlocalised`, `sex_chromosome`. Emits `'metatag:updated'` event with
+  `{ count }` payload. Sidebar shows colored badges (HAP/CON/UNL/SEX)
+  and supports "Color: Meta Tag" metric. Cleared on `file:loaded` via
+  EventWiring. `setMany()`/`removeMany()` emit only once for batch ops.
+- **TelomereDetector**: Pure algorithm scanning loaded FASTA sequences for
+  telomere repeat motifs (TTAGGG/CCCTAA) at contig ends. Computes genome-wide
+  density profile and identifies telomere-positive ends exceeding a minimum
+  density threshold. Requires `referenceSequences` map from FASTA loading.
+  Runs synchronously. Produces "Telomere Repeats" marker track (green,
+  `#00e676`). Emits `'telomere:detected'` event.
+- **KRNormalization**: Knight-Ruiz iterative matrix balancing (Knight & Ruiz
+  2013). Accumulates scaling vector via `x_new = x * sqrt(rowSum)`. Reuses
+  `computeRowSums` and `filterLowCoverageBins` from ICENormalization. Tighter
+  convergence (epsilon 1e-6, max 200 iterations) than ICE. Worker-integrated
+  via `AnalysisWorkerClient.normalizeKR()`. When KR completes, compartments
+  and P(s) are re-run on the normalized matrix. Produces "KR Bias" line
+  track (coral, `#ff7675`). Session-persisted as `SessionICE` type (bias
+  vector only; matrix re-derived on restore).
 - **MisassemblyFlags**: Singleton manager (mirrors `ContigExclusion` pattern)
   tracking flagged contig indices. `setFlags()` emits `'misassembly:updated'`
   event for reactive sidebar refresh. Sidebar shows orange "MIS" badges.
@@ -446,7 +473,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1999 tests must pass
+- Run `npm test` before committing; all 2139 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls
@@ -463,6 +490,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - `contigExclusion` is a singleton -- call `clearAll()` when loading new data.
 - `misassemblyFlags` is a singleton -- call `clearAll()` when loading new data
   or clearing analysis tracks.
+- `metaTags` is a singleton -- call `clearAll()` when loading new data.
 - Batch operations process indices right-to-left to maintain index stability
   during cuts and joins.
 - Analysis modules operate on the overview `contactMap`, not full-resolution

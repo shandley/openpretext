@@ -1,0 +1,67 @@
+{
+  "id": "09-automated-misassembly",
+  "title": "Automated Misassembly Detection",
+  "difficulty": "advanced",
+  "estimatedMinutes": 25,
+  "specimenId": "finch",
+  "introduction": "Manual curation requires expert pattern recognition, but OpenPretext's automated detection pipeline can identify many common misassemblies algorithmically. The system combines TAD boundary analysis, compartment switching detection, and pattern recognition to find chimeric contigs and structural errors.\n\nIn this lesson, you'll learn to:\n\u2022 Run the full analysis pipeline to detect misassemblies\n\u2022 Interpret misassembly flags and confidence scores\n\u2022 Use the guided cut review panel\n\u2022 Detect inversions and translocations automatically\n\u2022 Auto-detect and assign chromosome scaffolds\n\u2022 Verify improvements using the health score\n\nWe'll use the zebra finch genome, which has real misassemblies to detect and correct.",
+  "steps": [
+    {
+      "id": "run-analysis",
+      "title": "Run the Analysis Pipeline",
+      "instruction": "Open the sidebar (**I**) and find the **3D Analysis** section. Click **Compute All** to run insulation, P(s), and compartment analysis.\n\nThese three analyses form the foundation for misassembly detection:\n\u2022 **Insulation** finds TAD boundaries \u2014 boundaries that fall inside a contig (not at its edges) suggest the contig is chimeric\n\u2022 **Compartments** find A/B switches \u2014 compartment changes inside a contig suggest it joins non-contiguous genomic regions\n\u2022 **P(s) decay** provides a baseline quality metric\n\nWait for all three to complete.",
+      "highlight": { "type": "ui-element", "selector": "#btn-compute-all" },
+      "expectedAction": { "type": "observe" },
+      "hint": "Computation runs in a background worker. Buttons are disabled during processing."
+    },
+    {
+      "id": "review-flags",
+      "title": "Review Misassembly Flags",
+      "instruction": "After analysis completes, look at the contig list in the sidebar. Some contigs now show orange **MIS** badges \u2014 these are potential misassemblies detected by the algorithm.\n\nThe detector finds contigs where TAD boundaries or compartment switches fall well inside the contig (not at the edges, which would be normal chromosome boundaries). The number of flagged contigs is shown in the analysis panel.\n\nScroll through the contig list and note which contigs are flagged.",
+      "expectedAction": { "type": "observe" },
+      "hint": "MIS badges appear next to the contig size. More flagged contigs means more potential misassemblies to review."
+    },
+    {
+      "id": "suggest-cuts",
+      "title": "Generate Cut Suggestions",
+      "instruction": "Click the **Suggest Cuts** button in the analysis panel. This converts misassembly flags into specific cut recommendations, each with a confidence score:\n\n\u2022 **Green** (high confidence) \u2014 strong TAD + compartment evidence\n\u2022 **Yellow** (medium confidence) \u2014 moderate evidence from one signal type\n\u2022 **Red** (low confidence) \u2014 weak evidence, may be a false positive\n\nSuggestions are sorted by confidence. You don't have to accept all of them \u2014 use your judgment, especially for red suggestions.",
+      "expectedAction": { "type": "observe" },
+      "hint": "The number in parentheses shows how many suggestions were generated."
+    },
+    {
+      "id": "cut-review",
+      "title": "Use the Cut Review Panel",
+      "instruction": "Click **Review Cuts** to open the guided review panel at the bottom of the screen. This presents one cut suggestion at a time:\n\n\u2022 The camera automatically navigates to the cut location\n\u2022 Press **Y** to accept the cut (executes it immediately)\n\u2022 Press **N** to skip to the next suggestion\n\u2022 Press **B** to go back to the previous suggestion\n\nStart reviewing suggestions. Accept the high-confidence ones and skip the uncertain ones. After each accepted cut, the queue refreshes with updated detection.",
+      "expectedAction": { "type": "observe" },
+      "hint": "You can close the review panel at any time and undo any accepted cuts with Cmd+Z."
+    },
+    {
+      "id": "detect-patterns",
+      "title": "Detect Inversions and Translocations",
+      "instruction": "Click **Detect Patterns** to run algorithmic detection of two common structural errors:\n\n\u2022 **Inversions** \u2014 contigs with anti-diagonal (butterfly) signal indicating reversed orientation\n\u2022 **Translocations** \u2014 off-diagonal enrichment between non-adjacent contig pairs suggesting misjoined sequences\n\nResults appear as clickable cards. Click **Go** on any detection to navigate the camera to that location for visual confirmation.\n\nFor detected inversions, you can switch to edit mode (**E**) and press **F** to flip the contig.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Not all detections will be true positives. Zoom into each one and use the visual pattern to confirm before acting."
+    },
+    {
+      "id": "auto-scaffolds",
+      "title": "Auto-Detect Scaffolds",
+      "instruction": "After correcting misassemblies, click **Auto-assign Scaffolds** to automatically detect chromosome boundaries from the block-diagonal structure of the contact map.\n\nThe algorithm finds boundaries where inter-contig contact drops sharply, then creates scaffolds named Chr1, Chr2, etc. (largest first). Check the Scaffolds section in the sidebar to verify the assignments look reasonable.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Auto-scaffolding works best after cuts and sorting have been applied. The finch genome should have around 30-40 chromosomes."
+    },
+    {
+      "id": "verify-health",
+      "title": "Verify with Health Score",
+      "instruction": "Check the health score to see if your curation improved the assembly. Compare the current score with what it was before your edits.\n\nKey indicators of improvement:\n\u2022 Higher assembly integrity (fewer misassembly flags)\n\u2022 Better P(s) fit (higher R\u00b2)\n\u2022 Stronger compartment signal\n\u2022 Library quality now computable (with scaffolds assigned)\n\nA good curation session should increase the health score by 10-20 points.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Use the P(s) baseline snapshot to compare before/after decay curves."
+    },
+    {
+      "id": "summary",
+      "title": "Automated Detection Summary",
+      "instruction": "You've learned the automated misassembly detection workflow:\n\n1. **Compute All** runs the foundation analyses\n2. **MIS flags** identify potentially chimeric contigs\n3. **Suggest Cuts** converts flags to actionable cut recommendations with confidence scores\n4. **Review Cuts** provides a guided step-by-step review panel\n5. **Detect Patterns** finds inversions and translocations algorithmically\n6. **Auto-assign Scaffolds** groups corrected contigs into chromosomes\n7. **Health score** validates that your curation improved the assembly\n\nThis pipeline handles the bulk of common misassemblies. For subtle cases, manual review using the visual patterns you learned in earlier lessons remains essential.",
+      "expectedAction": { "type": "observe" }
+    }
+  ],
+  "assessment": null
+}

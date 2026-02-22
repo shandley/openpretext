@@ -14,8 +14,8 @@ describe('PromptStrategy', () => {
       expect(library.version).toBe('1.0.0');
     });
 
-    it('has 5 strategies', () => {
-      expect(library.strategies).toHaveLength(5);
+    it('has 8 strategies', () => {
+      expect(library.strategies).toHaveLength(8);
     });
 
     it('has unique IDs', () => {

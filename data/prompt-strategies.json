@@ -68,6 +68,53 @@
           "commands": "# The tiny blocks are likely micro-chromosomes — verify ordering\necho Micro-chromosomes detected: small blocks at positions #25-#40\nzoom #25"
         }
       ]
+    },
+    {
+      "id": "analysis-guided",
+      "name": "Analysis-Guided Curation",
+      "description": "Uses computed analysis tracks (insulation, P(s), compartments, health score) to guide curation decisions. Best used after running the 3D analysis pipeline.",
+      "category": "workflow",
+      "supplement": "This assembly has been analyzed with the 3D genomics analysis pipeline. Use the analysis results to guide your curation suggestions:\n\n1. Check the health score components — low scores indicate specific problems:\n   - Low contiguity (N50): many small contigs, suggest autosort or joins\n   - Low P(s) quality: poor contact decay fit, suggest checking for misjoins\n   - Low assembly integrity: many misassembly flags, suggest cuts at flagged positions\n   - Low compartment strength: weak A/B signal, may indicate normalization needed\n   - Low library quality: high trans ratio, may indicate contamination\n\n2. If misassembly flags are present, prioritize cuts at flagged positions\n3. If pattern detection found inversions, suggest invert commands for the affected contigs\n4. If scaffold auto-detection has not been run, suggest it after basic corrections\n5. After curation, re-check the health score to verify improvement\n\nFocus on operations that will most improve the health score. Address integrity issues first (cuts), then ordering (sorts/moves), then scaffolding.",
+      "examples": [
+        {
+          "scenario": "Health score is 45/100 with low assembly integrity (misassembly flags on contigs #5, #12, #18)",
+          "commands": "# Address misassembly flags — cut at detected breakpoints\ncut #5 512\ncut #12 256\ncut #18 384"
+        },
+        {
+          "scenario": "After running ICE normalization, P(s) exponent improved from -0.8 to -1.1 but compartment strength is still low",
+          "commands": "# Reorder contigs to strengthen block-diagonal structure\nautosort\necho Re-run compartment analysis after sorting"
+        }
+      ]
+    },
+    {
+      "id": "haplotig-detection",
+      "name": "Haplotig Detection",
+      "description": "Identifies and classifies haplotigs in dual-haplotype or partially phased assemblies. Looks for mirror-image off-diagonal blocks indicating homologous chromosome copies.",
+      "category": "pattern",
+      "supplement": "This assembly may contain haplotigs — duplicate copies of genomic regions from both haplotypes. Key visual signatures:\n\n- Symmetric off-diagonal bright blocks between two chromosome regions\n- Two blocks of similar size with mutual strong contact\n- The haplotig copy is typically shorter and may show noisier signal\n- Haplotigs create artificially inflated contig counts and confuse scaffolding\n\nFor each suspected haplotig:\n1. Identify the primary copy (usually larger, cleaner signal)\n2. Identify the haplotig copy (smaller, noisier, or more fragmented)\n3. Do NOT cut or join haplotigs — instead, exclude them from the primary assembly\n4. Use the meta tag system to classify contigs: tag haplotigs as 'haplotig'\n5. Suggest excluding tagged haplotigs so they don't interfere with chromosome-level scaffolding\n\nNote: In some assemblies, both haplotype copies are intentionally retained (e.g., trio-phased assemblies). Confirm whether this is a primary or phased assembly before excluding haplotigs. If unsure, tag but don't exclude.",
+      "examples": [
+        {
+          "scenario": "Contigs #30-#35 show mirror-image off-diagonal signal with the chromosome block at #5-#10, suggesting they are haplotig copies",
+          "commands": "# Tag suspected haplotigs for review\necho Haplotigs detected: #30-#35 appear to mirror chromosome at #5-#10\nzoom #30"
+        }
+      ]
+    },
+    {
+      "id": "telomere-aware",
+      "name": "Telomere-Aware Curation",
+      "description": "Uses telomere detection results to guide chromosome completeness assessment and endpoint validation. Best used after loading a reference FASTA and running telomere detection.",
+      "category": "pattern",
+      "supplement": "Telomere repeat sequences (TTAGGG in vertebrates) mark the physical ends of chromosomes. Use telomere detection results to assess assembly completeness:\n\n1. A contig with telomere signal at both 5' and 3' ends likely represents a complete chromosome or a large terminal fragment\n2. A contig with telomere signal at only one end is likely a chromosome terminus — check if it's at the correct end of its scaffold\n3. Chromosome blocks should ideally begin and end with telomere-positive contigs\n4. A telomere-positive contig found in the middle of a chromosome block may indicate a misassembly — the telomere should only appear at chromosome ends\n5. Short contigs with telomere signal but no other strong contacts may be unplaced fragments\n\nAfter sorting contigs into scaffolds:\n- Verify that telomere-positive contigs are at the boundaries (first/last position) of each scaffold\n- If a telomere-positive contig is in the middle of a chromosome, consider moving it to the nearest end or cutting the chromosome at that point\n- Missing telomere signals at both ends of a scaffold is normal — not all chromosome ends have detectable telomere repeats in draft assemblies\n\nThis strategy works best in combination with scaffold assignment. Assign scaffolds first, then validate telomere placement.",
+      "examples": [
+        {
+          "scenario": "Contig #3 has telomere signal at its 3' end but is positioned in the middle of a chromosome block (#1 through #8)",
+          "commands": "# Move telomere-positive contig to chromosome end\nmove #3 after #8\necho Moved telomere-positive contig #3 to chromosome terminus"
+        },
+        {
+          "scenario": "After scaffolding, Chr1 has telomere signal only at its 5' end (contig #0) but none at the 3' end",
+          "commands": "# Check for unplaced telomere-positive contigs that might belong here\necho Chr1 missing 3' telomere — check unplaced contigs for matches\nzoom #0"
+        }
+      ]
     }
   ]
 }
