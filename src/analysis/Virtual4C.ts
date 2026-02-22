@@ -186,7 +186,7 @@ export function virtual4CToTrack(
     name: `Virtual 4C (bin ${result.viewpoint})`,
     type: 'line',
     data,
-    color: 'rgb(255, 140, 50)',
+    color: '#ff8c32',
     height: 40,
     visible: true,
   };

@@ -247,7 +247,7 @@ export function qualityToTrack(
     name: 'Per-Contig Cis Ratio',
     type: 'line',
     data,
-    color: 'rgb(100, 180, 255)',
+    color: '#64b4ff',
     height: 30,
     visible: true,
   };

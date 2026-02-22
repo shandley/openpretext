@@ -27,6 +27,10 @@ import {
   downloadInsulationBedGraph,
   downloadCompartmentBedGraph,
   downloadDecayTSV,
+  downloadDirectionalityBedGraph,
+  downloadICEBiasBedGraph,
+  downloadQualityTSV,
+  downloadSaddleTSV,
 } from '../export/AnalysisExport';
 import {
   detectMisassemblies,
@@ -924,7 +928,7 @@ function updateResultsDisplay(ctx: AppContext): void {
   }
 
   // Export buttons (only if at least one result exists)
-  if (cachedInsulation || cachedDecay || cachedCompartments) {
+  if (cachedInsulation || cachedDecay || cachedCompartments || cachedDI || cachedICE || cachedQuality || cachedSaddle) {
     html += '<div class="analysis-export-buttons">';
     if (cachedInsulation) {
       html += '<button class="analysis-btn" id="btn-export-insulation">Export Insulation</button>';
@@ -934,6 +938,18 @@ function updateResultsDisplay(ctx: AppContext): void {
     }
     if (cachedCompartments) {
       html += '<button class="analysis-btn" id="btn-export-compartments">Export Compartments</button>';
+    }
+    if (cachedDI) {
+      html += '<button class="analysis-btn" id="btn-export-di">Export DI</button>';
+    }
+    if (cachedICE) {
+      html += '<button class="analysis-btn" id="btn-export-ice">Export ICE Bias</button>';
+    }
+    if (cachedQuality) {
+      html += '<button class="analysis-btn" id="btn-export-quality">Export Quality</button>';
+    }
+    if (cachedSaddle) {
+      html += '<button class="analysis-btn" id="btn-export-saddle">Export Saddle</button>';
     }
     html += '</div>';
   }
@@ -963,6 +979,30 @@ function updateResultsDisplay(ctx: AppContext): void {
     if (cachedCompartments) {
       downloadCompartmentBedGraph(cachedCompartments, s, overviewSize);
       ctx.showToast('Compartment BedGraph exported');
+    }
+  });
+  document.getElementById('btn-export-di')?.addEventListener('click', () => {
+    if (cachedDI) {
+      downloadDirectionalityBedGraph(cachedDI, s, overviewSize);
+      ctx.showToast('Directionality BedGraph exported');
+    }
+  });
+  document.getElementById('btn-export-ice')?.addEventListener('click', () => {
+    if (cachedICE) {
+      downloadICEBiasBedGraph(cachedICE, s, overviewSize);
+      ctx.showToast('ICE Bias BedGraph exported');
+    }
+  });
+  document.getElementById('btn-export-quality')?.addEventListener('click', () => {
+    if (cachedQuality) {
+      downloadQualityTSV(cachedQuality, s);
+      ctx.showToast('Quality metrics TSV exported');
+    }
+  });
+  document.getElementById('btn-export-saddle')?.addEventListener('click', () => {
+    if (cachedSaddle) {
+      downloadSaddleTSV(cachedSaddle);
+      ctx.showToast('Saddle plot TSV exported');
     }
   });
 

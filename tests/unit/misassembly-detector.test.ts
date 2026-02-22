@@ -287,7 +287,7 @@ describe('misassemblyToTrack', () => {
     expect(track.data[512]).toBe(1);
     // Pixel 75 in overview → 75/100 * 1024 = 768 in texture
     expect(track.data[768]).toBe(1);
-    expect(track.color).toBe('rgb(255, 165, 0)');
+    expect(track.color).toBe('#ffa500');
     expect(track.visible).toBe(true);
   });
 

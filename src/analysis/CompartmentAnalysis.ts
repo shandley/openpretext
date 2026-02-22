@@ -388,7 +388,7 @@ export function compartmentToTrack(
     name: 'A/B Compartments',
     type: 'heatmap',
     data,
-    color: 'rgb(255, 100, 100)',
+    color: '#ff6464',
     height: 16,
     visible: true,
   };

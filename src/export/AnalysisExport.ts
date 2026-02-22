@@ -12,6 +12,10 @@ import type { AppState } from '../core/State';
 import type { InsulationResult } from '../analysis/InsulationScore';
 import type { ContactDecayResult } from '../analysis/ContactDecay';
 import type { CompartmentResult } from '../analysis/CompartmentAnalysis';
+import type { DIResult } from '../analysis/DirectionalityIndex';
+import type { ICEResult } from '../analysis/ICENormalization';
+import type { HiCQualityResult } from '../analysis/HiCQualityMetrics';
+import type { SaddleResult } from '../analysis/SaddlePlot';
 
 // ---------------------------------------------------------------------------
 // Coordinate mapping
@@ -162,6 +166,93 @@ export function exportDecayTSV(result: ContactDecayResult): string {
   return lines.join('\n') + '\n';
 }
 
+/**
+ * Export directionality index scores as BedGraph.
+ */
+export function exportDirectionalityBedGraph(
+  result: DIResult,
+  appState: AppState,
+  overviewSize: number,
+): string {
+  const pixelMap = buildPixelToContigMap(appState, overviewSize);
+  return formatAnalysisBedGraph('Directionality Index', result.diScores, pixelMap);
+}
+
+/**
+ * Export ICE bias vector as BedGraph.
+ */
+export function exportICEBiasBedGraph(
+  result: ICEResult,
+  appState: AppState,
+  overviewSize: number,
+): string {
+  const pixelMap = buildPixelToContigMap(appState, overviewSize);
+  return formatAnalysisBedGraph('ICE Bias', result.biasVector, pixelMap);
+}
+
+/**
+ * Export Hi-C quality metrics as TSV.
+ */
+export function exportQualityTSV(
+  result: HiCQualityResult,
+  appState: AppState,
+): string {
+  const lines: string[] = [
+    '# Hi-C library quality metrics',
+    `# Cis/trans ratio: ${result.cisTransRatio.toFixed(4)}`,
+    `# Cis percentage: ${result.cisPercentage.toFixed(2)}%`,
+    `# Long/short ratio: ${result.longShortRatio.toFixed(4)}`,
+    `# Contact density: ${result.contactDensity.toFixed(6)}`,
+    `# Flagged contigs: ${result.flaggedContigs.length}`,
+    'contig\tcis_ratio',
+  ];
+
+  if (appState.map) {
+    const { contigs } = appState.map;
+    const { contigOrder } = appState;
+    for (let i = 0; i < contigOrder.length; i++) {
+      const contig = contigs[contigOrder[i]];
+      const ratio = i < result.perContigCisRatio.length ? result.perContigCisRatio[i] : 0;
+      lines.push(`${contig.name}\t${ratio.toFixed(4)}`);
+    }
+  }
+
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Export saddle plot matrix as TSV.
+ */
+export function exportSaddleTSV(result: SaddleResult): string {
+  if (result.nBins === 0) return '';
+
+  const lines: string[] = [
+    '# Saddle plot matrix',
+    `# Compartment strength: ${result.strength.toFixed(4)}`,
+    `# Bins: ${result.nBins}`,
+  ];
+
+  // Header: bin edge midpoints
+  const header = ['bin'];
+  for (let j = 0; j < result.nBins; j++) {
+    const mid = (result.binEdges[j] + result.binEdges[j + 1]) / 2;
+    header.push(mid.toFixed(3));
+  }
+  lines.push(header.join('\t'));
+
+  // Matrix rows
+  for (let i = 0; i < result.nBins; i++) {
+    const mid = (result.binEdges[i] + result.binEdges[i + 1]) / 2;
+    const row = [mid.toFixed(3)];
+    for (let j = 0; j < result.nBins; j++) {
+      row.push(result.saddleMatrix[i * result.nBins + j].toFixed(4));
+    }
+    lines.push(row.join('\t'));
+  }
+
+  return lines.join('\n') + '\n';
+}
+
 // ---------------------------------------------------------------------------
 // Download triggers
 // ---------------------------------------------------------------------------
@@ -211,4 +302,41 @@ export function downloadDecayTSV(
 ): void {
   const content = exportDecayTSV(result);
   triggerDownload(content, filename ?? 'decay_curve.tsv');
+}
+
+export function downloadDirectionalityBedGraph(
+  result: DIResult,
+  appState: AppState,
+  overviewSize: number,
+  filename?: string,
+): void {
+  const content = exportDirectionalityBedGraph(result, appState, overviewSize);
+  triggerDownload(content, filename ?? `${defaultBasename(appState)}_directionality.bedgraph`);
+}
+
+export function downloadICEBiasBedGraph(
+  result: ICEResult,
+  appState: AppState,
+  overviewSize: number,
+  filename?: string,
+): void {
+  const content = exportICEBiasBedGraph(result, appState, overviewSize);
+  triggerDownload(content, filename ?? `${defaultBasename(appState)}_ice_bias.bedgraph`);
+}
+
+export function downloadQualityTSV(
+  result: HiCQualityResult,
+  appState: AppState,
+  filename?: string,
+): void {
+  const content = exportQualityTSV(result, appState);
+  triggerDownload(content, filename ?? `${defaultBasename(appState)}_quality.tsv`);
+}
+
+export function downloadSaddleTSV(
+  result: SaddleResult,
+  filename?: string,
+): void {
+  const content = exportSaddleTSV(result);
+  triggerDownload(content, filename ?? 'saddle_plot.tsv');
 }

@@ -274,7 +274,7 @@ describe('bedGraphToTrack', () => {
 
     expect(track.name).toBe('BedGraph');
     expect(track.type).toBe('line');
-    expect(track.color).toBe('rgb(100, 200, 255)');
+    expect(track.color).toBe('#64c8ff');
     expect(track.height).toBe(40);
     expect(track.visible).toBe(true);
   });

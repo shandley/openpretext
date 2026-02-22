@@ -174,7 +174,7 @@ export function bedGraphToTrack(
     name: options?.name ?? result.trackName ?? 'BedGraph',
     type: options?.type ?? 'line',
     data,
-    color: options?.color ?? 'rgb(100, 200, 255)',
+    color: options?.color ?? '#64c8ff',
     height: options?.height ?? 40,
     visible: true,
   };

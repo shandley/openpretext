@@ -429,7 +429,7 @@ export function misassemblyToTrack(
     name: 'Misassembly Flags',
     type: 'marker',
     data,
-    color: 'rgb(255, 165, 0)',
+    color: '#ffa500',
     height: 20,
     visible: true,
   };

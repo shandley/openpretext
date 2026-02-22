@@ -287,7 +287,7 @@ export function iceToTrack(
     name: 'ICE Bias',
     type: 'line',
     data,
-    color: 'rgb(180, 130, 255)',
+    color: '#b482ff',
     height: 30,
     visible: true,
   };
