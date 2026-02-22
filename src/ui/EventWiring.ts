@@ -9,6 +9,7 @@ import type { AppContext } from './AppContext';
 import { events } from '../core/EventBus';
 import { state } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
+import { metaTags } from '../curation/MetaTagManager';
 import { getContigBoundaries } from '../core/DerivedState';
 import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel } from './AnalysisPanel';
 import { updateComparisonSummary } from './ComparisonMode';
@@ -33,6 +34,7 @@ export function setupEventListeners(ctx: AppContext): void {
       );
       ctx.comparisonVisible = false;
       contigExclusion.clearAll();
+      metaTags.clearAll();
       // Set progress reference to initial contig order
       ctx.progressReference = [...s.contigOrder];
       ctx.previousProgress = null;
@@ -45,6 +47,7 @@ export function setupEventListeners(ctx: AppContext): void {
   });
 
   events.on('misassembly:updated', () => ctx.updateSidebarContigList());
+  events.on('metatag:updated', () => ctx.updateSidebarContigList());
 
   events.on('curation:cut', () => refreshAfterCuration(ctx));
   events.on('curation:join', () => refreshAfterCuration(ctx));

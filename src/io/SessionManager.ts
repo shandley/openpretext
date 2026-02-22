@@ -182,6 +182,7 @@ export interface SessionAnalysisData {
   compartments?: SessionCompartments;
   scaffoldDecay?: SessionScaffoldDecay[];
   ice?: SessionICE;
+  kr?: SessionICE;
   directionality?: SessionDirectionality;
   quality?: SessionQuality;
   saddle?: SessionSaddle;
@@ -320,6 +321,18 @@ function validateSessionAnalysis(v: unknown): boolean {
     }
     if (!isFiniteNumber(v.ice.iterations)) return false;
     if (!isFiniteNumber(v.ice.maxDeviation)) return false;
+  }
+
+  // Optional KR normalization (same shape as ICE)
+  if (v.kr !== undefined) {
+    if (!isObject(v.kr)) return false;
+    if (!isFiniteNumberArray(v.kr.biasVector)) return false;
+    if (!Array.isArray(v.kr.maskedBins)) return false;
+    for (const b of v.kr.maskedBins as unknown[]) {
+      if (!Number.isInteger(b) || (b as number) < 0) return false;
+    }
+    if (!isFiniteNumber(v.kr.iterations)) return false;
+    if (!isFiniteNumber(v.kr.maxDeviation)) return false;
   }
 
   // Optional directionality index

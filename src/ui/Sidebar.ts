@@ -7,12 +7,20 @@ import { state } from '../core/State';
 import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
+import { metaTags, type MetaTagType } from '../curation/MetaTagManager';
 import { move } from '../curation/CurationEngine';
 import { detectChromosomeBlocks } from '../analysis/ScaffoldDetection';
 import { recomputeScaffoldDecay } from './AnalysisPanel';
 
+const META_TAG_COLORS: Record<MetaTagType, string> = {
+  haplotig: '#9b59b6',
+  contaminant: '#e74c3c',
+  unlocalised: '#3498db',
+  sex_chromosome: '#2ecc71',
+};
+
 /** Current contig color metric for sidebar stripe. */
-let contigColorMetric: 'none' | 'length' | 'scaffold' | 'misassembly' = 'none';
+let contigColorMetric: 'none' | 'length' | 'scaffold' | 'misassembly' | 'metatag' = 'none';
 
 export function getContigColorMetric(): string { return contigColorMetric; }
 
@@ -72,6 +80,14 @@ export function updateSidebarContigList(ctx: AppContext): void {
         metricColors.set(i, '#e74c3c');
       }
     }
+  } else if (contigColorMetric === 'metatag') {
+    metricColors = new Map();
+    for (let i = 0; i < s.contigOrder.length; i++) {
+      const info = metaTags.getTag(i);
+      if (info) {
+        metricColors.set(i, META_TAG_COLORS[info.tag]);
+      }
+    }
   }
 
   const html = s.contigOrder.map((contigId, orderIdx) => {
@@ -83,6 +99,10 @@ export function updateSidebarContigList(ctx: AppContext): void {
     const invertedBadge = contig.inverted ? '<span class="contig-badge inverted">INV</span>' : '';
     const excludedBadge = contigExclusion.isExcluded(orderIdx) ? '<span class="contig-badge excluded">EXC</span>' : '';
     const misassemblyBadge = misassemblyFlags.isFlagged(orderIdx) ? '<span class="contig-badge misassembly">MIS</span>' : '';
+    const tagInfo = metaTags.getTag(orderIdx);
+    const metatagBadge = tagInfo
+      ? `<span class="contig-badge metatag-${tagInfo.tag}">${tagInfo.tag === 'sex_chromosome' ? 'SEX' : tagInfo.tag.substring(0, 3).toUpperCase()}</span>`
+      : '';
     const scaffoldBadge = contig.scaffoldId !== null
       ? `<span class="contig-badge scaffold">S${contig.scaffoldId}</span>`
       : '';
@@ -93,7 +113,7 @@ export function updateSidebarContigList(ctx: AppContext): void {
       : '';
     return `<div class="contig-item ${isSelected ? 'selected' : ''}" data-order-index="${orderIdx}"${draggable}${metricStyle}>
       <span class="contig-name">${contig.name}</span>
-      <span class="contig-meta">${lengthStr} ${invertedBadge}${excludedBadge}${misassemblyBadge}${scaffoldBadge}</span>
+      <span class="contig-meta">${lengthStr} ${invertedBadge}${excludedBadge}${misassemblyBadge}${metatagBadge}${scaffoldBadge}</span>
     </div>`;
   }).join('');
 
@@ -338,4 +358,54 @@ export function setupContigSearch(ctx: AppContext): void {
     contigColorMetric = metricSelect.value as typeof contigColorMetric;
     ctx.updateSidebarContigList();
   });
+
+  // Wire meta tag controls
+  document.getElementById('btn-apply-metatag')?.addEventListener('click', () => {
+    const s = state.get();
+    const sel = document.getElementById('metatag-select') as HTMLSelectElement | null;
+    if (!sel) return;
+    const tag = sel.value as MetaTagType;
+    if (s.selectedContigs.size === 0) {
+      ctx.showToast('Select contigs first');
+      return;
+    }
+    metaTags.setMany([...s.selectedContigs], tag);
+    ctx.showToast(`Tagged ${s.selectedContigs.size} contig(s) as ${tag}`);
+    updateMetaTagSummary();
+  });
+
+  document.getElementById('btn-clear-metatag')?.addEventListener('click', () => {
+    const s = state.get();
+    if (s.selectedContigs.size === 0) {
+      ctx.showToast('Select contigs first');
+      return;
+    }
+    metaTags.removeMany([...s.selectedContigs]);
+    ctx.showToast(`Cleared tags from ${s.selectedContigs.size} contig(s)`);
+    updateMetaTagSummary();
+  });
+}
+
+export function updateMetaTagSummary(): void {
+  const el = document.getElementById('metatag-summary');
+  if (!el) return;
+  const counts = metaTags.getTagCounts();
+  const total = metaTags.getTagCount();
+  if (total === 0) {
+    el.innerHTML = '<div style="color:var(--text-secondary);font-size:11px;">No tags assigned</div>';
+    return;
+  }
+  let html = '';
+  const labels: Record<MetaTagType, string> = {
+    haplotig: 'Haplotigs',
+    contaminant: 'Contaminants',
+    unlocalised: 'Unlocalised',
+    sex_chromosome: 'Sex chr.',
+  };
+  for (const [tag, count] of Object.entries(counts)) {
+    if (count > 0) {
+      html += `<div class="metatag-count-row"><span style="color:${META_TAG_COLORS[tag as MetaTagType]}">${labels[tag as MetaTagType]}</span><span>${count}</span></div>`;
+    }
+  }
+  el.innerHTML = html;
 }

@@ -26,6 +26,8 @@ export interface AppEvents {
   'tutorial:step-advanced': { lessonId: string; stepId: string };
   'tutorial:completed': { lessonId: string; score?: number };
   'misassembly:updated': { count: number };
+  'metatag:updated': { count: number };
+  'telomere:detected': { hitCount: number };
 }
 
 class EventBus {

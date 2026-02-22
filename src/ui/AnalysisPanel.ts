@@ -21,7 +21,9 @@ import {
 } from '../analysis/ContactDecay';
 import { compartmentToTrack, type CompartmentResult } from '../analysis/CompartmentAnalysis';
 import { iceToTrack, type ICEResult } from '../analysis/ICENormalization';
+import { krToTrack, type KRResult } from '../analysis/KRNormalization';
 import { directionalityToTracks, type DIResult } from '../analysis/DirectionalityIndex';
+import { detectTelomeres, telomereToTrack, type TelomereResult } from '../analysis/TelomereDetector';
 import { AnalysisWorkerClient } from '../analysis/AnalysisWorkerClient';
 import {
   downloadInsulationBedGraph,
@@ -29,9 +31,11 @@ import {
   downloadDecayTSV,
   downloadDirectionalityBedGraph,
   downloadICEBiasBedGraph,
+  downloadKRBiasBedGraph,
   downloadQualityTSV,
   downloadSaddleTSV,
 } from '../export/AnalysisExport';
+import { events } from '../core/EventBus';
 import {
   detectMisassemblies,
   misassemblyToTrack,
@@ -76,6 +80,8 @@ let cachedDI: DIResult | null = null;
 let cachedQuality: HiCQualityResult | null = null;
 let cachedSaddle: SaddleResult | null = null;
 let cachedV4C: Virtual4CResult | null = null;
+let cachedKR: KRResult | null = null;
+let cachedTelomere: TelomereResult | null = null;
 let insulationWindowSize = 10;
 let workerClient: AnalysisWorkerClient | null = null;
 let computing = false;
@@ -180,6 +186,7 @@ function setButtonsDisabled(disabled: boolean): void {
     'btn-run-all-analysis',
     'btn-detect-patterns',
     'btn-normalize-ice',
+    'btn-normalize-kr',
     'btn-compute-directionality',
     'btn-compute-quality',
   ];
@@ -326,6 +333,39 @@ async function runICENormalization(ctx: AppContext): Promise<void> {
   updateResultsDisplay(ctx);
 }
 
+async function runKRNormalization(ctx: AppContext): Promise<void> {
+  const s = state.get();
+  if (!s.map?.contactMap) return;
+
+  const overviewSize = getOverviewSize();
+  const result = await getClient().normalizeKR(s.map.contactMap, overviewSize);
+  cachedKR = result;
+  cachedNormalizedMap = result.normalizedMatrix;
+
+  const track = krToTrack(result, overviewSize, s.map.textureSize);
+  ctx.trackRenderer.addTrack(track);
+  ctx.tracksVisible = true;
+  ctx.updateTrackConfigPanel();
+  ctx.showToast(`KR: ${result.iterations} iterations, ${result.maskedBins.length} masked bins`);
+
+  // Re-run compartments on normalized matrix if already computed
+  if (cachedCompartments) {
+    const compResult = await getClient().computeCompartments(cachedNormalizedMap, overviewSize);
+    cachedCompartments = compResult;
+    const compTrack = compartmentToTrack(compResult, overviewSize, s.map.textureSize);
+    ctx.trackRenderer.addTrack(compTrack);
+    ctx.updateTrackConfigPanel();
+  }
+
+  // Re-run P(s) decay on normalized matrix if already computed
+  if (cachedDecay) {
+    await runDecay(ctx);
+    ctx.showToast('P(s) recomputed on KR-normalized map');
+  }
+
+  updateResultsDisplay(ctx);
+}
+
 function runSaddlePlot(ctx: AppContext): void {
   const s = state.get();
   if (!s.map?.contactMap || !cachedCompartments) return;
@@ -370,6 +410,30 @@ async function runQualityMetrics(ctx: AppContext): Promise<void> {
 
   const flagCount = cachedQuality.flaggedContigs.length;
   ctx.showToast(`Library: ${cachedQuality.cisPercentage.toFixed(1)}% cis${flagCount > 0 ? `, ${flagCount} flagged contigs` : ''}`);
+  updateResultsDisplay(ctx);
+}
+
+/**
+ * Run telomere detection on loaded FASTA sequences.
+ */
+export function runTelomereDetection(ctx: AppContext): void {
+  const s = state.get();
+  if (!s.map || !ctx.referenceSequences || ctx.referenceSequences.size === 0) return;
+
+  const contigNames = s.contigOrder.map(id => s.map!.contigs[id].name);
+  const contigLengths = s.contigOrder.map(id => s.map!.contigs[id].length);
+
+  cachedTelomere = detectTelomeres(ctx.referenceSequences, contigNames, contigLengths);
+
+  if (cachedTelomere.hits.length > 0) {
+    const track = telomereToTrack(cachedTelomere, s.map.textureSize);
+    ctx.trackRenderer.addTrack(track);
+    ctx.tracksVisible = true;
+    ctx.updateTrackConfigPanel();
+    events.emit('telomere:detected', { hitCount: cachedTelomere.hits.length });
+  }
+
+  ctx.showToast(`Telomeres: ${cachedTelomere.hits.length} hits detected`);
   updateResultsDisplay(ctx);
 }
 
@@ -856,6 +920,16 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += `<div class="stats-row"><span>ICE Normalization</span><span style="color:#6c5ce7;">${cachedICE.iterations} iters, ${cachedICE.maskedBins.length} masked</span></div>`;
   }
 
+  // KR normalization status
+  if (cachedKR) {
+    html += `<div class="stats-row"><span>KR Normalization</span><span style="color:#ff7675;">${cachedKR.iterations} iters, ${cachedKR.maskedBins.length} masked</span></div>`;
+  }
+
+  // Telomere detection status
+  if (cachedTelomere) {
+    html += `<div class="stats-row"><span>Telomere Hits</span><span style="color:#00e676;">${cachedTelomere.hits.length} ends</span></div>`;
+  }
+
   if (cachedDecay) {
     html += formatDecayStats(cachedDecay);
 
@@ -928,7 +1002,7 @@ function updateResultsDisplay(ctx: AppContext): void {
   }
 
   // Export buttons (only if at least one result exists)
-  if (cachedInsulation || cachedDecay || cachedCompartments || cachedDI || cachedICE || cachedQuality || cachedSaddle) {
+  if (cachedInsulation || cachedDecay || cachedCompartments || cachedDI || cachedICE || cachedKR || cachedQuality || cachedSaddle) {
     html += '<div class="analysis-export-buttons">';
     if (cachedInsulation) {
       html += '<button class="analysis-btn" id="btn-export-insulation">Export Insulation</button>';
@@ -944,6 +1018,9 @@ function updateResultsDisplay(ctx: AppContext): void {
     }
     if (cachedICE) {
       html += '<button class="analysis-btn" id="btn-export-ice">Export ICE Bias</button>';
+    }
+    if (cachedKR) {
+      html += '<button class="analysis-btn" id="btn-export-kr">Export KR Bias</button>';
     }
     if (cachedQuality) {
       html += '<button class="analysis-btn" id="btn-export-quality">Export Quality</button>';
@@ -991,6 +1068,12 @@ function updateResultsDisplay(ctx: AppContext): void {
     if (cachedICE) {
       downloadICEBiasBedGraph(cachedICE, s, overviewSize);
       ctx.showToast('ICE Bias BedGraph exported');
+    }
+  });
+  document.getElementById('btn-export-kr')?.addEventListener('click', () => {
+    if (cachedKR) {
+      downloadKRBiasBedGraph(cachedKR, s, overviewSize);
+      ctx.showToast('KR Bias BedGraph exported');
     }
   });
   document.getElementById('btn-export-quality')?.addEventListener('click', () => {
@@ -1293,7 +1376,7 @@ function sessionToDecay(s: SessionDecay): ContactDecayResult {
  */
 export function exportAnalysisState(): SessionAnalysisData | null {
   if (!cachedInsulation && !cachedDecay && !cachedCompartments
-      && !cachedICE && !cachedDI && !cachedQuality && !cachedSaddle) return null;
+      && !cachedICE && !cachedKR && !cachedDI && !cachedQuality && !cachedSaddle) return null;
 
   const data: SessionAnalysisData = {
     insulationWindowSize,
@@ -1342,6 +1425,16 @@ export function exportAnalysisState(): SessionAnalysisData | null {
       maskedBins: [...cachedICE.maskedBins],
       iterations: cachedICE.iterations,
       maxDeviation: cachedICE.maxDeviation,
+    };
+  }
+
+  // KR normalization (persist bias vector only — matrix re-derived on restore)
+  if (cachedKR) {
+    data.kr = {
+      biasVector: Array.from(cachedKR.biasVector),
+      maskedBins: [...cachedKR.maskedBins],
+      iterations: cachedKR.iterations,
+      maxDeviation: cachedKR.maxDeviation,
     };
   }
 
@@ -1469,6 +1562,34 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
     ctx.trackRenderer.addTrack(iceTrack);
   }
 
+  // Restore KR normalization (re-derive normalized matrix from bias vector)
+  if (data.kr && s.map.contactMap) {
+    const biasVector = Float32Array.from(data.kr.biasVector);
+    const normalizedMatrix = Float32Array.from(s.map.contactMap);
+    const krSize = biasVector.length;
+    for (let i = 0; i < krSize; i++) {
+      for (let j = 0; j < krSize; j++) {
+        const bi = biasVector[i];
+        const bj = biasVector[j];
+        if (bi > 0 && bj > 0) {
+          normalizedMatrix[i * krSize + j] /= (bi * bj);
+        } else {
+          normalizedMatrix[i * krSize + j] = 0;
+        }
+      }
+    }
+    cachedKR = {
+      biasVector,
+      normalizedMatrix,
+      maskedBins: [...data.kr.maskedBins],
+      iterations: data.kr.iterations,
+      maxDeviation: data.kr.maxDeviation,
+    };
+    cachedNormalizedMap = normalizedMatrix;
+    const krTrack = krToTrack(cachedKR, overviewSize, s.map.textureSize);
+    ctx.trackRenderer.addTrack(krTrack);
+  }
+
   // Restore directionality index
   if (data.directionality) {
     cachedDI = {
@@ -1563,7 +1684,8 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     <button class="analysis-btn" id="btn-run-all-analysis" style="margin-bottom:6px;width:100%;">Compute All</button>
     <button class="analysis-btn" id="btn-compute-directionality" style="margin-bottom:2px;width:100%;">Directionality</button>
     <button class="analysis-btn" id="btn-compute-quality" style="margin-bottom:2px;width:100%;">Library Quality</button>
-    <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:6px;width:100%;background:#6c5ce7;color:#fff;">Normalize (ICE)</button>
+    <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:2px;width:100%;background:#6c5ce7;color:#fff;">Normalize (ICE)</button>
+    <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (KR)</button>
     <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
     <div id="pattern-results"></div>
     <div id="analysis-results">
@@ -1658,6 +1780,16 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       });
     }
   });
+  document.getElementById('btn-normalize-kr')?.addEventListener('click', () => {
+    if (!computing) {
+      computing = true;
+      setButtonsDisabled(true);
+      runKRNormalization(ctx).finally(() => {
+        computing = false;
+        setButtonsDisabled(false);
+      });
+    }
+  });
   document.getElementById('btn-detect-patterns')?.addEventListener('click', () => {
     if (!computing) {
       computing = true;
@@ -1708,10 +1840,12 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedScaffoldDecay = null;
   cachedPatterns = null;
   cachedICE = null;
+  cachedKR = null;
   cachedNormalizedMap = null;
   cachedDI = null;
   cachedQuality = null;
   cachedSaddle = null;
+  cachedTelomere = null;
   if (cachedV4C) {
     ctx.trackRenderer.removeTrack(`Virtual 4C (bin ${cachedV4C.viewpoint})`);
     cachedV4C = null;
@@ -1723,9 +1857,11 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   ctx.trackRenderer.removeTrack('A/B Compartments');
   ctx.trackRenderer.removeTrack('Misassembly Flags');
   ctx.trackRenderer.removeTrack('ICE Bias');
+  ctx.trackRenderer.removeTrack('KR Bias');
   ctx.trackRenderer.removeTrack('Directionality Index');
   ctx.trackRenderer.removeTrack('DI Boundaries');
   ctx.trackRenderer.removeTrack('Per-Contig Cis Ratio');
+  ctx.trackRenderer.removeTrack('Telomere Repeats');
   ctx.updateTrackConfigPanel();
 }
 

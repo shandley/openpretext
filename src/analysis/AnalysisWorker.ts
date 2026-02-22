@@ -13,6 +13,7 @@ import { computeContactDecay, type ContactDecayParams } from './ContactDecay';
 import { computeCompartments, type CompartmentParams } from './CompartmentAnalysis';
 import { detectInversions, detectTranslocations, type DetectedPattern } from './PatternDetector';
 import { computeICENormalization, type ICEParams } from './ICENormalization';
+import { computeKRNormalization, type KRParams } from './KRNormalization';
 import { computeDirectionality, type DIParams } from './DirectionalityIndex';
 import type { ContigRange } from '../curation/AutoSort';
 
@@ -71,7 +72,15 @@ export interface DIRequest {
   params?: Partial<DIParams>;
 }
 
-export type AnalysisRequest = InsulationRequest | DecayRequest | CompartmentRequest | PatternRequest | ICERequest | DIRequest;
+export interface KRRequest {
+  type: 'kr';
+  id: number;
+  contactMap: Float32Array;
+  size: number;
+  params?: Partial<KRParams>;
+}
+
+export type AnalysisRequest = InsulationRequest | DecayRequest | CompartmentRequest | PatternRequest | ICERequest | DIRequest | KRRequest;
 
 export interface InsulationResponse {
   type: 'insulation';
@@ -128,6 +137,16 @@ export interface DIResponse {
   strengths: number[];
 }
 
+export interface KRResponse {
+  type: 'kr';
+  id: number;
+  biasVector: Float32Array;
+  normalizedMatrix: Float32Array;
+  maskedBins: number[];
+  iterations: number;
+  maxDeviation: number;
+}
+
 export interface ErrorResponse {
   type: 'error';
   id: number;
@@ -141,6 +160,7 @@ export type AnalysisResponse =
   | PatternResponse
   | ICEResponse
   | DIResponse
+  | KRResponse
   | ErrorResponse;
 
 // ---------------------------------------------------------------------------
@@ -251,6 +271,24 @@ self.onmessage = (event: MessageEvent<AnalysisRequest>) => {
         const result = computeICENormalization(msg.contactMap, msg.size, msg.params);
         const response: ICEResponse = {
           type: 'ice',
+          id: msg.id,
+          biasVector: result.biasVector,
+          normalizedMatrix: result.normalizedMatrix,
+          maskedBins: result.maskedBins,
+          iterations: result.iterations,
+          maxDeviation: result.maxDeviation,
+        };
+        self.postMessage(response, [
+          response.biasVector.buffer,
+          response.normalizedMatrix.buffer,
+        ] as any);
+        break;
+      }
+
+      case 'kr': {
+        const result = computeKRNormalization(msg.contactMap, msg.size, msg.params);
+        const response: KRResponse = {
+          type: 'kr',
           id: msg.id,
           biasVector: result.biasVector,
           normalizedMatrix: result.normalizedMatrix,

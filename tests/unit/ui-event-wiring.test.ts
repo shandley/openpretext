@@ -36,6 +36,12 @@ vi.mock('../../src/curation/ContigExclusion', () => ({
   },
 }));
 
+vi.mock('../../src/curation/MetaTagManager', () => ({
+  metaTags: {
+    clearAll: vi.fn(),
+  },
+}));
+
 vi.mock('../../src/core/DerivedState', async () => {
   const stateModule = await vi.importMock<typeof import('../../src/core/State')>('../../src/core/State');
   return {
@@ -212,11 +218,11 @@ describe('EventWiring', () => {
       expect(eventNames).toContain('curation:redo');
     });
 
-    it('should subscribe to exactly 7 events', () => {
+    it('should subscribe to exactly 9 events', () => {
       const ctx = createMockCtx();
       setupEventListeners(ctx);
 
-      expect(mockEventsOn).toHaveBeenCalledTimes(8);
+      expect(mockEventsOn).toHaveBeenCalledTimes(9);
     });
 
     it('file:loaded handler should call updateSidebarContigList', () => {

@@ -14,6 +14,7 @@ import { computeContactDecay } from './ContactDecay';
 import { computeCompartments } from './CompartmentAnalysis';
 import { detectInversions, detectTranslocations, type DetectedPattern } from './PatternDetector';
 import { computeICENormalization, type ICEParams, type ICEResult } from './ICENormalization';
+import { computeKRNormalization, type KRParams, type KRResult } from './KRNormalization';
 import { computeDirectionality, type DIParams, type DIResult } from './DirectionalityIndex';
 import type { ContigRange } from '../curation/AutoSort';
 import type {
@@ -25,6 +26,7 @@ import type {
   PatternResponse,
   ICEResponse,
   DIResponse,
+  KRResponse,
 } from './AnalysisWorker';
 
 // ---------------------------------------------------------------------------
@@ -298,6 +300,39 @@ export class AnalysisWorkerClient {
       }
     }
     return computeICENormalization(contactMap, size, params);
+  }
+
+  /**
+   * Compute KR normalization in the worker.
+   * Falls back to synchronous if worker is unavailable.
+   */
+  async normalizeKR(
+    contactMap: Float32Array,
+    size: number,
+    params?: Partial<KRParams>,
+  ): Promise<KRResult> {
+    if (!this.workerFailed && this.worker) {
+      try {
+        const id = this.nextId++;
+        const resp = await this.postRequest({
+          type: 'kr',
+          id,
+          contactMap,
+          size,
+          params,
+        }) as KRResponse;
+        return {
+          biasVector: resp.biasVector,
+          normalizedMatrix: resp.normalizedMatrix,
+          maskedBins: resp.maskedBins,
+          iterations: resp.iterations,
+          maxDeviation: resp.maxDeviation,
+        };
+      } catch {
+        // Fall through to synchronous
+      }
+    }
+    return computeKRNormalization(contactMap, size, params);
   }
 
   /**

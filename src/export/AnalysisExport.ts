@@ -14,6 +14,7 @@ import type { ContactDecayResult } from '../analysis/ContactDecay';
 import type { CompartmentResult } from '../analysis/CompartmentAnalysis';
 import type { DIResult } from '../analysis/DirectionalityIndex';
 import type { ICEResult } from '../analysis/ICENormalization';
+import type { KRResult } from '../analysis/KRNormalization';
 import type { HiCQualityResult } from '../analysis/HiCQualityMetrics';
 import type { SaddleResult } from '../analysis/SaddlePlot';
 
@@ -191,6 +192,18 @@ export function exportICEBiasBedGraph(
 }
 
 /**
+ * Export KR bias vector as BedGraph.
+ */
+export function exportKRBiasBedGraph(
+  result: KRResult,
+  appState: AppState,
+  overviewSize: number,
+): string {
+  const pixelMap = buildPixelToContigMap(appState, overviewSize);
+  return formatAnalysisBedGraph('KR Bias', result.biasVector, pixelMap);
+}
+
+/**
  * Export Hi-C quality metrics as TSV.
  */
 export function exportQualityTSV(
@@ -322,6 +335,16 @@ export function downloadICEBiasBedGraph(
 ): void {
   const content = exportICEBiasBedGraph(result, appState, overviewSize);
   triggerDownload(content, filename ?? `${defaultBasename(appState)}_ice_bias.bedgraph`);
+}
+
+export function downloadKRBiasBedGraph(
+  result: KRResult,
+  appState: AppState,
+  overviewSize: number,
+  filename?: string,
+): void {
+  const content = exportKRBiasBedGraph(result, appState, overviewSize);
+  triggerDownload(content, filename ?? `${defaultBasename(appState)}_kr_bias.bedgraph`);
 }
 
 export function downloadQualityTSV(

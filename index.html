@@ -1642,6 +1642,49 @@
       background: #e67e22;
       color: #fff;
     }
+    .contig-badge.metatag-haplotig {
+      background: #9b59b6;
+      color: #fff;
+    }
+    .contig-badge.metatag-contaminant {
+      background: #e74c3c;
+      color: #fff;
+    }
+    .contig-badge.metatag-unlocalised {
+      background: #3498db;
+      color: #fff;
+    }
+    .contig-badge.metatag-sex_chromosome {
+      background: #2ecc71;
+      color: #fff;
+    }
+    .contig-badge.telomere {
+      background: #00e676;
+      color: #000;
+    }
+
+    /* Meta tag controls */
+    #metatag-select {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    #metatag-summary {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .metatag-count-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
 
     /* Drag-drop scaffold targets */
     .drag-over-scaffold {
@@ -2175,12 +2218,28 @@
             <option value="length">Color: Length</option>
             <option value="scaffold">Color: Scaffold</option>
             <option value="misassembly">Color: Misassembly</option>
+            <option value="metatag">Color: Meta Tag</option>
           </select>
           <div id="contig-list"></div>
         </div>
         <div class="sidebar-section">
           <h3>Scaffolds</h3>
           <div id="scaffold-list"></div>
+        </div>
+        <div class="sidebar-section">
+          <h3>Meta Tags</h3>
+          <div id="metatag-controls">
+            <select id="metatag-select">
+              <option value="">Tag selected as...</option>
+              <option value="haplotig">Haplotig</option>
+              <option value="contaminant">Contaminant</option>
+              <option value="unlocalised">Unlocalised</option>
+              <option value="sex_chromosome">Sex Chromosome</option>
+            </select>
+            <button class="analysis-btn" id="btn-apply-metatag" style="width:100%;margin:2px 0;">Apply Tag</button>
+            <button class="analysis-btn" id="btn-clear-metatag" style="width:100%;margin:2px 0;">Clear Tag</button>
+          </div>
+          <div id="metatag-summary"></div>
         </div>
         <div class="sidebar-section">
           <h3>Assembly Metrics</h3>

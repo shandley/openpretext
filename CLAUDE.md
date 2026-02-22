@@ -83,7 +83,7 @@ src/
     AGPWriter.ts             AGP 2.1 format generation
     BEDWriter.ts             BED6 format export (scaffold-aware)
     FASTAWriter.ts           FASTA export with reverse complement
-    AnalysisExport.ts        BedGraph/TSV export for analysis tracks
+    AnalysisExport.ts        BedGraph/TSV export for all analysis tracks
     SnapshotExporter.ts      PNG screenshot via canvas.toBlob
     CurationLog.ts           JSON operation history export
   io/
@@ -122,13 +122,13 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      1980 unit tests across 76 files (vitest)
+  unit/                      1999 unit tests across 76 files (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
     waypoint.test.ts         WaypointManager
     export.test.ts           AGP writer, curation log
-    session.test.ts          Session save/load round-trips
+    session.test.ts          Session save/load round-trips (106 tests)
     scripting.test.ts        Script parser + executor (110 tests)
     replay.test.ts           Script replay from logs
     tiles.test.ts            TileManager, frustum culling, LRU
@@ -199,12 +199,13 @@ tests/
     ui-loading.test.ts           Loading overlay
     ui-color-map.test.ts         Color map controls
     ui-shortcuts-modal.test.ts   Shortcuts reference modal
-  e2e/                       34 E2E tests (Playwright + Chromium)
+  e2e/                       35 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
     auto-curation.spec.ts    AutoCut + AutoSort E2E
     tile-streaming.spec.ts   Tile LOD with real .pretext file
     features-integration.spec.ts  Stats, exclusion, comparison, batch, tracks
+    session-persistence.spec.ts   Analysis save/load round-trip (1 test)
 ```
 
 ## Key Technical Decisions
@@ -328,9 +329,11 @@ themselves. The undo stack is the source of truth for curation history.
 - **ICENormalization**: Sinkhorn-Knopp iterative matrix balancing (Imakaev
   et al. 2012). Computes bias vector and normalized matrix. Input is sanitized
   (NaN/Infinity → 0) before processing. Low-coverage bins masked by quantile
-  filtering. Worker-integrated via `AnalysisWorkerClient.normalizeICE()`.
-  When ICE completes, compartment analysis is re-run on the normalized matrix.
-  Produces "ICE Bias" line track.
+  filtering. Optimized to 2 O(n²) passes per iteration (fused correction +
+  row-sum recomputation). Worker-integrated via
+  `AnalysisWorkerClient.normalizeICE()`. When ICE completes, compartment
+  analysis and P(s) decay are re-run on the normalized matrix. Produces
+  "ICE Bias" line track.
 - **DirectionalityIndex**: Dixon et al. 2012 signed chi-square statistic.
   Computes per-bin directionality scores with configurable window size.
   Boundary detection at negative-to-positive zero crossings. Worker-integrated
@@ -361,11 +364,15 @@ themselves. The undo stack is the source of truth for curation history.
   `EventWiring`. Buttons are disabled during computation and all three
   core analyses run in parallel in the worker. Also includes 5 additional
   buttons (Directionality, Library Quality, Normalize ICE, Compute Saddle
-  Plot, Clear V4C) with 5 additional result caches. Includes BedGraph/TSV
-  export buttons, an inline P(s) decay SVG chart with comparative overlay
-  (baseline vs current), a health score card, and debounced auto-recompute
-  of insulation + P(s) after curation operations (1s debounce, compartments
-  excluded). "Review Cuts" button opens `CutReviewPanel`.
+  Plot, Clear V4C) with 5 additional result caches. Includes 7 export
+  buttons (Insulation BedGraph, P(s) TSV, Compartments BedGraph,
+  Directionality BedGraph, ICE Bias BedGraph, Quality TSV, Saddle TSV),
+  an inline P(s) decay SVG chart with comparative overlay (baseline vs
+  current), a health score card, and debounced auto-recompute of insulation
+  + P(s) after curation operations (1s debounce, compartments excluded).
+  P(s) decay uses ICE-normalized map when available (`cachedNormalizedMap`)
+  and auto-recomputes after ICE normalization completes.
+  "Review Cuts" button opens `CutReviewPanel`.
 - **CutReviewPanel**: Step-by-step guided review of misassembly-based cut
   suggestions. Floating bottom-center panel presents one suggestion at a
   time, navigates camera to the cut point, and lets the user accept (Y),
@@ -385,10 +392,14 @@ themselves. The undo stack is the source of truth for curation history.
   (score = (1 + log10(ratio)) * 100, where ratio < 0.1 scores 0).
   Used by both AnalysisPanel (detailed card) and StatsPanel (summary row).
 - **Analysis persistence**: Analysis results (insulation, P(s) decay,
-  compartments, baseline P(s)) are serialized in session files via optional
-  `SessionAnalysisData` field. `exportAnalysisState()` converts typed arrays
-  to `number[]`; `restoreAnalysisState()` reconstructs them and re-registers
-  tracks. Backward compatible — old sessions without analysis still load.
+  compartments, baseline P(s), ICE, directionality, quality, saddle) are
+  serialized in session files via optional `SessionAnalysisData` field.
+  `exportAnalysisState()` converts typed arrays to `number[]`;
+  `restoreAnalysisState()` reconstructs them and re-registers tracks.
+  ICE `normalizedMatrix` is re-derived from bias vector + raw contactMap
+  on restore (not persisted). V4C is excluded (viewpoint invalidated by
+  reordering). Backward compatible — old sessions without analysis still
+  load.
 - **MisassemblyDetector**: Detects potential chimeric contigs by finding
   TAD boundaries and compartment eigenvector sign-changes that fall inside
   a contig (not at edges). Uses an edge margin (default 2 overview pixels)
@@ -435,7 +446,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 1980 tests must pass
+- Run `npm test` before committing; all 1999 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls
@@ -464,3 +475,6 @@ structure, filename conventions, and ID uniqueness on every PR.
 - `AnalysisWorkerClient` falls back to synchronous execution when workers
   are unavailable (test environments, file:// protocol). Tests exercise the
   pure algorithm modules directly, not through the worker.
+- Track `color` values must use `#hex` format (e.g. `'#ff5050'`), not
+  `rgb()`. The color is set on `<input type="color">` elements which only
+  accept hex. Using `rgb()` causes console warnings.
