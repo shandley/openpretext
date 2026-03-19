@@ -45,7 +45,7 @@ export async function runRegression(dataDir: string): Promise<boolean> {
   }
 
   // Load specimen catalog as single source of truth for baselines
-  const catalogPath = resolve(join(import.meta.dirname, '..', 'data', 'specimen-catalog.json'));
+  const catalogPath = resolve(join(import.meta.dirname, '..', 'public', 'data', 'specimen-catalog.json'));
   const catalog: SpecimenCatalog = JSON.parse(await readFile(catalogPath, 'utf-8'));
   const specimensWithBaselines = catalog.specimens.filter(s => s.benchmarkBaseline !== null);
 
