@@ -12,7 +12,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from .inference import MODEL_VERSION, Evo2HiCModel
+from . import inference
+from .inference import Evo2HiCModel
 from .schemas import EnhanceRequest, EnhanceResponse, HealthResponse
 
 model = Evo2HiCModel()
@@ -27,7 +28,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Evo2HiC Enhancement Server",
-    version=MODEL_VERSION,
+    version=inference.MODEL_VERSION,
     lifespan=lifespan,
 )
 
@@ -46,7 +47,7 @@ async def health() -> HealthResponse:
         status="ok",
         model_loaded=model.is_loaded,
         device=model.device,
-        model_version=MODEL_VERSION,
+        model_version=inference.MODEL_VERSION,
     )
 
 
@@ -89,7 +90,7 @@ async def enhance(request: EnhanceRequest) -> EnhanceResponse:
         enhanced_map=encoded,
         enhanced_size=new_size,
         upscale_factor=upscale_factor,
-        model_version=MODEL_VERSION,
+        model_version=inference.MODEL_VERSION,
         elapsed_ms=round(elapsed_ms, 2),
     )
 
