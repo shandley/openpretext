@@ -108,7 +108,7 @@ src/
     AIFeedbackUI.ts          Per-suggestion thumbs up/down UI
     ComparisonMode.ts        Original vs curated boundary overlay
     index.ts                 Barrel exports for UI modules
-data/
+public/data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
   lessons/                   Tutorial lesson JSON files (9 lessons)
   pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
