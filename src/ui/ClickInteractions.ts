@@ -7,6 +7,8 @@ import { state } from '../core/State';
 import { SelectionManager } from '../curation/SelectionManager';
 import { triggerVirtual4C } from './AnalysisPanel';
 
+let editModeHintShown = false;
+
 export function setupClickInteractions(ctx: AppContext, canvas: HTMLCanvasElement): void {
   let mouseDownPos = { x: 0, y: 0 };
 
@@ -29,6 +31,12 @@ export function setupClickInteractions(ctx: AppContext, canvas: HTMLCanvasElemen
     const dx = Math.abs(e.clientX - mouseDownPos.x);
     const dy = Math.abs(e.clientY - mouseDownPos.y);
     if (dx > 5 || dy > 5) return;
+
+    // Navigate mode hint: suggest Edit mode on first click
+    if (ctx.currentMode === 'navigate' && ctx.hoveredContigIndex >= 0 && !e.altKey && !editModeHintShown) {
+      editModeHintShown = true;
+      ctx.showToast('Press E to enter Edit mode for contig selection');
+    }
 
     if (ctx.currentMode === 'edit' && ctx.hoveredContigIndex >= 0) {
       if (e.shiftKey) {

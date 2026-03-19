@@ -17,6 +17,7 @@ import {
   scaffoldAwareAutoSort,
   autoCutContigs,
 } from '../curation/BatchOperations';
+import { computeProgress } from '../analysis/CurationProgress';
 
 export function runBatchSelectByPattern(ctx: AppContext): void {
   const pattern = prompt('Enter name pattern (regex):');
@@ -108,6 +109,12 @@ export function runAutoSort(ctx: AppContext): void {
     ctx.showToast('Invalid threshold'); return;
   }
 
+  // Capture pre-sort progress for comparison
+  const preSortOrder = [...s.contigOrder];
+  const preProgress = ctx.progressReference
+    ? computeProgress(preSortOrder, ctx.progressReference, s.undoStack.length)
+    : null;
+
   const hasScaffolds = ctx.scaffoldManager.getAllScaffolds().length >= 2;
   ctx.showToast(hasScaffolds ? 'Sorting within scaffolds...' : 'Auto sorting...');
   setTimeout(() => {
@@ -116,7 +123,17 @@ export function runAutoSort(ctx: AppContext): void {
       ? scaffoldAwareAutoSort(ctx.scaffoldManager, sortParams)
       : autoSortContigs(sortParams);
     ctx.refreshAfterCuration();
-    ctx.showToast(result.description);
+
+    // Build enriched toast message
+    let msg = `Auto Sort: ${result.operationsPerformed} contigs reordered`;
+    if (preProgress && ctx.progressReference) {
+      const postState = state.get();
+      const postProgress = computeProgress(postState.contigOrder, ctx.progressReference, postState.undoStack.length);
+      const prePct = Math.round(((preProgress.kendallTau + 1) / 2) * 100);
+      const postPct = Math.round(((postProgress.kendallTau + 1) / 2) * 100);
+      msg += ` (ordering: ${prePct}% \u2192 ${postPct}%)`;
+    }
+    ctx.showToast(msg);
   }, 50);
 }
 
@@ -132,11 +149,16 @@ export function runAutoCut(ctx: AppContext): void {
   if (cutThreshold !== undefined && (isNaN(cutThreshold) || cutThreshold <= 0 || cutThreshold > 1)) {
     ctx.showToast('Invalid threshold'); return;
   }
+  const contigsBefore = s.contigOrder.length;
   ctx.showToast('Auto cutting...');
   setTimeout(() => {
     const result = autoCutContigs(cutThreshold !== undefined ? { cutThreshold } : undefined);
     ctx.refreshAfterCuration();
-    ctx.showToast(result.description);
+    const contigsAfter = state.get().contigOrder.length;
+    const msg = result.operationsPerformed > 0
+      ? `Auto Cut: ${result.operationsPerformed} breakpoints detected, ${contigsBefore} \u2192 ${contigsAfter} contigs`
+      : 'Auto Cut: no breakpoints detected';
+    ctx.showToast(msg);
   }, 50);
 }
 

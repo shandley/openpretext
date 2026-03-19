@@ -29,6 +29,7 @@ import type { AppContext } from './ui/AppContext';
 import {
   showToast,
   setupShortcutsModal,
+  setupWorkflowGuide,
   updateSidebarContigList,
   updateSidebarScaffoldList,
   setupContigSearch,
@@ -148,6 +149,7 @@ class OpenPretextApp {
     setupScriptConsole(ctx);
     setupAIAssist(ctx);
     setupShortcutsModal();
+    setupWorkflowGuide();
     setupContigSearch(ctx);
     setupTrackUpload(ctx);
     setupFastaUpload(ctx);

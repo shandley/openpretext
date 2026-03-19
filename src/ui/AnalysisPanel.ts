@@ -95,6 +95,21 @@ const healthScoreHistory: number[] = [];
 // Helpers
 // ---------------------------------------------------------------------------
 
+export function updateFastaHint(ctx: AppContext): void {
+  const el = document.getElementById('fasta-hint');
+  if (!el) return;
+  if (cachedTelomere && cachedTelomere.hits.length > 0) {
+    el.textContent = `Telomere detection: ${cachedTelomere.hits.length} telomere-positive ends found`;
+    el.style.color = '#00e676';
+  } else if (ctx.referenceSequences && ctx.referenceSequences.size > 0) {
+    el.textContent = 'FASTA loaded. Click Compute All to run telomere detection.';
+    el.style.color = 'var(--text-secondary)';
+  } else {
+    el.textContent = 'Load a reference FASTA (toolbar) to enable telomere detection';
+    el.style.color = 'var(--text-secondary)';
+  }
+}
+
 export function getOverviewSize(): number {
   const s = state.get();
   if (!s.map?.contactMap) return 0;
@@ -435,6 +450,7 @@ export function runTelomereDetection(ctx: AppContext): void {
 
   ctx.showToast(`Telomeres: ${cachedTelomere.hits.length} hits detected`);
   updateResultsDisplay(ctx);
+  updateFastaHint(ctx);
 }
 
 async function runDirectionality(ctx: AppContext): Promise<void> {
@@ -1750,11 +1766,15 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:2px;width:100%;background:#6c5ce7;color:#fff;">Normalize (ICE)</button>
     <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (KR)</button>
     <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
+    <div id="fasta-hint" style="color:var(--text-secondary);font-size:10px;margin:4px 0;"></div>
     <div id="pattern-results"></div>
     <div id="analysis-results">
       <div style="color: var(--text-secondary); font-size: 11px;">Computing...</div>
     </div>
   `;
+
+  // Update FASTA/telomere hint
+  updateFastaHint(ctx);
 
   // Wire slider
   const slider = document.getElementById('insulation-window') as HTMLInputElement;

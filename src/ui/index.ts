@@ -89,7 +89,7 @@ export { setupAssessmentPanel } from './AssessmentPanel';
 export { togglePatternGallery, setupPatternGallery } from './PatternGallery';
 
 // AnalysisPanel
-export { setupAnalysisPanel, runAllAnalyses, clearAnalysisTracks, recomputeScaffoldDecay, snapshotBaseline, resetBaseline, getBaselineDecay, updateProgressPanel } from './AnalysisPanel';
+export { setupAnalysisPanel, runAllAnalyses, clearAnalysisTracks, recomputeScaffoldDecay, snapshotBaseline, resetBaseline, getBaselineDecay, updateProgressPanel, updateFastaHint } from './AnalysisPanel';
 
 // UndoHistoryPanel
 export { updateUndoHistoryPanel } from './UndoHistoryPanel';
@@ -105,6 +105,9 @@ export { setupZoomControls, updateZoomLevel } from './ZoomControls';
 
 // Boot
 export { boot } from './Boot';
+
+// WorkflowGuide
+export { toggleWorkflowGuide, setupWorkflowGuide } from './WorkflowGuide';
 
 // EventWiring
 export { setupEventListeners, refreshAfterCuration, rebuildContigBoundaries } from './EventWiring';
