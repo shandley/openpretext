@@ -93,14 +93,14 @@ vi.mock('../../src/analysis/MisassemblyDetector', () => ({
 }));
 
 vi.mock('../../src/analysis/AnalysisWorkerClient', () => ({
-  AnalysisWorkerClient: vi.fn().mockImplementation(() => ({
-    computeInsulation: vi.fn().mockResolvedValue({
+  AnalysisWorkerClient: class {
+    computeInsulation = vi.fn().mockResolvedValue({
       rawScores: new Float64Array(64),
       normalizedScores: new Float32Array(64),
       boundaries: [],
       boundaryStrengths: [],
-    }),
-    computeContactDecay: vi.fn().mockResolvedValue({
+    });
+    computeContactDecay = vi.fn().mockResolvedValue({
       distances: Float64Array.from([1, 2, 3]),
       meanContacts: Float64Array.from([0.5, 0.3, 0.2]),
       logDistances: Float64Array.from([0, 0.301, 0.477]),
@@ -108,14 +108,14 @@ vi.mock('../../src/analysis/AnalysisWorkerClient', () => ({
       decayExponent: -1.1,
       rSquared: 0.95,
       maxDistance: 32,
-    }),
-    computeCompartments: vi.fn().mockResolvedValue({
+    });
+    computeCompartments = vi.fn().mockResolvedValue({
       eigenvector: new Float32Array(64),
       normalizedEigenvector: new Float32Array(64),
       iterations: 50,
       eigenvalue: 5.0,
-    }),
-  })),
+    });
+  },
 }));
 
 vi.mock('../../src/analysis/InsulationScore', () => ({

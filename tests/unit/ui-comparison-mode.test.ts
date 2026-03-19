@@ -672,7 +672,7 @@ describe('ComparisonMode', () => {
       // Mock Blob, URL, and anchor element for download
       const mockUrl = 'blob:test';
       const mockAnchor = { href: '', download: '', click: vi.fn() } as any;
-      (globalThis as any).Blob = vi.fn((parts: any[], opts: any) => ({ parts, type: opts.type }));
+      (globalThis as any).Blob = class { parts: any[]; type: string; constructor(parts: any[], opts: any) { this.parts = parts; this.type = opts.type; } };
       (globalThis as any).URL = {
         createObjectURL: vi.fn(() => mockUrl),
         revokeObjectURL: vi.fn(),
