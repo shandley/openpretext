@@ -2,14 +2,16 @@
 
 A FastAPI server that provides Hi-C contact map resolution enhancement for OpenPretext.
 
-Currently runs in **mock mode** -- applies Gaussian denoising, bicubic upscaling, and sharpening to produce plausible enhanced maps without requiring model weights. Replace with real Evo2HiC model weights when available.
+Supports two modes:
+- **Mock mode** (default) -- Gaussian denoising, bicubic upscaling, and sharpening
+- **Real model** -- loads weights from the [CHNFTQ/Evo2HiC](https://github.com/CHNFTQ/Evo2HiC) repository
 
 ## Prerequisites
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) package manager
 
-## Quick Start
+## Quick Start (Mock Mode)
 
 ```bash
 cd server
@@ -18,6 +20,52 @@ uv run evo2hic-server
 ```
 
 The server starts on `http://localhost:8000`.
+
+## Running with Real Model Weights
+
+### 1. Clone the Evo2HiC repository
+
+```bash
+git clone https://github.com/CHNFTQ/Evo2HiC.git /path/to/Evo2HiC
+```
+
+### 2. Download model weights
+
+Download the pretrained checkpoint from Zenodo (DOI: [10.5281/zenodo.17917912](https://doi.org/10.5281/zenodo.17917912)). Extract so you have a directory containing both a `.pt` checkpoint file and an `args.json` file.
+
+### 3. Set environment variables and run
+
+```bash
+export EVO2HIC_REPO_PATH=/path/to/Evo2HiC
+export EVO2HIC_CHECKPOINT=/path/to/checkpoint/best_model.pt
+
+cd server
+uv sync
+uv run evo2hic-server
+```
+
+The server will log whether it loaded the real model or fell back to mock mode. If loading fails (missing dependencies, bad checkpoint, etc.), it automatically falls back to mock inference with a warning.
+
+### GPU acceleration
+
+By default, PyTorch uses CPU. For GPU acceleration:
+
+```bash
+# CUDA 12.x
+uv pip install torch --index-url https://download.pytorch.org/whl/cu124
+
+# Optional: install accelerate for multi-GPU support
+uv pip install accelerate
+```
+
+## Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `EVO2HIC_REPO_PATH` | Path to cloned CHNFTQ/Evo2HiC repository | None (mock mode) |
+| `EVO2HIC_CHECKPOINT` | Path to `.pt` checkpoint file | None (mock mode) |
+
+Both must be set for real model inference. If either is missing, the server runs in mock mode.
 
 ## API
 
@@ -33,6 +81,8 @@ Returns server status and model info.
   "model_version": "mock-0.1.0"
 }
 ```
+
+When running with real weights, `model_loaded` will be `true` and `model_version` will reflect the checkpoint name.
 
 ### `POST /api/v1/enhance`
 
@@ -59,22 +109,11 @@ Enhances a Hi-C contact map.
 | `model_version` | string | Model version string |
 | `elapsed_ms` | float | Processing time in milliseconds |
 
-## Mock Mode vs Real Model
+## How Real Inference Works
 
-The server starts in mock mode by default (`model_loaded: false`). Mock enhancement applies:
-
-1. Gaussian smoothing (noise reduction)
-2. Bicubic interpolation (upscaling)
-3. Unsharp mask (sharpening)
-4. Symmetry enforcement
-
-To use real model weights, implement the TODO sections in `evo2hic_server/inference.py`.
-
-## GPU Acceleration
-
-By default, PyTorch installs with CPU support. For GPU acceleration:
-
-```bash
-# CUDA 12.x
-uv pip install torch --index-url https://download.pytorch.org/whl/cu124
-```
+1. The contact map is normalized using the checkpoint's `Normalizer` (normalization type and parameters stored in `args.json`)
+2. For small maps (up to 256 pixels), the entire map is padded to a multiple of the model's chunk size (typically 100 bins) and processed in a single forward pass
+3. For larger maps, the map is split into overlapping tiles, each processed independently, then reassembled with overlap blending
+4. DNA and mappability embeddings are set to empty tensors, which triggers the model's built-in zero-embedding fallback (the model was trained with DNA dropout)
+5. Output is unnormalized, clipped to non-negative values, and symmetrized
+6. Optional upscaling via bicubic interpolation is applied after model inference
