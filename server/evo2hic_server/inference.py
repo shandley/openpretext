@@ -153,9 +153,20 @@ class Evo2HiCModel:
             step=args["step"],
         )
 
+        # Supply defaults for args that create_model expects but
+        # aren't stored in args.json (they come from argparse defaults)
+        model_defaults = {
+            "input_channels": args.get("num_channels", 1),
+            "output_channels": args.get("num_channels", 1),
+            "dim": args.get("unet_input_dim", 128),
+            "force_final_conv": args.get("force_final_conv", False),
+            "use_mrcrossembed": args.get("use_mrcrossembed", True),
+            "encoder_version": args.get("encoder_version", "v1"),
+        }
+
         # Create model architecture (diffusion_steps=0 for inference)
         model = create_model(
-            **{**args, "normalizer": self.normalizer, "diffusion_steps": 0}
+            **{**model_defaults, **args, "normalizer": self.normalizer, "diffusion_steps": 0}
         )
 
         # Load state dict with unet->decoder key remapping
@@ -172,8 +183,10 @@ class Evo2HiCModel:
         self.model = model
         self._loaded = True
 
-        # Extract chunk size from model args if available
-        if "chunk_size" in args:
+        # Extract chunk size from model args (key is "chunk" in args.json)
+        if "chunk" in args:
+            self.chunk_size = args["chunk"]
+        elif "chunk_size" in args:
             self.chunk_size = args["chunk_size"]
 
         global MODEL_VERSION, MODEL_LOADED
