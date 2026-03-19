@@ -174,6 +174,14 @@ export interface SessionSaddle {
 /**
  * Persisted analysis state for session save/restore.
  */
+/** Serialized Evo2HiC enhancement state. */
+export interface SessionEnhancement {
+  enhancedOverviewBase64: string;
+  upscaleFactor: number;
+  modelVersion: string;
+  active: boolean;
+}
+
 export interface SessionAnalysisData {
   insulationWindowSize: number;
   insulation?: SessionInsulation;
@@ -186,6 +194,7 @@ export interface SessionAnalysisData {
   directionality?: SessionDirectionality;
   quality?: SessionQuality;
   saddle?: SessionSaddle;
+  enhancement?: SessionEnhancement;
 }
 
 /**
@@ -371,6 +380,15 @@ function validateSessionAnalysis(v: unknown): boolean {
     if (!isFiniteNumber(v.saddle.strength)) return false;
     if (!isFiniteNumberArray(v.saddle.strengthProfile)) return false;
     if (!isFiniteNumberArray(v.saddle.binEdges)) return false;
+  }
+
+  // Optional Evo2HiC enhancement
+  if (v.enhancement !== undefined) {
+    if (!isObject(v.enhancement)) return false;
+    if (!isNonEmptyString(v.enhancement.enhancedOverviewBase64)) return false;
+    if (!isFiniteNumber(v.enhancement.upscaleFactor)) return false;
+    if (typeof v.enhancement.modelVersion !== 'string') return false;
+    if (typeof v.enhancement.active !== 'boolean') return false;
   }
 
   return true;

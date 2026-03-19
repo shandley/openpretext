@@ -62,6 +62,9 @@ import { openCutReview } from './CutReviewPanel';
 import { autoAssignScaffolds } from './Sidebar';
 import { computeProgress, computeTrend } from '../analysis/CurationProgress';
 import type { DetectedPattern } from '../analysis/PatternDetector';
+import { Evo2HiCClient, getStoredServerUrl, setStoredServerUrl } from '../analysis/Evo2HiCClient';
+import { downscaleMap, encodeContactMap, decodeContactMap } from '../analysis/Evo2HiCEnhancement';
+import { reorderContactMap } from '../renderer/ContactMapReorder';
 
 // ---------------------------------------------------------------------------
 // Cached state
@@ -82,6 +85,10 @@ let cachedSaddle: SaddleResult | null = null;
 let cachedV4C: Virtual4CResult | null = null;
 let cachedKR: KRResult | null = null;
 let cachedTelomere: TelomereResult | null = null;
+let cachedEnhancedMap: Float32Array | null = null;
+let cachedEnhancedOverview: Float32Array | null = null;
+let enhancedMapActive = false;
+let enhancing = false;
 let insulationWindowSize = 10;
 let workerClient: AnalysisWorkerClient | null = null;
 let computing = false;
@@ -1210,6 +1217,23 @@ export function getNormalizedMap(): Float32Array | null {
   return cachedNormalizedMap;
 }
 
+/** Whether the enhanced (Evo2HiC) view is currently active. */
+export function getEnhancedMapActive(): boolean {
+  return enhancedMapActive;
+}
+
+/** Get the enhanced overview map, or null if not computed. */
+export function getEnhancedOverview(): Float32Array | null {
+  return cachedEnhancedOverview;
+}
+
+/** Clear enhanced map state (called on curation operations). */
+export function clearEnhancedMap(): void {
+  cachedEnhancedMap = null;
+  cachedEnhancedOverview = null;
+  enhancedMapActive = false;
+}
+
 /** Get the cached compartment result. */
 export function getCachedCompartments(): CompartmentResult | null {
   return cachedCompartments;
@@ -1556,6 +1580,16 @@ export function exportAnalysisState(): SessionAnalysisData | null {
     };
   }
 
+  // Evo2HiC enhancement
+  if (cachedEnhancedOverview) {
+    data.enhancement = {
+      enhancedOverviewBase64: encodeContactMap(cachedEnhancedOverview),
+      upscaleFactor: 4,
+      modelVersion: 'unknown',
+      active: enhancedMapActive,
+    };
+  }
+
   return data;
 }
 
@@ -1716,6 +1750,23 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
     };
   }
 
+  // Restore Evo2HiC enhancement
+  if (data.enhancement && data.enhancement.enhancedOverviewBase64) {
+    const overviewSz = getOverviewSize();
+    try {
+      cachedEnhancedOverview = decodeContactMap(data.enhancement.enhancedOverviewBase64, overviewSz);
+      enhancedMapActive = data.enhancement.active ?? false;
+      if (enhancedMapActive && cachedEnhancedOverview) {
+        ctx.renderer.uploadContactMap(cachedEnhancedOverview, overviewSz);
+        ctx.minimap.updateThumbnail(cachedEnhancedOverview, overviewSz);
+      }
+    } catch {
+      // Silently ignore corrupt enhancement data
+      cachedEnhancedOverview = null;
+      enhancedMapActive = false;
+    }
+  }
+
   // Re-derive misassembly detection from restored insulation + compartments
   if (cachedInsulation && cachedCompartments) {
     runMisassemblyDetection(ctx);
@@ -1765,6 +1816,16 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     <button class="analysis-btn" id="btn-compute-quality" style="margin-bottom:2px;width:100%;">Library Quality</button>
     <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:2px;width:100%;background:#6c5ce7;color:#fff;">Normalize (ICE)</button>
     <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (KR)</button>
+    <div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;">
+      <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+        <input type="text" id="evo2hic-url" placeholder="http://localhost:8000" style="flex:1;min-width:0;" value="${getStoredServerUrl() ?? ''}">
+        <button class="analysis-btn" id="btn-evo2hic-check" style="white-space:nowrap;">Check</button>
+      </div>
+      <div id="evo2hic-status" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
+      <button class="analysis-btn" id="btn-evo2hic-enhance" style="width:100%;margin-bottom:2px;background:#00b894;color:#fff;" disabled>Enhance (Evo2HiC)</button>
+      <button class="analysis-btn" id="btn-evo2hic-toggle" style="width:100%;margin-bottom:4px;" disabled>Toggle Enhanced View</button>
+      <div id="evo2hic-fasta-hint" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
+    </div>
     <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
     <div id="fasta-hint" style="color:var(--text-secondary);font-size:10px;margin:4px 0;"></div>
     <div id="pattern-results"></div>
@@ -1873,6 +1934,113 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       });
     }
   });
+
+  // Evo2HiC enhancement handlers
+  const evo2hicUrlInput = document.getElementById('evo2hic-url') as HTMLInputElement | null;
+  const evo2hicStatus = document.getElementById('evo2hic-status');
+  const evo2hicFastaHint = document.getElementById('evo2hic-fasta-hint');
+  const btnEnhance = document.getElementById('btn-evo2hic-enhance') as HTMLButtonElement | null;
+  const btnToggle = document.getElementById('btn-evo2hic-toggle') as HTMLButtonElement | null;
+
+  // Show FASTA hint
+  if (evo2hicFastaHint) {
+    evo2hicFastaHint.textContent = (!ctx.referenceSequences || ctx.referenceSequences.size === 0)
+      ? 'Load FASTA for sequence-aware enhancement'
+      : '';
+  }
+
+  // Restore toggle state if enhanced map exists
+  if (btnToggle && cachedEnhancedOverview) {
+    btnToggle.disabled = false;
+    btnToggle.textContent = enhancedMapActive ? 'Show Original' : 'Toggle Enhanced View';
+    if (enhancedMapActive) btnToggle.classList.add('enhance-active');
+  }
+
+  document.getElementById('btn-evo2hic-check')?.addEventListener('click', async () => {
+    const url = evo2hicUrlInput?.value?.trim();
+    if (!url) {
+      if (evo2hicStatus) { evo2hicStatus.textContent = 'Enter a server URL'; evo2hicStatus.style.color = '#e94560'; }
+      return;
+    }
+    setStoredServerUrl(url);
+    if (evo2hicStatus) { evo2hicStatus.textContent = 'Checking...'; evo2hicStatus.style.color = 'var(--text-secondary)'; }
+    try {
+      const client = new Evo2HiCClient({ serverUrl: url });
+      const health = await client.checkHealth();
+      if (evo2hicStatus) {
+        evo2hicStatus.textContent = `OK: ${health.device}, model ${health.modelVersion}`;
+        evo2hicStatus.style.color = '#4caf50';
+      }
+      if (btnEnhance) btnEnhance.disabled = false;
+    } catch (err: unknown) {
+      if (evo2hicStatus) {
+        evo2hicStatus.textContent = `Error: ${(err as Error).message}`;
+        evo2hicStatus.style.color = '#e94560';
+      }
+      if (btnEnhance) btnEnhance.disabled = true;
+    }
+  });
+
+  btnEnhance?.addEventListener('click', async () => {
+    const url = evo2hicUrlInput?.value?.trim();
+    if (!url || enhancing) return;
+    const s2 = state.get();
+    if (!s2.map?.contactMap) return;
+
+    enhancing = true;
+    btnEnhance.disabled = true;
+    btnEnhance.textContent = 'Enhancing...';
+
+    try {
+      const overviewSz = getOverviewSize();
+      const contactMap = cachedNormalizedMap ?? s2.map.contactMap;
+      const contigNames = s2.contigOrder.map(id => s2.map!.contigs[id].name);
+      const client = new Evo2HiCClient({ serverUrl: url });
+      const result = await client.enhance(contactMap, overviewSz, ctx.referenceSequences ?? undefined, contigNames);
+
+      cachedEnhancedMap = result.enhancedMap;
+      cachedEnhancedOverview = downscaleMap(result.enhancedMap, result.enhancedSize, overviewSz);
+      ctx.showToast(`Enhanced in ${(result.elapsedMs / 1000).toFixed(1)}s (${result.upscaleFactor}x, ${result.modelVersion})`);
+
+      if (btnToggle) {
+        btnToggle.disabled = false;
+        btnToggle.textContent = 'Toggle Enhanced View';
+      }
+    } catch (err: unknown) {
+      ctx.showToast(`Enhancement failed: ${(err as Error).message}`, 4000);
+    } finally {
+      enhancing = false;
+      btnEnhance.disabled = false;
+      btnEnhance.textContent = 'Enhance (Evo2HiC)';
+    }
+  });
+
+  btnToggle?.addEventListener('click', () => {
+    if (!cachedEnhancedOverview) return;
+    const s2 = state.get();
+    if (!s2.map) return;
+
+    enhancedMapActive = !enhancedMapActive;
+    const overviewSz = getOverviewSize();
+
+    if (enhancedMapActive) {
+      ctx.renderer.uploadContactMap(cachedEnhancedOverview, overviewSz);
+      ctx.minimap.updateThumbnail(cachedEnhancedOverview, overviewSz);
+      btnToggle.textContent = 'Show Original';
+      btnToggle.classList.add('enhance-active');
+    } else {
+      const original = s2.map.originalContactMap;
+      if (original) {
+        const reordered = reorderContactMap(original, s2.map.contigs, s2.contigOrder, overviewSz);
+        ctx.renderer.uploadContactMap(reordered, overviewSz);
+        ctx.minimap.updateThumbnail(reordered, overviewSz);
+      }
+      btnToggle.textContent = 'Toggle Enhanced View';
+      btnToggle.classList.remove('enhance-active');
+    }
+    ctx.showToast(`Enhanced view: ${enhancedMapActive ? 'ON' : 'OFF'}`);
+  });
+
   document.getElementById('btn-detect-patterns')?.addEventListener('click', () => {
     if (!computing) {
       computing = true;
@@ -1929,6 +2097,9 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedQuality = null;
   cachedSaddle = null;
   cachedTelomere = null;
+  cachedEnhancedMap = null;
+  cachedEnhancedOverview = null;
+  enhancedMapActive = false;
   if (cachedV4C) {
     ctx.trackRenderer.removeTrack(`Virtual 4C (bin ${cachedV4C.viewpoint})`);
     cachedV4C = null;
