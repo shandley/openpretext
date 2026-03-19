@@ -13,6 +13,7 @@ import { metaTags } from '../curation/MetaTagManager';
 import { getContigBoundaries } from '../core/DerivedState';
 import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel } from './AnalysisPanel';
 import { updateComparisonSummary } from './ComparisonMode';
+import { reorderContactMap } from '../renderer/ContactMapReorder';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -63,6 +64,7 @@ export function setupEventListeners(ctx: AppContext): void {
  */
 export function refreshAfterCuration(ctx: AppContext): void {
   rebuildContigBoundaries(ctx);
+  reorderAndUploadContactMap(ctx);
   ctx.updateSidebarContigList();
   const s = state.get();
   document.getElementById('status-contigs')!.textContent = `${s.contigOrder.length} contigs`;
@@ -77,6 +79,23 @@ export function refreshAfterCuration(ctx: AppContext): void {
   updateProgressPanel(ctx);
   // Schedule debounced analysis recompute (insulation + P(s) only)
   scheduleAnalysisRecompute(ctx);
+}
+
+/**
+ * Reorder the contact map to match the current contig display order
+ * and re-upload the texture to the GPU.
+ */
+function reorderAndUploadContactMap(ctx: AppContext): void {
+  const s = state.get();
+  if (!s.map) return;
+  const original = s.map.originalContactMap;
+  if (!original) return;
+  const mapSize = Math.round(Math.sqrt(original.length));
+  if (mapSize === 0) return;
+
+  const reordered = reorderContactMap(original, s.map.contigs, s.contigOrder, mapSize);
+  ctx.renderer.uploadContactMap(reordered, mapSize);
+  ctx.minimap.updateThumbnail(reordered, mapSize);
 }
 
 /**
