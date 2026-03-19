@@ -1232,6 +1232,12 @@ export function clearEnhancedMap(): void {
   cachedEnhancedMap = null;
   cachedEnhancedOverview = null;
   enhancedMapActive = false;
+  const toggleBtn = document.getElementById('btn-evo2hic-toggle') as HTMLButtonElement | null;
+  if (toggleBtn) {
+    toggleBtn.disabled = true;
+    toggleBtn.textContent = 'Toggle Enhanced View';
+    toggleBtn.classList.remove('enhance-active');
+  }
 }
 
 /** Get the cached compartment result. */

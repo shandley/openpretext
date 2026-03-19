@@ -161,8 +161,8 @@ describe('Evo2HiCClient', () => {
 
       const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
       expect(body.contact_map).toBe(encodeContactMap(smallMap));
-      expect(body.size).toBe(2);
-      expect(body.upscale_factor).toBe(4);
+      expect(body.map_size).toBe(2);
+      expect(body.params.upscale_factor).toBe(4);
     });
 
     it('includes fasta sequences when provided', async () => {
@@ -234,7 +234,7 @@ describe('Evo2HiCClient', () => {
       await client.enhance(smallMap, 2);
 
       const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-      expect(body.upscale_factor).toBe(2);
+      expect(body.params.upscale_factor).toBe(2);
     });
   });
 
