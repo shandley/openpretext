@@ -11,7 +11,7 @@ import { state } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { metaTags } from '../curation/MetaTagManager';
 import { getContigBoundaries } from '../core/DerivedState';
-import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel } from './AnalysisPanel';
+import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel, clearEnhancedMap } from './AnalysisPanel';
 import { updateComparisonSummary } from './ComparisonMode';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
 
@@ -80,6 +80,8 @@ export function refreshAfterCuration(ctx: AppContext): void {
   ctx.updateStatsPanel();
   ctx.updateUndoHistoryPanel();
   updateComparisonSummary(ctx);
+  // Clear enhanced map on curation (ordering changed, enhancement is stale)
+  clearEnhancedMap();
   // Update curation progress panel
   updateProgressPanel(ctx);
   // Schedule debounced analysis recompute (insulation + P(s) only)

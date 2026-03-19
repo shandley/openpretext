@@ -1,0 +1,31 @@
+"""Pydantic models for the Evo2HiC enhancement API."""
+
+from pydantic import BaseModel
+
+
+class EnhanceParams(BaseModel):
+    upscale_factor: int = 4  # 4x or 16x
+    denoise: bool = True
+
+
+class EnhanceRequest(BaseModel):
+    contact_map: str  # base64-encoded Float32Array bytes
+    map_size: int
+    fasta_sequences: dict[str, str] | None = None  # contig_name -> sequence
+    contig_names: list[str] | None = None
+    params: EnhanceParams | None = None
+
+
+class EnhanceResponse(BaseModel):
+    enhanced_map: str  # base64-encoded Float32Array bytes
+    enhanced_size: int
+    upscale_factor: int
+    model_version: str
+    elapsed_ms: float
+
+
+class HealthResponse(BaseModel):
+    status: str
+    model_loaded: bool
+    device: str
+    model_version: str

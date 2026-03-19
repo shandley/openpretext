@@ -89,7 +89,7 @@ export { setupAssessmentPanel } from './AssessmentPanel';
 export { togglePatternGallery, setupPatternGallery } from './PatternGallery';
 
 // AnalysisPanel
-export { setupAnalysisPanel, runAllAnalyses, clearAnalysisTracks, recomputeScaffoldDecay, snapshotBaseline, resetBaseline, getBaselineDecay, updateProgressPanel, updateFastaHint } from './AnalysisPanel';
+export { setupAnalysisPanel, runAllAnalyses, clearAnalysisTracks, recomputeScaffoldDecay, snapshotBaseline, resetBaseline, getBaselineDecay, updateProgressPanel, updateFastaHint, clearEnhancedMap, getEnhancedMapActive, getEnhancedOverview } from './AnalysisPanel';
 
 // UndoHistoryPanel
 export { updateUndoHistoryPanel } from './UndoHistoryPanel';
