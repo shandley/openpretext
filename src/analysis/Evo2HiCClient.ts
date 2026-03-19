@@ -130,8 +130,8 @@ export class Evo2HiCClient {
 
     const payload: Record<string, unknown> = {
       contact_map: encodeContactMap(contactMap),
-      size,
-      upscale_factor: this.upscaleFactor,
+      map_size: size,
+      params: { upscale_factor: this.upscaleFactor },
     };
 
     if (fastaSequences && fastaSequences.size > 0) {
