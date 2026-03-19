@@ -46,6 +46,12 @@ export interface MapData {
    * This is reconstructed from the per-tile decoded data.
    */
   contactMap: Float32Array | null;
+  /**
+   * Original (file-order) contact map, preserved across curation operations.
+   * contactMap may be reordered to match display order; this always holds
+   * the original pixel layout for re-permutation after undo/redo.
+   */
+  originalContactMap?: Float32Array | null;
   /** Raw decompressed BC4 tile data for on-demand detail decoding. */
   rawTiles: Uint8Array[] | null;
   /** Parsed pretext header for tile decoding parameters. */
