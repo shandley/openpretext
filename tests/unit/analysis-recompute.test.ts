@@ -73,11 +73,11 @@ const mockComputeCompartments = vi.fn().mockResolvedValue({
 });
 
 vi.mock('../../src/analysis/AnalysisWorkerClient', () => ({
-  AnalysisWorkerClient: vi.fn().mockImplementation(() => ({
-    computeInsulation: mockComputeInsulation,
-    computeContactDecay: mockComputeDecay,
-    computeCompartments: mockComputeCompartments,
-  })),
+  AnalysisWorkerClient: class {
+    computeInsulation = mockComputeInsulation;
+    computeContactDecay = mockComputeDecay;
+    computeCompartments = mockComputeCompartments;
+  },
 }));
 
 vi.mock('../../src/analysis/InsulationScore', () => ({
