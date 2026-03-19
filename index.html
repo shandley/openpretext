@@ -46,6 +46,27 @@
       padding: 0 12px;
       gap: 8px;
       z-index: 100;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+      position: relative;
+    }
+
+    #toolbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    #toolbar-scroll-fade {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 40px;
+      background: linear-gradient(to right, transparent, var(--bg-secondary));
+      pointer-events: none;
+      z-index: 101;
     }
 
     .toolbar-group {
@@ -159,6 +180,52 @@
     #canvas-container {
       flex: 1;
       position: relative;
+    }
+
+    /* Zoom controls overlay */
+    #zoom-controls {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(22, 33, 62, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      z-index: 50;
+      pointer-events: auto;
+      user-select: none;
+    }
+
+    #zoom-controls .zoom-btn {
+      background: none;
+      border: 1px solid transparent;
+      color: var(--text-primary);
+      font-size: 16px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+
+    #zoom-controls .zoom-btn:hover {
+      background: var(--bg-surface);
+      border-color: var(--border);
+    }
+
+    #zoom-level {
+      font-size: 11px;
+      color: var(--text-secondary);
+      min-width: 40px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
     }
 
     #map-canvas {
@@ -349,6 +416,52 @@
 
     #welcome .open-btn:hover {
       background: var(--accent-hover);
+    }
+
+    #welcome .welcome-tagline {
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: center;
+      margin: -8px 0 4px;
+    }
+
+    .getting-started {
+      display: flex;
+      gap: 16px;
+      max-width: 520px;
+      width: 100%;
+      margin: 8px 0;
+    }
+
+    .getting-started-path {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 10px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .getting-started-label {
+      font-size: 13px;
+      color: var(--text-primary);
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .getting-started-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .getting-started-path .open-btn {
+      margin-top: 0;
+      padding: 8px 16px;
+      font-size: 13px;
     }
 
     #welcome .specimen-section-title {
@@ -1043,8 +1156,8 @@
         --sidebar-width: 180px;
       }
 
-      .toolbar-group:nth-child(n+4) {
-        display: none;
+      .toolbar-group {
+        flex-shrink: 0;
       }
 
       #command-palette {
@@ -1545,6 +1658,86 @@
       font-size: 12px;
     }
 
+    /* Lesson browser modal */
+    #lesson-browser-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+    }
+    #lesson-browser-modal.visible { display: flex; }
+    .lesson-browser-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 640px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .lesson-browser-card h2 {
+      margin: 0 0 16px;
+      font-size: 16px;
+      color: var(--text-primary);
+    }
+    .lesson-item {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .lesson-item:hover {
+      border-color: var(--accent);
+      background: rgba(233, 69, 96, 0.08);
+    }
+    .lesson-item-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .lesson-item-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .lesson-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .lesson-badge.beginner { background: #1b5e20; color: #a5d6a7; }
+    .lesson-badge.intermediate { background: #e65100; color: #ffcc80; }
+    .lesson-badge.advanced { background: #b71c1c; color: #ef9a9a; }
+    .lesson-time {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-left: auto;
+    }
+    .lesson-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+    .lesson-browser-close {
+      margin-top: 12px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
     /* Contig search */
     #contig-search {
       width: 100%;
@@ -1626,9 +1819,41 @@
       display: flex;
       gap: 4px;
       flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .analysis-export-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
       margin-top: 8px;
       padding-top: 6px;
       border-top: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+    .analysis-export-header h4 {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      margin: 0;
+      flex: 1;
+    }
+    .analysis-export-header .export-toggle {
+      font-size: 10px;
+      color: var(--text-secondary);
+      transition: transform 0.15s;
+    }
+    .analysis-export-header .export-toggle.collapsed {
+      transform: rotate(-90deg);
+    }
+    .analysis-export-section.collapsed .analysis-export-buttons {
+      display: none;
+    }
+    .analysis-btn .export-fmt {
+      font-size: 9px;
+      color: var(--text-secondary);
+      margin-left: 2px;
     }
     .decay-chart { margin: 6px 0; }
     .decay-chart svg { width: 100%; height: auto; display: block; }
@@ -2150,6 +2375,7 @@
   <div id="app">
     <!-- Toolbar -->
     <div id="toolbar">
+      <div id="toolbar-scroll-fade"></div>
       <span class="toolbar-title">OpenPretext</span>
       <div class="toolbar-group">
         <button class="toolbar-btn" id="btn-open">Open <kbd>⌘O</kbd></button>
@@ -2208,6 +2434,11 @@
         <canvas id="track-canvas"></canvas>
         <canvas id="label-canvas"></canvas>
         <canvas id="waypoint-canvas"></canvas>
+        <div id="zoom-controls">
+          <button class="zoom-btn" id="btn-zoom-out" title="Zoom out (-)">−</button>
+          <span id="zoom-level">100%</span>
+          <button class="zoom-btn" id="btn-zoom-in" title="Zoom in (+)">+</button>
+        </div>
       </div>
       <div id="sidebar">
         <div class="sidebar-section">
@@ -2277,13 +2508,26 @@
       <!-- Welcome screen (shown when no file loaded) -->
       <div id="welcome">
         <h1>OpenPretext</h1>
-        <p>Modern Hi-C contact map viewer for genome assembly curation. Drop a .pretext file or click Open to begin.</p>
-        <button class="open-btn" id="btn-welcome-open">Open .pretext file</button>
+        <p class="welcome-tagline">Browser-based Hi-C contact map viewer and genome assembly curation tool</p>
+        <div class="getting-started">
+          <div class="getting-started-path">
+            <span class="getting-started-label">New to Hi-C curation?</span>
+            <button class="open-btn" id="btn-welcome-tutorial">Start Tutorial</button>
+          </div>
+          <div class="getting-started-path">
+            <span class="getting-started-label">Have a .pretext file?</span>
+            <button class="open-btn" id="btn-welcome-open">Open File</button>
+          </div>
+          <div class="getting-started-path">
+            <span class="getting-started-label">Explore examples</span>
+            <span class="getting-started-hint">Browse the specimen grid below</span>
+          </div>
+        </div>
         <div class="specimen-section-title">Example Datasets</div>
         <div id="specimen-grid">
           <!-- Populated dynamically from specimen catalog -->
         </div>
-        <button class="open-btn" id="btn-start-tutorial" style="background: var(--bg-surface); margin-top: 8px;">Start Tutorial</button>
+        <button class="open-btn" id="btn-start-tutorial" style="background: var(--bg-surface); margin-top: 8px;">Browse Tutorials</button>
         <!-- Hidden buttons for backwards compatibility and E2E tests -->
         <button id="btn-example" style="display:none;"></button>
         <button id="btn-demo" style="display:none;"></button>
@@ -2505,6 +2749,15 @@
       <div class="assessment-actions">
         <button class="assessment-retry">Try Again</button>
         <button class="assessment-done primary">Done</button>
+      </div>
+    </div>
+
+    <!-- Lesson browser modal -->
+    <div id="lesson-browser-modal">
+      <div class="lesson-browser-card">
+        <h2>Tutorials</h2>
+        <div id="lesson-browser-list"></div>
+        <div class="lesson-browser-close">Press <kbd>Esc</kbd> to close</div>
       </div>
     </div>
 

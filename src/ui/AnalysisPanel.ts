@@ -1001,33 +1001,24 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += '<div id="cut-suggestions"></div>';
   }
 
-  // Export buttons (only if at least one result exists)
-  if (cachedInsulation || cachedDecay || cachedCompartments || cachedDI || cachedICE || cachedKR || cachedQuality || cachedSaddle) {
+  // Export section — always shown when map is loaded, disabled buttons before analysis
+  {
+    html += '<div class="analysis-export-section" id="export-section">';
+    html += '<div class="analysis-export-header" id="export-section-toggle">';
+    html += '<h4>Export Analysis Data</h4>';
+    html += '<span class="export-toggle" id="export-toggle-icon">&#9660;</span>';
+    html += '</div>';
     html += '<div class="analysis-export-buttons">';
-    if (cachedInsulation) {
-      html += '<button class="analysis-btn" id="btn-export-insulation">Export Insulation</button>';
-    }
-    if (cachedDecay) {
-      html += '<button class="analysis-btn" id="btn-export-decay">Export P(s)</button>';
-    }
-    if (cachedCompartments) {
-      html += '<button class="analysis-btn" id="btn-export-compartments">Export Compartments</button>';
-    }
-    if (cachedDI) {
-      html += '<button class="analysis-btn" id="btn-export-di">Export DI</button>';
-    }
-    if (cachedICE) {
-      html += '<button class="analysis-btn" id="btn-export-ice">Export ICE Bias</button>';
-    }
-    if (cachedKR) {
-      html += '<button class="analysis-btn" id="btn-export-kr">Export KR Bias</button>';
-    }
-    if (cachedQuality) {
-      html += '<button class="analysis-btn" id="btn-export-quality">Export Quality</button>';
-    }
-    if (cachedSaddle) {
-      html += '<button class="analysis-btn" id="btn-export-saddle">Export Saddle</button>';
-    }
+    html += `<button class="analysis-btn" id="btn-export-all"${!(cachedInsulation || cachedDecay || cachedCompartments || cachedDI || cachedICE || cachedKR || cachedQuality || cachedSaddle) ? ' disabled title="Run analysis first"' : ''}>Export All</button>`;
+    html += `<button class="analysis-btn" id="btn-export-insulation"${!cachedInsulation ? ' disabled title="Run analysis first"' : ''}>Insulation <span class="export-fmt">(BedGraph)</span></button>`;
+    html += `<button class="analysis-btn" id="btn-export-decay"${!cachedDecay ? ' disabled title="Run analysis first"' : ''}>P(s) <span class="export-fmt">(TSV)</span></button>`;
+    html += `<button class="analysis-btn" id="btn-export-compartments"${!cachedCompartments ? ' disabled title="Run analysis first"' : ''}>Compartments <span class="export-fmt">(BedGraph)</span></button>`;
+    html += `<button class="analysis-btn" id="btn-export-di"${!cachedDI ? ' disabled title="Run analysis first"' : ''}>DI <span class="export-fmt">(BedGraph)</span></button>`;
+    html += `<button class="analysis-btn" id="btn-export-ice"${!cachedICE ? ' disabled title="Run analysis first"' : ''}>ICE Bias <span class="export-fmt">(BedGraph)</span></button>`;
+    html += `<button class="analysis-btn" id="btn-export-kr"${!cachedKR ? ' disabled title="Run analysis first"' : ''}>KR Bias <span class="export-fmt">(BedGraph)</span></button>`;
+    html += `<button class="analysis-btn" id="btn-export-quality"${!cachedQuality ? ' disabled title="Run analysis first"' : ''}>Quality <span class="export-fmt">(TSV)</span></button>`;
+    html += `<button class="analysis-btn" id="btn-export-saddle"${!cachedSaddle ? ' disabled title="Run analysis first"' : ''}>Saddle <span class="export-fmt">(TSV)</span></button>`;
+    html += '</div>';
     html += '</div>';
   }
 
@@ -1087,6 +1078,28 @@ function updateResultsDisplay(ctx: AppContext): void {
       downloadSaddleTSV(cachedSaddle);
       ctx.showToast('Saddle plot TSV exported');
     }
+  });
+
+  // Wire export all button
+  document.getElementById('btn-export-all')?.addEventListener('click', () => {
+    let count = 0;
+    if (cachedInsulation) { downloadInsulationBedGraph(cachedInsulation, s, overviewSize); count++; }
+    if (cachedDecay) { downloadDecayTSV(cachedDecay); count++; }
+    if (cachedCompartments) { downloadCompartmentBedGraph(cachedCompartments, s, overviewSize); count++; }
+    if (cachedDI) { downloadDirectionalityBedGraph(cachedDI, s, overviewSize); count++; }
+    if (cachedICE) { downloadICEBiasBedGraph(cachedICE, s, overviewSize); count++; }
+    if (cachedKR) { downloadKRBiasBedGraph(cachedKR, s, overviewSize); count++; }
+    if (cachedQuality) { downloadQualityTSV(cachedQuality, s); count++; }
+    if (cachedSaddle) { downloadSaddleTSV(cachedSaddle); count++; }
+    ctx.showToast(`Exported ${count} analysis file${count !== 1 ? 's' : ''}`);
+  });
+
+  // Wire export section collapse toggle
+  document.getElementById('export-section-toggle')?.addEventListener('click', () => {
+    const section = document.getElementById('export-section');
+    const icon = document.getElementById('export-toggle-icon');
+    if (section) section.classList.toggle('collapsed');
+    if (icon) icon.classList.toggle('collapsed');
   });
 
   // Wire suggest cuts button
@@ -1199,6 +1212,56 @@ export function resetBaseline(): void {
 /** Get the current baseline decay result (for testing). */
 export function getBaselineDecay(): ContactDecayResult | null {
   return baselineDecay;
+}
+
+/** Export a specific analysis result by key. Returns true if exported. */
+export function exportAnalysisByKey(ctx: AppContext, key: string): boolean {
+  const overviewSize = getOverviewSize();
+  const s = state.get();
+  switch (key) {
+    case 'insulation':
+      if (!cachedInsulation) return false;
+      downloadInsulationBedGraph(cachedInsulation, s, overviewSize);
+      ctx.showToast('Insulation BedGraph exported');
+      return true;
+    case 'decay':
+      if (!cachedDecay) return false;
+      downloadDecayTSV(cachedDecay);
+      ctx.showToast('P(s) decay TSV exported');
+      return true;
+    case 'compartments':
+      if (!cachedCompartments) return false;
+      downloadCompartmentBedGraph(cachedCompartments, s, overviewSize);
+      ctx.showToast('Compartment BedGraph exported');
+      return true;
+    case 'di':
+      if (!cachedDI) return false;
+      downloadDirectionalityBedGraph(cachedDI, s, overviewSize);
+      ctx.showToast('Directionality BedGraph exported');
+      return true;
+    case 'ice':
+      if (!cachedICE) return false;
+      downloadICEBiasBedGraph(cachedICE, s, overviewSize);
+      ctx.showToast('ICE Bias BedGraph exported');
+      return true;
+    case 'kr':
+      if (!cachedKR) return false;
+      downloadKRBiasBedGraph(cachedKR, s, overviewSize);
+      ctx.showToast('KR Bias BedGraph exported');
+      return true;
+    case 'quality':
+      if (!cachedQuality) return false;
+      downloadQualityTSV(cachedQuality, s);
+      ctx.showToast('Quality metrics TSV exported');
+      return true;
+    case 'saddle':
+      if (!cachedSaddle) return false;
+      downloadSaddleTSV(cachedSaddle);
+      ctx.showToast('Saddle plot TSV exported');
+      return true;
+    default:
+      return false;
+  }
 }
 
 // ---------------------------------------------------------------------------

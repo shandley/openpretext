@@ -134,7 +134,10 @@ export function startRenderLoop(ctx: AppContext): void {
     // Minimap
     ctx.minimap.render(cam);
 
-    document.getElementById('status-zoom')!.textContent = `${Math.round(cam.zoom * 100)}%`;
+    const zoomPct = `${Math.round(cam.zoom * 100)}%`;
+    document.getElementById('status-zoom')!.textContent = zoomPct;
+    const zoomLevel = document.getElementById('zoom-level');
+    if (zoomLevel) zoomLevel.textContent = zoomPct;
 
     ctx.animFrameId = requestAnimationFrame(renderFrame);
   };

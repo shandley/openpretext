@@ -22,6 +22,8 @@ import { TutorialManager } from './ui/TutorialManager';
 import { setupTutorialOverlay } from './ui/TutorialOverlay';
 import { setupAssessmentPanel } from './ui/AssessmentPanel';
 import { setupPatternGallery } from './ui/PatternGallery';
+import { setupLessonBrowser } from './ui/LessonBrowser';
+import { setupZoomControls } from './ui/ZoomControls';
 
 import type { AppContext } from './ui/AppContext';
 import {
@@ -158,6 +160,8 @@ class OpenPretextApp {
     setupTutorialOverlay(ctx, tutorialManager);
     setupAssessmentPanel(ctx, tutorialManager);
     setupPatternGallery();
+    setupLessonBrowser(ctx);
+    setupZoomControls(ctx);
     setupAnalysisPanel(ctx);
 
     console.log('OpenPretext initialized');

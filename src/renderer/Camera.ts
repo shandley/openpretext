@@ -317,6 +317,14 @@ export class Camera {
     this.animateTo({ x: cx, y: cy, zoom: Math.min(zoom, this.maxZoom) });
   }
 
+  /**
+   * Zoom by a multiplicative factor centered on the current view.
+   */
+  zoomByFactor(factor: number): void {
+    const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom * factor));
+    this.animateTo({ zoom: newZoom }, 150);
+  }
+
   private clamp(): void {
     // Allow some overscroll but keep the map mostly visible
     const margin = 0.5 / this.zoom;

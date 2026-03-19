@@ -10,6 +10,7 @@ import type { ColorMapName } from '../renderer/ColorMaps';
 import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession } from './ExportSession';
 import { loadExampleDataset, loadDemoData } from './FileLoading';
 import { performUndo, performRedo } from './CurationActions';
+import { toggleLessonBrowser } from './LessonBrowser';
 
 export function setupToolbar(ctx: AppContext): void {
   document.getElementById('btn-open')?.addEventListener('click', () => {
@@ -25,7 +26,10 @@ export function setupToolbar(ctx: AppContext): void {
     loadDemoData(ctx);
   });
   document.getElementById('btn-start-tutorial')?.addEventListener('click', () => {
-    ctx.tutorialManager?.startLesson(ctx, '01-reading-the-map');
+    toggleLessonBrowser(ctx);
+  });
+  document.getElementById('btn-welcome-tutorial')?.addEventListener('click', () => {
+    toggleLessonBrowser(ctx);
   });
 
   document.getElementById('btn-save-agp')?.addEventListener('click', () => {
@@ -103,6 +107,20 @@ export function setupToolbar(ctx: AppContext): void {
   document.getElementById('btn-redo')?.addEventListener('click', () => {
     performRedo(ctx);
   });
+
+  // Toolbar scroll fade indicator
+  const toolbar = document.getElementById('toolbar');
+  const scrollFade = document.getElementById('toolbar-scroll-fade');
+  if (toolbar && scrollFade) {
+    const updateFade = () => {
+      const hasOverflow = toolbar.scrollWidth > toolbar.clientWidth;
+      const atEnd = toolbar.scrollLeft + toolbar.clientWidth >= toolbar.scrollWidth - 2;
+      scrollFade.style.display = hasOverflow && !atEnd ? 'block' : 'none';
+    };
+    toolbar.addEventListener('scroll', updateFade);
+    window.addEventListener('resize', updateFade);
+    updateFade();
+  }
 
   ctx.setMode('navigate');
 }
