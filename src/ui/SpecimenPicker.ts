@@ -11,10 +11,25 @@ function esc(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function buildTooltip(specimen: SpecimenEntry): string {
+  const parts = [specimen.commonName];
+  const species = specimen.species.replace(/_/g, ' ');
+  parts.push(species);
+  parts.push(`${specimen.sizeMB} MB — ${specimen.contigCount} contigs`);
+  if (specimen.chromosomeCount) {
+    parts.push(`${specimen.chromosomeCount} chromosomes`);
+  }
+  if (specimen.teachingNotes) {
+    parts.push(specimen.teachingNotes);
+  }
+  return parts.join('\n');
+}
+
 function createSpecimenCard(specimen: SpecimenEntry, ctx: AppContext): HTMLElement {
   const card = document.createElement('div');
   card.className = 'specimen-card';
   card.dataset.specimenId = specimen.id;
+  card.title = buildTooltip(specimen);
   card.innerHTML =
     `<span class="specimen-name">${esc(specimen.commonName)}</span>` +
     `<span class="specimen-species">${esc(specimen.species.replace(/_/g, ' '))}</span>` +

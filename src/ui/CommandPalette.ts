@@ -18,6 +18,7 @@ import { toggleShortcutsModal } from './ShortcutsModal';
 import { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoin, runBatchInvert, runSortByLength, runAutoSort, runAutoCut, undoLastBatch } from './BatchActions';
 import { togglePatternGallery } from './PatternGallery';
 import { toggleAIAssist } from './AIAssistPanel';
+import { exportAnalysisByKey } from './AnalysisPanel';
 
 import type { SpecimenEntry } from '../data/SpecimenCatalog';
 
@@ -129,6 +130,14 @@ function getCommands(ctx: AppContext) {
     { name: 'Tutorial: Full Curation Exercise', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '06-full-curation-exercise') },
     { name: 'Pattern Gallery', shortcut: '', action: () => togglePatternGallery(ctx) },
     { name: 'AI: Analyze Contact Map', shortcut: '', action: () => toggleAIAssist() },
+    { name: 'Export Insulation BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'insulation') },
+    { name: 'Export P(s) TSV', shortcut: '', action: () => exportAnalysisByKey(ctx, 'decay') },
+    { name: 'Export Compartments BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'compartments') },
+    { name: 'Export Directionality BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'di') },
+    { name: 'Export ICE Bias BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'ice') },
+    { name: 'Export KR Bias BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'kr') },
+    { name: 'Export Quality TSV', shortcut: '', action: () => exportAnalysisByKey(ctx, 'quality') },
+    { name: 'Export Saddle TSV', shortcut: '', action: () => exportAnalysisByKey(ctx, 'saddle') },
   ];
 }
 

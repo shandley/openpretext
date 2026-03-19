@@ -194,6 +194,17 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
         toggleShortcutsModal();
         break;
 
+      case '+':
+      case '=':
+        ctx.camera.zoomByFactor(1.3);
+        break;
+
+      case '-':
+        if (!cmd) {
+          ctx.camera.zoomByFactor(1 / 1.3);
+        }
+        break;
+
       case ']':
       case '.': {
         // Next waypoint

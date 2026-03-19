@@ -45,6 +45,11 @@ export function setupEventListeners(ctx: AppContext): void {
     // Auto-compute 3D analysis tracks
     clearAnalysisTracks(ctx);
     runAllAnalyses(ctx);
+
+    // Show orientation toast for first-time guidance
+    setTimeout(() => {
+      ctx.showToast('Scroll to zoom \u2022 Drag to pan \u2022 Press E for edit mode \u2022 \u2318K for commands', 5000);
+    }, 800);
   });
 
   events.on('misassembly:updated', () => ctx.updateSidebarContigList());

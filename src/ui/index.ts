@@ -97,6 +97,12 @@ export { updateUndoHistoryPanel } from './UndoHistoryPanel';
 // CutReviewPanel
 export { openCutReview, closeCutReview, isCutReviewActive } from './CutReviewPanel';
 
+// LessonBrowser
+export { isLessonBrowserVisible, toggleLessonBrowser, setupLessonBrowser } from './LessonBrowser';
+
+// ZoomControls
+export { setupZoomControls, updateZoomLevel } from './ZoomControls';
+
 // Boot
 export { boot } from './Boot';
 
