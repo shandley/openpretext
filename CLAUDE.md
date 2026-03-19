@@ -36,6 +36,7 @@ src/
     TrackRenderer.ts         Annotation track overlay (line/heatmap/marker)
     ScaffoldOverlay.ts       Scaffold color bands
     WaypointOverlay.ts       Waypoint position markers
+    ContactMapReorder.ts     Contact map pixel reordering for curation updates
   curation/
     CurationEngine.ts        Cut/join/invert/move with full undo data
     SelectionManager.ts      Click/shift/ctrl contig selection
@@ -91,7 +92,7 @@ src/
     CurationLog.ts           JSON operation history export
   io/
     SessionManager.ts        Session save/load (JSON with undo stack + analysis)
-  ui/                        35 UI modules (pure DOM, no framework)
+  ui/                        38 UI modules (pure DOM, no framework)
     AppContext.ts             Shared context object passed between UI modules
     EventWiring.ts           Event subscriptions + refresh-after-curation logic
     AnalysisPanel.ts         3D analysis sidebar (compute, export, health, patterns)
@@ -107,6 +108,9 @@ src/
     AIAssistPanel.ts         AI curation assistant panel
     AIFeedbackUI.ts          Per-suggestion thumbs up/down UI
     ComparisonMode.ts        Original vs curated boundary overlay
+    LessonBrowser.ts         Tutorial lesson browser modal
+    WorkflowGuide.ts         7-step recommended workflow modal
+    ZoomControls.ts          Zoom +/- buttons and level indicator
     index.ts                 Barrel exports for UI modules
 public/data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
@@ -125,7 +129,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      2139 unit tests across 79 files (vitest)
+  unit/                      2151 unit tests across 80 files (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -205,6 +209,7 @@ tests/
     ui-loading.test.ts           Loading overlay
     ui-color-map.test.ts         Color map controls
     ui-shortcuts-modal.test.ts   Shortcuts reference modal
+    contact-map-reorder.test.ts  Contact map reorder permutation (12 tests)
   e2e/                       35 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
@@ -298,7 +303,7 @@ themselves. The undo stack is the source of truth for curation history.
   (regression tests). No DOM or Node dependencies.
 - **AssessmentPanel**: Triggered by TutorialManager when a lesson has
   `assessment` data. Computes kendallTau and shows score card.
-- **PatternGallery**: Modal showing 8 Hi-C patterns from
+- **PatternGallery**: Modal showing 11 Hi-C patterns from
   `data/pattern-gallery.json`. Clicking a pattern navigates the camera.
 - **Benchmark regression**: `bench/cli.ts regression` downloads 2 small
   specimens and validates metrics against `bench/baselines.json`.
@@ -310,7 +315,7 @@ themselves. The undo stack is the source of truth for curation history.
   strategy editor (create/edit/delete), export/import buttons, Browse link
   to the community strategy repository (`shandley/openpretext-strategies`),
   and per-suggestion feedback (thumbs up/down via `AIFeedbackUI`).
-- **PromptStrategy**: `data/prompt-strategies.json` contains 5 built-in
+- **PromptStrategy**: `data/prompt-strategies.json` contains 8 built-in
   strategies. Custom strategies stored in localStorage key
   `openpretext-custom-strategies`. `mergeStrategies()` combines built-in
   and custom. `buildSystemPrompt(strategy)` appends supplement to base prompt.
@@ -473,7 +478,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 2139 tests must pass
+- Run `npm test` before committing; all 2151 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls

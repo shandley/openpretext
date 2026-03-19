@@ -12,16 +12,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   at contig ends with genome-wide density profiling and visualization track
 - **KR normalization** — Knight-Ruiz iterative matrix balancing as an alternative
   to ICE; faster convergence with sqrt(rowSum) correction
+- **Contact map re-rendering** — heatmap now visually updates after every curation
+  operation (cut/join/invert/move/sort) by reordering pixels from the original map
+- **Lesson browser** — modal showing all 9 tutorials with difficulty badges,
+  estimated time, and descriptions; replaces hardcoded lesson-01 button
+- **Workflow guide** — 7-step recommended curation workflow modal accessible from
+  welcome screen and command palette
+- **Zoom controls** — +/- buttons with zoom percentage indicator; keyboard shortcuts
+  (+/= to zoom in, - to zoom out)
+- **Onboarding improvements** — welcome screen with tagline, 3 getting-started paths,
+  specimen card tooltips, and post-load orientation toast
+- **Export discoverability** — collapsible "Export Analysis Data" section with format
+  labels, disabled states, Export All button, and 8 command palette entries
+- **Edit mode hint** — one-time toast when clicking map in Navigate mode
+- **AutoSort/AutoCut feedback** — enriched toasts showing before/after metrics
+- **FASTA hint** — Analysis Panel prompts to load reference FASTA for telomere detection
 - 3 new tutorial lessons: 3D Genomics Analysis, Contig Classification, Automated
   Misassembly Detection
 - 3 new Hi-C pattern gallery entries: telomere signal, sex chromosomes, haplotig mirror
 - 3 new AI prompt strategies: analysis-guided, haplotig detection, telomere-aware
 - Export buttons for KR bias BedGraph
-- 140 new unit tests (meta tags, telomere detection, KR normalization)
+- CHANGELOG.md and CONTRIBUTING.md
 
 ### Fixed
+- **Contact map not updating** after curation operations — the critical rendering
+  bug that prevented users from seeing the effect of their curation work
+- **Toolbar hidden on small screens** — replaced `display: none` with horizontal
+  scroll so all buttons remain accessible at any viewport width
+- **Data files not deployed** — moved `data/` to `public/data/` so Vite copies
+  JSON files (tutorials, specimens, patterns, strategies) to the deployed site
+- **Zoom button overlap** — repositioned zoom controls above minimap canvas
 - Track color values now consistently use `#hex` format (fixes console warnings
   on `<input type="color">` elements)
+
+### Changed
+- Upgraded vite 5→8, vitest 2→4, @vitest/coverage-v8 2→4 (resolves 3 security
+  vulnerabilities)
 
 ## [0.4.0] — 2026-02-22
 

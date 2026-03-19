@@ -198,11 +198,15 @@ required.
 - Command palette (Cmd+K / Ctrl+K) with fuzzy search across all commands
 - Keyboard shortcuts for all operations (press `?` for reference)
 - Pan via mouse drag, zoom via scroll wheel or trackpad pinch (0.5x to 200x)
+- Zoom controls (+/- buttons) with zoom level indicator
 - Touch and trackpad gesture support (pinch-zoom, two-finger pan)
 - Jump to diagonal, reset view, zoom to specific contigs
 - Responsive layout with mobile and tablet breakpoints
 - Searchable contig list with scaffold badges, meta tag badges, exclusion indicators, and inversion markers
 - Sidebar panels: contigs, scaffolds, assembly metrics, history, 3D analysis, curation progress, tracks
+- Lesson browser modal for browsing and starting tutorial lessons
+- Workflow guide modal with 7-step recommended curation workflow
+- Edit mode hint overlay for new users
 - Toast notifications, detailed hover tooltips, loading progress overlay
 - Drag-and-drop file opening
 
@@ -297,6 +301,8 @@ Press `?` at any time to open the shortcuts reference.
 | `Cmd+Shift+Z` | Redo |
 | `Cmd+O` | Open file |
 | `Cmd+S` | Screenshot |
+| `+` / `=` | Zoom in |
+| `-` | Zoom out |
 | `Cmd+A` | Select all contigs (edit mode) |
 
 ## Curation Workflow
@@ -401,7 +407,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev          # Start development server with hot reload
-npm test             # Run unit tests (2,139 tests across 79 files)
+npm test             # Run unit tests (2,151 tests across 80 files)
 npm run test:visual  # Run E2E tests (35 tests, Playwright + Chromium)
 npm run build        # Production build to dist/
 npm run preview      # Preview the production build
@@ -442,6 +448,7 @@ src/
     TrackRenderer.ts         Annotation track renderer (line/heatmap/marker)
     ScaffoldOverlay.ts       Scaffold color band overlay
     WaypointOverlay.ts       Waypoint marker overlay
+    ContactMapReorder.ts     Contact map pixel reordering after curation
   curation/
     CurationEngine.ts        Cut/join/invert/move with undo/redo
     SelectionManager.ts      Contig selection (click/shift/ctrl)
@@ -497,14 +504,14 @@ src/
     CurationLog.ts           JSON operation history export
   io/
     SessionManager.ts        Session save/load (JSON with undo stack + analysis)
-  ui/                        35 UI modules (pure DOM, no framework)
-data/
+  ui/                        38 UI modules (pure DOM, no framework)
+public/data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
   lessons/                   Tutorial lesson JSON files (9 lessons)
   pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
   prompt-strategies.json     AI prompt strategy library (8 strategies)
 tests/
-  unit/                      2,139 unit tests across 79 test files
+  unit/                      2,151 unit tests across 80 test files
   e2e/                       35 E2E tests (Playwright + Chromium)
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)
