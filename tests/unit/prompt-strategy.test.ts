@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getStrategyById, _resetCache, type StrategyLibrary, type PromptStrategy } from '../../src/data/PromptStrategy';
-import strategyData from '../../data/prompt-strategies.json';
+import strategyData from '../../public/data/prompt-strategies.json';
 
 const library = strategyData as StrategyLibrary;
 
