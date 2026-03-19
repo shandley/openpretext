@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import type { SpecimenEntry, SpecimenCatalog } from '../../src/data/SpecimenCatalog';
 import { getTutorialSpecimens, getSpecimensByDifficulty } from '../../src/data/SpecimenCatalog';
-import catalogData from '../../data/specimen-catalog.json';
+import catalogData from '../../public/data/specimen-catalog.json';
 
 const catalog = catalogData as SpecimenCatalog;
 
