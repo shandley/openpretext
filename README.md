@@ -237,6 +237,20 @@ Open http://localhost:3000 in a browser, then either:
 - Drag and drop a `.pretext` file onto the window
 - Click **Start Tutorial** for a guided walkthrough
 
+### Running Locally
+
+OpenPretext requires a local HTTP server; the `file://` protocol will not work
+due to CORS restrictions and ES module loading requirements.
+
+```bash
+npm run dev          # Development server with hot reload (http://localhost:3000)
+npm run build        # Build for production
+npm run preview      # Preview the production build locally
+```
+
+If you just want to preview a production build without cloning, `npx vite preview`
+works from the project root after `npm run build`.
+
 ### Obtaining Test Data
 
 Real `.pretext` files are available from the

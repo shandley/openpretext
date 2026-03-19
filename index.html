@@ -1658,6 +1658,65 @@
       font-size: 12px;
     }
 
+    /* Workflow guide modal */
+    #workflow-guide {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+    }
+    #workflow-guide.visible { display: flex; }
+    .workflow-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .workflow-card h2 {
+      margin: 0 0 16px;
+      font-size: 16px;
+      color: var(--text-primary);
+    }
+    .workflow-step {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .workflow-step:last-child { border-bottom: none; }
+    .workflow-step-num {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      min-width: 20px;
+    }
+    .workflow-step-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .workflow-step-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .workflow-close {
+      margin-top: 12px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
     /* Lesson browser modal */
     #lesson-browser-modal {
       display: none;
@@ -2534,7 +2593,8 @@
         <div class="shortcuts">
           <kbd>⌘K</kbd> Command palette &nbsp;
           <kbd>E</kbd> Edit mode &nbsp;
-          <kbd>L</kbd> Toggle grid
+          <kbd>L</kbd> Toggle grid &nbsp;
+          <a id="btn-welcome-workflow" href="#" style="color:var(--accent);text-decoration:underline;cursor:pointer;">Workflow Guide</a>
         </div>
       </div>
     </div>
@@ -2698,6 +2758,42 @@
           <div class="shortcut-row"><span class="desc">Screenshot</span><span class="key"><kbd>&#8984;</kbd><kbd>S</kbd></span></div>
         </div>
         <div class="shortcuts-close">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</div>
+      </div>
+    </div>
+
+    <!-- Workflow guide modal -->
+    <div id="workflow-guide">
+      <div class="workflow-card">
+        <h2>Recommended Workflow</h2>
+        <div class="workflow-step">
+          <span class="workflow-step-num">1</span>
+          <div><div class="workflow-step-title">Load</div><div class="workflow-step-desc">Open a .pretext file or load an example dataset</div></div>
+        </div>
+        <div class="workflow-step">
+          <span class="workflow-step-num">2</span>
+          <div><div class="workflow-step-title">Explore</div><div class="workflow-step-desc">Pan and zoom the contact map to understand the assembly structure</div></div>
+        </div>
+        <div class="workflow-step">
+          <span class="workflow-step-num">3</span>
+          <div><div class="workflow-step-title">Sort</div><div class="workflow-step-desc">Run Auto Sort (Cmd+K &rarr; "Auto sort") to group contigs into chromosomes</div></div>
+        </div>
+        <div class="workflow-step">
+          <span class="workflow-step-num">4</span>
+          <div><div class="workflow-step-title">Cut</div><div class="workflow-step-desc">Run Auto Cut to split misassembled contigs at breakpoints</div></div>
+        </div>
+        <div class="workflow-step">
+          <span class="workflow-step-num">5</span>
+          <div><div class="workflow-step-title">Scaffold</div><div class="workflow-step-desc">Assign contigs to chromosomes using scaffold painting mode (S)</div></div>
+        </div>
+        <div class="workflow-step">
+          <span class="workflow-step-num">6</span>
+          <div><div class="workflow-step-title">Analyze</div><div class="workflow-step-desc">Compute insulation, compartments, and P(s) decay to validate</div></div>
+        </div>
+        <div class="workflow-step">
+          <span class="workflow-step-num">7</span>
+          <div><div class="workflow-step-title">Export</div><div class="workflow-step-desc">Export curated assembly as AGP, BED, or FASTA</div></div>
+        </div>
+        <div class="workflow-close">Press <kbd>Esc</kbd> to close</div>
       </div>
     </div>
 

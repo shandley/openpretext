@@ -185,6 +185,9 @@ export async function loadReferenceFasta(ctx: AppContext, file: File): Promise<v
     const records = parseFASTA(text);
     ctx.referenceSequences = new Map(records.map(r => [r.name, r.sequence]));
     ctx.showToast(`Loaded ${records.length} reference sequences`);
+    // Update FASTA hint in analysis panel
+    const { updateFastaHint } = await import('./AnalysisPanel');
+    updateFastaHint(ctx);
   } catch (err) {
     console.error('FASTA parse error:', err);
     ctx.showToast(`FASTA load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);

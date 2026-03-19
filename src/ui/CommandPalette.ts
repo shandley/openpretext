@@ -19,6 +19,7 @@ import { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoi
 import { togglePatternGallery } from './PatternGallery';
 import { toggleAIAssist } from './AIAssistPanel';
 import { exportAnalysisByKey } from './AnalysisPanel';
+import { toggleWorkflowGuide } from './WorkflowGuide';
 
 import type { SpecimenEntry } from '../data/SpecimenCatalog';
 
@@ -129,6 +130,7 @@ function getCommands(ctx: AppContext) {
     { name: 'Tutorial: Manual Scaffold Assignment', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '05-scaffold-assignment') },
     { name: 'Tutorial: Full Curation Exercise', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '06-full-curation-exercise') },
     { name: 'Pattern Gallery', shortcut: '', action: () => togglePatternGallery(ctx) },
+    { name: 'Workflow Guide', shortcut: '', action: () => toggleWorkflowGuide() },
     { name: 'AI: Analyze Contact Map', shortcut: '', action: () => toggleAIAssist() },
     { name: 'Export Insulation BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'insulation') },
     { name: 'Export P(s) TSV', shortcut: '', action: () => exportAnalysisByKey(ctx, 'decay') },

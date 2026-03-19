@@ -555,7 +555,7 @@ describe('BatchActions', () => {
 
       expect(autoSortContigs).toHaveBeenCalledWith(undefined);
       expect(ctx.refreshAfterCuration).toHaveBeenCalled();
-      expect(ctx.showToast).toHaveBeenCalledWith('Auto sort: 3 operation(s) (1 chain(s))');
+      expect(ctx.showToast).toHaveBeenCalledWith('Auto Sort: 3 contigs reordered');
     });
 
     it('should pass hardThreshold when a valid number is provided', () => {
@@ -738,7 +738,7 @@ describe('BatchActions', () => {
 
       expect(autoCutContigs).toHaveBeenCalledWith(undefined);
       expect(ctx.refreshAfterCuration).toHaveBeenCalled();
-      expect(ctx.showToast).toHaveBeenCalledWith('Auto cut: 2 breakpoint(s) detected and applied');
+      expect(ctx.showToast).toHaveBeenCalledWith('Auto Cut: 2 breakpoints detected, 0 \u2192 0 contigs');
     });
 
     it('should pass cutThreshold when a valid number is provided', () => {
