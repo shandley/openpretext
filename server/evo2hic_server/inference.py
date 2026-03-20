@@ -30,10 +30,13 @@ EVO2HIC_REPO_PATH = os.environ.get("EVO2HIC_REPO_PATH")
 EVO2HIC_CHECKPOINT = os.environ.get("EVO2HIC_CHECKPOINT")
 
 EVO2HIC_EPI_CHECKPOINT = os.environ.get("EVO2HIC_EPI_CHECKPOINT")
+EVO2HIC_SEQ2HIC_CHECKPOINT = os.environ.get("EVO2HIC_SEQ2HIC_CHECKPOINT")
 
 MODEL_VERSION = "mock-0.1.0"
 MODEL_LOADED = False
 EPI_MODEL_LOADED = False
+SEQ2HIC_MODEL_LOADED = False
+SEQ2HIC_MODEL_VERSION = "mock-seq2hic-0.1.0"
 
 # Default chunk size the Evo2HiC model expects (bins at 2kb resolution)
 DEFAULT_CHUNK_SIZE = 100
@@ -861,3 +864,356 @@ class Evo2HiCEpiModel:
                 "color": color,
             })
         return results
+
+
+# ======================================================================
+# Sequence-to-Hi-C prediction (Seq2HiC)
+# ======================================================================
+
+# Safe padded size: chunk=100 fails because 100/2=50/2=25 (odd) breaks
+# the memory_efficient downsample (Rearrange requires even dims at each
+# level). Use 160 as a safe minimum tile size (160/2=80/2=40 -- all even).
+_SEQ2HIC_SAFE_TILE_SIZE = 160
+
+
+class Evo2HiCSeq2HiCModel:
+    """Sequence-to-Hi-C contact map prediction.
+
+    Uses the pretrained CDNA2d model (contrastive learning checkpoint) to
+    predict an expected Hi-C contact map from DNA sequence alone. The model
+    receives actual DNA encoding but a zero Hi-C input matrix, and the
+    decoder reconstructs the predicted contact pattern.
+
+    When real weights are unavailable, falls back to generating a synthetic
+    block-diagonal contact map based on contig structure.
+    """
+
+    def __init__(self) -> None:
+        self.device: str = "cpu"
+        self.model: torch.nn.Module | None = None
+        self.normalizer: object | None = None
+        self.model_args: dict | None = None
+        self.chunk_size: int = DEFAULT_CHUNK_SIZE
+        self._loaded = False
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._loaded
+
+    def load_model(
+        self,
+        checkpoint_path: str | None = None,
+        device: str | None = None,
+    ) -> None:
+        """Load pretrained CDNA2d model weights for Seq2HiC prediction.
+
+        Args:
+            checkpoint_path: Path to pretrained model checkpoint. If None,
+                checks EVO2HIC_SEQ2HIC_CHECKPOINT env var, then tries
+                auto-detection relative to EVO2HIC_CHECKPOINT.
+            device: Torch device string. Auto-detected if None.
+        """
+        if device is None:
+            self.device = _detect_device()
+        else:
+            self.device = device
+
+        # Resolve checkpoint path
+        ckpt = checkpoint_path or EVO2HIC_SEQ2HIC_CHECKPOINT
+
+        # Auto-detect: look for pretrained_weights/model.pt as sibling of
+        # the enhancement checkpoint directory
+        if ckpt is None and EVO2HIC_CHECKPOINT is not None:
+            grandparent = Path(EVO2HIC_CHECKPOINT).parent.parent
+            candidate = grandparent / "pretrained_weights" / "model.pt"
+            if candidate.is_file():
+                ckpt = str(candidate)
+                logger.info("Auto-detected Seq2HiC checkpoint: %s", ckpt)
+
+        if ckpt is not None:
+            try:
+                self._load_real_model(ckpt)
+                return
+            except Exception:
+                logger.exception(
+                    "Failed to load Seq2HiC model from %s; "
+                    "falling back to mock inference",
+                    ckpt,
+                )
+
+        logger.info("Seq2HiC model running in mock inference mode")
+        self._loaded = False
+
+    def _load_real_model(self, checkpoint_path: str) -> None:
+        """Load the real pretrained CDNA2d model from checkpoint."""
+        if not _ensure_evo2hic_importable():
+            raise RuntimeError(
+                "EVO2HIC_REPO_PATH is not set or invalid. "
+                "Cannot import Evo2HiC model code."
+            )
+
+        # Resolve symlinks
+        try:
+            ckpt = os.readlink(checkpoint_path)
+        except OSError:
+            ckpt = checkpoint_path
+
+        if not os.path.isfile(ckpt):
+            raise FileNotFoundError(f"Seq2HiC checkpoint not found: {ckpt}")
+
+        # Load args.json from the same directory as the checkpoint
+        args_file = os.path.join(os.path.dirname(ckpt), "args.json")
+        if not os.path.isfile(args_file):
+            raise FileNotFoundError(
+                f"args.json not found next to Seq2HiC checkpoint: {args_file}"
+            )
+
+        with open(args_file) as f:
+            args = json.load(f)
+
+        self.model_args = args
+
+        # Import Evo2HiC modules
+        from dataset.normalizer import Normalizer  # type: ignore[import-untyped]
+        from model.create_CDNA2d import create_model  # type: ignore[import-untyped]
+
+        # Build normalizer
+        self.normalizer = Normalizer(
+            args["normalization"],
+            max_reads=args["max_reads"],
+            denominator=args["denominator"],
+            step=args["step"],
+        )
+
+        # Supply defaults for args that create_model expects
+        model_defaults = {
+            "input_channels": args.get("num_channels", 1),
+            "output_channels": args.get("num_channels", 1),
+            "dim": args.get("unet_input_dim", 128),
+            "force_final_conv": args.get("force_final_conv", False),
+            "use_mrcrossembed": args.get("use_mrcrossembed", True),
+            "encoder_version": args.get("encoder_version", "v1"),
+        }
+
+        # Create model architecture (diffusion_steps=0 for inference)
+        model = create_model(
+            **{**model_defaults, **args, "normalizer": self.normalizer, "diffusion_steps": 0}
+        )
+
+        # Load state dict with unet->decoder key remapping
+        state = torch.load(ckpt, map_location="cpu", weights_only=True)
+        state_unified = {
+            k.replace("unet", "decoder"): v
+            for k, v in state["model"].items()
+        }
+        model.load_state_dict(state_unified)
+
+        model.to(self.device)
+        model.eval()
+
+        self.model = model
+        self._loaded = True
+
+        # Extract chunk size from model args
+        if "chunk" in args:
+            self.chunk_size = args["chunk"]
+        elif "chunk_size" in args:
+            self.chunk_size = args["chunk_size"]
+
+        global SEQ2HIC_MODEL_VERSION, SEQ2HIC_MODEL_LOADED
+        SEQ2HIC_MODEL_VERSION = f"evo2hic-seq2hic-{Path(ckpt).stem}"
+        SEQ2HIC_MODEL_LOADED = True
+
+        logger.info(
+            "Loaded Seq2HiC model from %s (device=%s, chunk_size=%d)",
+            ckpt,
+            self.device,
+            self.chunk_size,
+        )
+
+    def predict_hic(
+        self,
+        fasta_sequences: dict[str, str],
+        contig_names: list[str] | None = None,
+        map_size: int = 64,
+    ) -> tuple[np.ndarray, int]:
+        """Predict a Hi-C contact map from DNA sequence alone.
+
+        Args:
+            fasta_sequences: Contig name -> DNA sequence mapping.
+            contig_names: Ordered contig names for coordinate mapping.
+            map_size: Desired output overview map size.
+
+        Returns:
+            Tuple of (flattened float32 predicted map, map_size).
+        """
+        if self._loaded and self.model is not None and self.normalizer is not None:
+            return self._real_predict(fasta_sequences, contig_names, map_size)
+
+        return self._mock_predict(fasta_sequences, contig_names, map_size)
+
+    # ------------------------------------------------------------------
+    # Real model inference
+    # ------------------------------------------------------------------
+
+    def _real_predict(
+        self,
+        fasta_sequences: dict[str, str],
+        contig_names: list[str] | None,
+        map_size: int,
+    ) -> tuple[np.ndarray, int]:
+        """Run real CDNA2d model with zero Hi-C input to predict contacts."""
+        assert self.model is not None
+        assert self.normalizer is not None
+
+        resolution = 2000
+        if self.model_args and "resolution" in self.model_args:
+            resolution = self.model_args["resolution"]
+
+        # Pad to safe tile size (chunk=100 has divisibility issues)
+        padded_size = max(
+            _SEQ2HIC_SAFE_TILE_SIZE,
+            math.ceil(map_size / _SEQ2HIC_SAFE_TILE_SIZE) * _SEQ2HIC_SAFE_TILE_SIZE,
+        )
+
+        # Zero Hi-C input -- model predicts contacts from DNA alone
+        zero_matrix = np.zeros((padded_size, padded_size), dtype=np.float64)
+
+        # Normalize the zero matrix (pass through normalizer for consistency)
+        normalized = self.normalizer.normalize(zero_matrix)  # type: ignore[union-attr]
+
+        # Build input tensor: (batch=1, S=1, H=1, channels=1, height, width)
+        input_tensor = (
+            torch.from_numpy(normalized)
+            .float()
+            .unsqueeze(0)  # channels
+            .unsqueeze(0)  # H
+            .unsqueeze(0)  # S
+            .unsqueeze(0)  # batch
+        )
+
+        # Build DNA tensors from FASTA
+        encoded = prepare_dna_for_tile(
+            fasta_sequences=fasta_sequences,
+            contig_names=contig_names,
+            tile_start_bin=0,
+            tile_end_bin=padded_size,
+            resolution=resolution,
+            overview_size=map_size,
+            texture_size=map_size,
+        )
+        num_bases = encoded.shape[0]
+        dna_tensor = prepare_dna_tensor(encoded, self.device)
+        map_tensor = prepare_mappability_tensor(num_bases, self.device)
+
+        data = {
+            "input_matrix": input_tensor.to(self.device),
+            "DNA_row": dna_tensor,
+            "DNA_col": dna_tensor,
+            "mappability_row": map_tensor,
+            "mappability_col": map_tensor,
+        }
+
+        with torch.no_grad():
+            output = self.model(**data)
+
+        # Output shape: (batch, S, H, channels, height, width)
+        result = output.flatten(0, 2)[:, 0, :, :].cpu().numpy()[0]
+
+        # Unnormalize
+        result = self.normalizer.unnormalize(result)  # type: ignore[union-attr]
+        result = np.clip(result, 0, None)
+
+        # Enforce symmetry
+        result = (result + result.T) / 2.0
+
+        # Crop to requested map_size
+        result = result[:map_size, :map_size]
+
+        # Resize if needed (result may be larger than map_size)
+        if result.shape[0] != map_size:
+            result = zoom(result, map_size / result.shape[0], order=3)
+            result = np.clip(result, 0, None)
+
+        flat = result.astype(np.float32).ravel()
+        return flat, map_size
+
+    # ------------------------------------------------------------------
+    # Mock inference (fallback)
+    # ------------------------------------------------------------------
+
+    def _mock_predict(
+        self,
+        fasta_sequences: dict[str, str],
+        contig_names: list[str] | None,
+        map_size: int,
+    ) -> tuple[np.ndarray, int]:
+        """Generate a synthetic block-diagonal contact map from contig structure.
+
+        Simulates chromosome territory patterns: strong contacts within
+        contigs (blocks along the diagonal) with weaker inter-contig signal.
+        """
+        names = contig_names if contig_names else list(fasta_sequences.keys())
+        num_contigs = len(names)
+
+        # Compute contig sizes (proportional to sequence length)
+        sizes = []
+        for name in names:
+            seq = fasta_sequences.get(name, "")
+            sizes.append(max(len(seq), 1))
+        total = sum(sizes)
+
+        # Map contigs to bin ranges
+        boundaries: list[tuple[int, int]] = []
+        pos = 0
+        for s in sizes:
+            bin_count = max(1, round(s / total * map_size))
+            end = min(pos + bin_count, map_size)
+            boundaries.append((pos, end))
+            pos = end
+
+        # Build the contact map
+        matrix = np.zeros((map_size, map_size), dtype=np.float64)
+
+        # Distance-dependent decay along diagonal
+        for i in range(map_size):
+            for j in range(i, map_size):
+                dist = abs(i - j)
+                # Base contact probability decays with distance
+                value = np.exp(-dist / (map_size * 0.05))
+                matrix[i, j] = value
+                matrix[j, i] = value
+
+        # Strengthen intra-contig contacts (block-diagonal structure)
+        for start, end in boundaries:
+            block_size = end - start
+            if block_size <= 0:
+                continue
+            for i in range(start, end):
+                for j in range(start, end):
+                    dist = abs(i - j)
+                    boost = 3.0 * np.exp(-dist / max(block_size * 0.3, 1))
+                    matrix[i, j] += boost
+
+        # Add mild inter-contig signal (trans contacts)
+        for ci, (s1, e1) in enumerate(boundaries):
+            for cj, (s2, e2) in enumerate(boundaries):
+                if ci >= cj:
+                    continue
+                # Weak uniform trans signal
+                trans_level = 0.1
+                matrix[s1:e1, s2:e2] += trans_level
+                matrix[s2:e2, s1:e1] += trans_level
+
+        # Apply mild Gaussian smoothing for realism
+        matrix = gaussian_filter(matrix, sigma=1.0)
+
+        # Normalize to reasonable range
+        if matrix.max() > 0:
+            matrix = matrix / matrix.max()
+
+        # Enforce symmetry
+        matrix = (matrix + matrix.T) / 2.0
+
+        flat = matrix.astype(np.float32).ravel()
+        return flat, map_size

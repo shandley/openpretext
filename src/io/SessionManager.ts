@@ -188,6 +188,13 @@ export interface SessionEpiTracks {
   modelVersion: string;
 }
 
+/** Serialized Seq2HiC predicted contact map state. */
+export interface SessionPredictedHiC {
+  mapBase64: string;
+  mapSize: number;
+  modelVersion: string;
+}
+
 export interface SessionAnalysisData {
   insulationWindowSize: number;
   insulation?: SessionInsulation;
@@ -202,6 +209,7 @@ export interface SessionAnalysisData {
   saddle?: SessionSaddle;
   enhancement?: SessionEnhancement;
   epiTracks?: SessionEpiTracks;
+  predictedHiC?: SessionPredictedHiC;
 }
 
 /**
@@ -409,6 +417,14 @@ function validateSessionAnalysis(v: unknown): boolean {
       if (!isNonEmptyString(t.valuesBase64)) return false;
       if (typeof t.color !== 'string') return false;
     }
+  }
+
+  // Optional predicted Hi-C (Seq2HiC)
+  if (v.predictedHiC !== undefined) {
+    if (!isObject(v.predictedHiC)) return false;
+    if (!isNonEmptyString(v.predictedHiC.mapBase64)) return false;
+    if (!Number.isInteger(v.predictedHiC.mapSize) || (v.predictedHiC.mapSize as number) < 1) return false;
+    if (typeof v.predictedHiC.modelVersion !== 'string') return false;
   }
 
   return true;

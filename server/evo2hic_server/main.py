@@ -13,11 +13,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import inference
-from .inference import Evo2HiCEpiModel, Evo2HiCModel
+from .inference import Evo2HiCEpiModel, Evo2HiCModel, Evo2HiCSeq2HiCModel
 from .schemas import (
     EnhanceRequest,
     EnhanceResponse,
     HealthResponse,
+    PredictHiCRequest,
+    PredictHiCResponse,
     PredictTracksRequest,
     PredictTracksResponse,
     TrackPrediction,
@@ -25,6 +27,7 @@ from .schemas import (
 
 model = Evo2HiCModel()
 epi_model = Evo2HiCEpiModel()
+seq2hic_model = Evo2HiCSeq2HiCModel()
 
 
 @asynccontextmanager
@@ -32,6 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Load models on startup."""
     model.load_model()
     epi_model.load_model()
+    seq2hic_model.load_model()
     yield
 
 
@@ -56,6 +60,7 @@ async def health() -> HealthResponse:
         status="ok",
         model_loaded=model.is_loaded,
         epi_model_loaded=epi_model.is_loaded,
+        seq2hic_model_loaded=seq2hic_model.is_loaded,
         device=model.device,
         model_version=inference.MODEL_VERSION,
     )
@@ -150,6 +155,35 @@ async def predict_tracks(request: PredictTracksRequest) -> PredictTracksResponse
     return PredictTracksResponse(
         tracks=track_predictions,
         model_version=inference.EPI_MODEL_VERSION,
+        elapsed_ms=round(elapsed_ms, 2),
+    )
+
+
+@app.post("/api/v1/predict-hic")
+async def predict_hic(request: PredictHiCRequest) -> PredictHiCResponse:
+    t0 = time.perf_counter()
+
+    if not request.fasta_sequences:
+        raise HTTPException(status_code=400, detail="fasta_sequences is required and must not be empty")
+
+    # Run Seq2HiC prediction
+    try:
+        predicted, size = seq2hic_model.predict_hic(
+            fasta_sequences=request.fasta_sequences,
+            contig_names=request.contig_names,
+            map_size=request.map_size,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Seq2HiC prediction failed: {e}")
+
+    # Encode result to base64
+    encoded = base64.b64encode(predicted.tobytes()).decode("ascii")
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    return PredictHiCResponse(
+        predicted_map=encoded,
+        map_size=size,
+        model_version=inference.SEQ2HIC_MODEL_VERSION,
         elapsed_ms=round(elapsed_ms, 2),
     )
 

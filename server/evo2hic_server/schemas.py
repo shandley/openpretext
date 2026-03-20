@@ -43,9 +43,23 @@ class PredictTracksResponse(BaseModel):
     elapsed_ms: float
 
 
+class PredictHiCRequest(BaseModel):
+    fasta_sequences: dict[str, str]  # contig_name -> sequence (required)
+    contig_names: list[str] | None = None
+    map_size: int = 64  # output overview size
+
+
+class PredictHiCResponse(BaseModel):
+    predicted_map: str  # base64-encoded Float32Array
+    map_size: int
+    model_version: str
+    elapsed_ms: float
+
+
 class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
     epi_model_loaded: bool
+    seq2hic_model_loaded: bool
     device: str
     model_version: str
