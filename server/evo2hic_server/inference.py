@@ -485,11 +485,11 @@ class Evo2HiCEpiModel:
         # Resolve checkpoint path
         ckpt = checkpoint_path or EVO2HIC_EPI_CHECKPOINT
 
-        # Auto-detect: look for epi_prediction/model.pt relative to the
+        # Auto-detect: look for epi_prediction/model.pt as sibling of the
         # enhancement checkpoint directory
         if ckpt is None and EVO2HIC_CHECKPOINT is not None:
-            parent = Path(EVO2HIC_CHECKPOINT).parent
-            candidate = parent / "epi_prediction" / "model.pt"
+            grandparent = Path(EVO2HIC_CHECKPOINT).parent.parent
+            candidate = grandparent / "epi_prediction" / "model.pt"
             if candidate.is_file():
                 ckpt = str(candidate)
                 logger.info("Auto-detected epi checkpoint: %s", ckpt)
@@ -654,25 +654,24 @@ class Evo2HiCEpiModel:
 
         data = {
             "input_matrix": input_tensor.to(self.device),
-            "DNA_row": torch.empty(0).to(self.device),
-            "DNA_col": torch.empty(0).to(self.device),
-            "mappability_row": torch.empty(0).to(self.device),
-            "mappability_col": torch.empty(0).to(self.device),
+            # CDNA1d uses DNA0/mappability0 (not DNA_row/DNA_col like CDNA2d)
+            "DNA0": torch.empty(0).to(self.device),
+            "mappability0": torch.empty(0).to(self.device),
         }
 
         with torch.no_grad():
             output = self.model(**data)
 
-        # Output shape: (batch, S, H, num_positions, num_tracks)
-        # Flatten batch dims and crop to original size
-        tracks_array = output[0, 0, 0, :size, :].cpu().numpy()
+        # Output shape: (batch, S, H, num_tracks, num_positions)
+        # Extract tracks and crop to original size
+        tracks_array = output[0, 0, 0, :, :size].cpu().numpy()
         tracks_array = np.clip(tracks_array, 0.0, 1.0)
 
         results = []
         for i, (name, color) in enumerate(TRACK_INFO):
             results.append({
                 "name": name,
-                "values": tracks_array[:, i].astype(np.float32),
+                "values": tracks_array[i].astype(np.float32),
                 "color": color,
             })
         return results
