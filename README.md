@@ -424,7 +424,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev          # Start development server with hot reload
-npm test             # Run unit tests (2,200 tests across 82 files)
+npm test             # Run unit tests (2,221 tests across 82 files)
 npm run test:visual  # Run E2E tests (35 tests, Playwright + Chromium)
 npm run build        # Production build to dist/
 npm run preview      # Preview the production build
@@ -530,7 +530,7 @@ public/data/
   pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
   prompt-strategies.json     AI prompt strategy library (8 strategies)
 tests/
-  unit/                      2,200 unit tests across 82 test files
+  unit/                      2,221 unit tests across 82 test files
   e2e/                       35 E2E tests (Playwright + Chromium)
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)

@@ -136,7 +136,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      2200 unit tests across 82 files (vitest)
+  unit/                      2221 unit tests across 82 files (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -301,7 +301,7 @@ themselves. The undo stack is the source of truth for curation history.
   using contig pixel spans for coordinate mapping.
 - **BEDWriter/FASTAWriter**: Use `AppState` directly; FASTA needs a
   `Map<string, string>` of reference sequences loaded separately.
-- **SpecimenCatalog**: `data/specimen-catalog.json` is the single source of
+- **SpecimenCatalog**: `public/data/specimen-catalog.json` is the single source of
   truth for both benchmark and education systems. `loadSpecimenCatalog()`
   fetches and caches it. `getTutorialSpecimens()` filters to app-loadable ones.
 - **TutorialManager**: State machine managing lesson lifecycle. Subscribes to
@@ -313,7 +313,7 @@ themselves. The undo stack is the source of truth for curation history.
 - **AssessmentPanel**: Triggered by TutorialManager when a lesson has
   `assessment` data. Computes kendallTau and shows score card.
 - **PatternGallery**: Modal showing 11 Hi-C patterns from
-  `data/pattern-gallery.json`. Clicking a pattern navigates the camera.
+  `public/data/pattern-gallery.json`. Clicking a pattern navigates the camera.
 - **Benchmark regression**: `bench/cli.ts regression` downloads 2 small
   specimens and validates metrics against `bench/baselines.json`.
 - **AIAssistPanel**: Single-shot AI curation assistant. Captures contact map
@@ -324,7 +324,7 @@ themselves. The undo stack is the source of truth for curation history.
   strategy editor (create/edit/delete), export/import buttons, Browse link
   to the community strategy repository (`shandley/openpretext-strategies`),
   and per-suggestion feedback (thumbs up/down via `AIFeedbackUI`).
-- **PromptStrategy**: `data/prompt-strategies.json` contains 8 built-in
+- **PromptStrategy**: `public/data/prompt-strategies.json` contains 8 built-in
   strategies. Custom strategies stored in localStorage key
   `openpretext-custom-strategies`. `mergeStrategies()` combines built-in
   and custom. `buildSystemPrompt(strategy)` appends supplement to base prompt.
@@ -498,7 +498,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 2200 tests must pass
+- Run `npm test` before committing; all 2221 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls
