@@ -28,6 +28,7 @@ class PredictTracksRequest(BaseModel):
     contact_map: str  # base64-encoded Float32Array
     map_size: int
     fasta_sequences: dict[str, str] | None = None
+    contig_names: list[str] | None = None
 
 
 class TrackPrediction(BaseModel):

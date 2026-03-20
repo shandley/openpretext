@@ -20,6 +20,7 @@ import numpy as np
 import torch
 from scipy.ndimage import gaussian_filter, zoom
 
+from .dna_encoder import prepare_dna_for_tile, prepare_dna_tensor, prepare_mappability_tensor
 from .schemas import EnhanceParams
 
 logger = logging.getLogger(__name__)
@@ -208,6 +209,7 @@ class Evo2HiCModel:
         contact_map: np.ndarray,
         size: int,
         fasta: dict[str, str] | None = None,
+        contig_names: list[str] | None = None,
         params: EnhanceParams | None = None,
     ) -> tuple[np.ndarray, int]:
         """Enhance a Hi-C contact map.
@@ -227,7 +229,11 @@ class Evo2HiCModel:
         matrix = contact_map.reshape(size, size).astype(np.float64)
 
         if self._loaded and self.model is not None and self.normalizer is not None:
-            return self._real_enhance(matrix, params)
+            return self._real_enhance(
+                matrix, params,
+                fasta_sequences=fasta,
+                contig_names=contig_names,
+            )
 
         return self._mock_enhance(matrix, params)
 
@@ -239,6 +245,8 @@ class Evo2HiCModel:
         self,
         matrix: np.ndarray,
         params: EnhanceParams,
+        fasta_sequences: dict[str, str] | None = None,
+        contig_names: list[str] | None = None,
     ) -> tuple[np.ndarray, int]:
         """Run real Evo2HiC model inference.
 
@@ -254,9 +262,17 @@ class Evo2HiCModel:
         normalized = self.normalizer.normalize(matrix)  # type: ignore[union-attr]
 
         if size <= WHOLE_MAP_THRESHOLD:
-            enhanced_norm = self._infer_whole_map(normalized, size)
+            enhanced_norm = self._infer_whole_map(
+                normalized, size,
+                fasta_sequences=fasta_sequences,
+                contig_names=contig_names,
+            )
         else:
-            enhanced_norm = self._infer_tiled(normalized, size)
+            enhanced_norm = self._infer_tiled(
+                normalized, size,
+                fasta_sequences=fasta_sequences,
+                contig_names=contig_names,
+            )
 
         # Unnormalize the output
         enhanced = self.normalizer.unnormalize(enhanced_norm)  # type: ignore[union-attr]
@@ -278,6 +294,8 @@ class Evo2HiCModel:
         self,
         normalized: np.ndarray,
         size: int,
+        fasta_sequences: dict[str, str] | None = None,
+        contig_names: list[str] | None = None,
     ) -> np.ndarray:
         """Process the entire map as a single input, padding to chunk_size."""
         chunk = self.chunk_size
@@ -287,7 +305,15 @@ class Evo2HiCModel:
         padded = np.zeros((padded_size, padded_size), dtype=np.float64)
         padded[:size, :size] = normalized
 
-        output = self._run_model_on_tile(padded)
+        output = self._run_model_on_tile(
+            padded,
+            fasta_sequences=fasta_sequences,
+            contig_names=contig_names,
+            tile_start_bin=0,
+            tile_end_bin=padded_size,
+            overview_size=size,
+            texture_size=size,
+        )
 
         # Crop back to original size
         return output[:size, :size]
@@ -296,6 +322,8 @@ class Evo2HiCModel:
         self,
         normalized: np.ndarray,
         size: int,
+        fasta_sequences: dict[str, str] | None = None,
+        contig_names: list[str] | None = None,
     ) -> np.ndarray:
         """Process a large map using overlapping tiles."""
         chunk = self.chunk_size
@@ -322,8 +350,16 @@ class Evo2HiCModel:
                 tile_w = c_end - col
                 tile[:tile_h, :tile_w] = padded[row:r_end, col:c_end]
 
-                # Run model
-                result = self._run_model_on_tile(tile)
+                # Run model (use row-based bin range for DNA)
+                result = self._run_model_on_tile(
+                    tile,
+                    fasta_sequences=fasta_sequences,
+                    contig_names=contig_names,
+                    tile_start_bin=row,
+                    tile_end_bin=row + chunk,
+                    overview_size=size,
+                    texture_size=size,
+                )
 
                 # Accumulate with blending weights (fade at overlaps)
                 w = np.ones((chunk, chunk), dtype=np.float64)
@@ -345,20 +381,31 @@ class Evo2HiCModel:
 
         return output[:size, :size]
 
-    def _run_model_on_tile(self, tile: np.ndarray) -> np.ndarray:
+    def _run_model_on_tile(
+        self,
+        tile: np.ndarray,
+        fasta_sequences: dict[str, str] | None = None,
+        contig_names: list[str] | None = None,
+        tile_start_bin: int = 0,
+        tile_end_bin: int | None = None,
+        overview_size: int | None = None,
+        texture_size: int = 0,
+    ) -> np.ndarray:
         """Run the model forward pass on a single tile.
 
         Constructs the input dict expected by CDNA2d.forward():
         - input_matrix: (batch=1, S=1, H=1, channels=1, height, width)
-        - DNA_row / DNA_col: empty tensors (triggers zero-embedding fallback)
-        - mappability_row / mappability_col: empty tensors
+        - DNA_row / DNA_col: encoded DNA tensors (or empty for zero fallback)
+        - mappability_row / mappability_col: ones or empty tensors
         """
         assert self.model is not None
 
         h, w = tile.shape
+        resolution = 2000
+        if self.model_args and "resolution" in self.model_args:
+            resolution = self.model_args["resolution"]
 
         # Model expects shape: (batch, S, H, channels, height, width)
-        # S and H are sub-matrix grid dimensions; for single tile, both = 1
         input_tensor = (
             torch.from_numpy(tile)
             .float()
@@ -368,15 +415,36 @@ class Evo2HiCModel:
             .unsqueeze(0)  # batch
         )
 
-        data = {
-            "input_matrix": input_tensor.to(self.device),
-            # Empty tensors for DNA/mappability trigger zero-embedding
-            # fallback in CDNA2d.forward()
-            "DNA_row": torch.empty(0).to(self.device),
-            "DNA_col": torch.empty(0).to(self.device),
-            "mappability_row": torch.empty(0).to(self.device),
-            "mappability_col": torch.empty(0).to(self.device),
-        }
+        # Build DNA tensors if FASTA is available
+        if fasta_sequences and overview_size:
+            end_bin = tile_end_bin if tile_end_bin is not None else tile_start_bin + h
+            encoded = prepare_dna_for_tile(
+                fasta_sequences=fasta_sequences,
+                contig_names=contig_names,
+                tile_start_bin=tile_start_bin,
+                tile_end_bin=end_bin,
+                resolution=resolution,
+                overview_size=overview_size,
+                texture_size=texture_size,
+            )
+            num_bases = encoded.shape[0]
+            dna_tensor = prepare_dna_tensor(encoded, self.device)
+            map_tensor = prepare_mappability_tensor(num_bases, self.device)
+            data = {
+                "input_matrix": input_tensor.to(self.device),
+                "DNA_row": dna_tensor,
+                "DNA_col": dna_tensor,
+                "mappability_row": map_tensor,
+                "mappability_col": map_tensor,
+            }
+        else:
+            data = {
+                "input_matrix": input_tensor.to(self.device),
+                "DNA_row": torch.empty(0).to(self.device),
+                "DNA_col": torch.empty(0).to(self.device),
+                "mappability_row": torch.empty(0).to(self.device),
+                "mappability_col": torch.empty(0).to(self.device),
+            }
 
         with torch.no_grad():
             output = self.model(**data)
@@ -604,12 +672,16 @@ class Evo2HiCEpiModel:
         self,
         contact_map: np.ndarray,
         size: int,
+        fasta_sequences: dict[str, str] | None = None,
+        contig_names: list[str] | None = None,
     ) -> list[dict]:
         """Predict epigenomic tracks from a Hi-C contact map.
 
         Args:
             contact_map: Flattened float32 contact map (size * size elements).
             size: Side length of the square contact map.
+            fasta_sequences: Optional contig name -> sequence mapping.
+            contig_names: Ordered contig names for mapping bins to sequences.
 
         Returns:
             List of 5 dicts with keys: name, values (np.ndarray), color.
@@ -617,7 +689,11 @@ class Evo2HiCEpiModel:
         matrix = contact_map.reshape(size, size).astype(np.float64)
 
         if self._loaded and self.model is not None and self.normalizer is not None:
-            return self._real_predict(matrix)
+            return self._real_predict(
+                matrix,
+                fasta_sequences=fasta_sequences,
+                contig_names=contig_names,
+            )
 
         return self._mock_predict(matrix)
 
@@ -625,12 +701,20 @@ class Evo2HiCEpiModel:
     # Real model inference
     # ------------------------------------------------------------------
 
-    def _real_predict(self, matrix: np.ndarray) -> list[dict]:
+    def _real_predict(
+        self,
+        matrix: np.ndarray,
+        fasta_sequences: dict[str, str] | None = None,
+        contig_names: list[str] | None = None,
+    ) -> list[dict]:
         """Run real CDNAtrack model inference."""
         assert self.model is not None
         assert self.normalizer is not None
 
         size = matrix.shape[0]
+        resolution = 2000
+        if self.model_args and "resolution" in self.model_args:
+            resolution = self.model_args["resolution"]
 
         # Normalize the contact map
         normalized = self.normalizer.normalize(matrix)  # type: ignore[union-attr]
@@ -652,12 +736,31 @@ class Evo2HiCEpiModel:
             .unsqueeze(0)  # batch
         )
 
-        data = {
-            "input_matrix": input_tensor.to(self.device),
-            # CDNA1d uses DNA0/mappability0 (not DNA_row/DNA_col like CDNA2d)
-            "DNA0": torch.empty(0).to(self.device),
-            "mappability0": torch.empty(0).to(self.device),
-        }
+        # Build DNA tensors if FASTA is available
+        if fasta_sequences:
+            encoded = prepare_dna_for_tile(
+                fasta_sequences=fasta_sequences,
+                contig_names=contig_names,
+                tile_start_bin=0,
+                tile_end_bin=padded_size,
+                resolution=resolution,
+                overview_size=size,
+                texture_size=size,
+            )
+            num_bases = encoded.shape[0]
+            dna_tensor = prepare_dna_tensor(encoded, self.device)
+            map_tensor = prepare_mappability_tensor(num_bases, self.device)
+            data = {
+                "input_matrix": input_tensor.to(self.device),
+                "DNA0": dna_tensor,
+                "mappability0": map_tensor,
+            }
+        else:
+            data = {
+                "input_matrix": input_tensor.to(self.device),
+                "DNA0": torch.empty(0).to(self.device),
+                "mappability0": torch.empty(0).to(self.device),
+            }
 
         with torch.no_grad():
             output = self.model(**data)

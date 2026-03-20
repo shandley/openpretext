@@ -85,6 +85,7 @@ async def enhance(request: EnhanceRequest) -> EnhanceResponse:
             contact_map,
             request.map_size,
             fasta=request.fasta_sequences,
+            contig_names=request.contig_names,
             params=request.params,
         )
     except Exception as e:
@@ -125,7 +126,12 @@ async def predict_tracks(request: PredictTracksRequest) -> PredictTracksResponse
 
     # Run track prediction
     try:
-        tracks = epi_model.predict_tracks(contact_map, request.map_size)
+        tracks = epi_model.predict_tracks(
+            contact_map,
+            request.map_size,
+            fasta_sequences=request.fasta_sequences,
+            contig_names=request.contig_names,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Track prediction failed: {e}")
 
