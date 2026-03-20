@@ -295,6 +295,8 @@ export class TrackRenderer {
     // Build the path at screen resolution — sample every screen pixel
     ctx.beginPath();
     let started = false;
+    let firstSx = 0;
+    let lastSx = 0;
 
     for (let sx = 0; sx < w; sx++) {
       const dataIdx = this.screenXToDataIndex(sx, cam, w, h, textureSize);
@@ -305,10 +307,12 @@ export class TrackRenderer {
 
       if (!started) {
         ctx.moveTo(sx, y);
+        firstSx = sx;
         started = true;
       } else {
         ctx.lineTo(sx, y);
       }
+      lastSx = sx;
     }
 
     if (!started) return;
@@ -316,9 +320,9 @@ export class TrackRenderer {
     // Stroke the line
     ctx.stroke();
 
-    // Fill area under the line
-    ctx.lineTo(w, bottom);
-    ctx.lineTo(0, bottom);
+    // Fill area under the line — close from last to first data point
+    ctx.lineTo(lastSx, bottom);
+    ctx.lineTo(firstSx, bottom);
     ctx.closePath();
     ctx.fill();
   }
@@ -342,6 +346,8 @@ export class TrackRenderer {
 
     ctx.beginPath();
     let started = false;
+    let firstSy = 0;
+    let lastSy = 0;
 
     for (let sy = 0; sy < h; sy++) {
       const dataIdx = this.screenYToDataIndex(sy, cam, w, h, textureSize);
@@ -352,18 +358,21 @@ export class TrackRenderer {
 
       if (!started) {
         ctx.moveTo(x, sy);
+        firstSy = sy;
         started = true;
       } else {
         ctx.lineTo(x, sy);
       }
+      lastSy = sy;
     }
 
     if (!started) return;
 
     ctx.stroke();
 
-    ctx.lineTo(right, h);
-    ctx.lineTo(right, 0);
+    // Close from last to first data point
+    ctx.lineTo(right, lastSy);
+    ctx.lineTo(right, firstSy);
     ctx.closePath();
     ctx.fill();
   }
