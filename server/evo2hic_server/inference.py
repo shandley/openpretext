@@ -28,8 +28,11 @@ logger = logging.getLogger(__name__)
 EVO2HIC_REPO_PATH = os.environ.get("EVO2HIC_REPO_PATH")
 EVO2HIC_CHECKPOINT = os.environ.get("EVO2HIC_CHECKPOINT")
 
+EVO2HIC_EPI_CHECKPOINT = os.environ.get("EVO2HIC_EPI_CHECKPOINT")
+
 MODEL_VERSION = "mock-0.1.0"
 MODEL_LOADED = False
+EPI_MODEL_LOADED = False
 
 # Default chunk size the Evo2HiC model expects (bins at 2kb resolution)
 DEFAULT_CHUNK_SIZE = 100
@@ -422,3 +425,325 @@ class Evo2HiCModel:
 
         result = symmetric.astype(np.float32).ravel()
         return result, new_size
+
+
+# ======================================================================
+# Epigenomic track prediction
+# ======================================================================
+
+TRACK_INFO = [
+    ("DNase", "#1f77b4"),
+    ("CTCF", "#ff7f0e"),
+    ("H3K27ac", "#2ca02c"),
+    ("H3K27me3", "#d62728"),
+    ("H3K4me3", "#9467bd"),
+]
+
+NUM_EPI_TRACKS = len(TRACK_INFO)
+
+EPI_MODEL_VERSION = "mock-epi-0.1.0"
+
+
+class Evo2HiCEpiModel:
+    """Epigenomic track prediction from Hi-C contact maps.
+
+    Loads real CHNFTQ/Evo2HiC CDNAtrack weights when configured, otherwise
+    falls back to mock prediction that generates plausible tracks from the
+    diagonal signal.
+    """
+
+    def __init__(self) -> None:
+        self.device: str = "cpu"
+        self.model: torch.nn.Module | None = None
+        self.normalizer: object | None = None
+        self.model_args: dict | None = None
+        self.chunk_size: int = DEFAULT_CHUNK_SIZE
+        self._loaded = False
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._loaded
+
+    def load_model(
+        self,
+        checkpoint_path: str | None = None,
+        device: str | None = None,
+    ) -> None:
+        """Load epi model weights from checkpoint.
+
+        Args:
+            checkpoint_path: Path to epi model checkpoint. If None, checks
+                EVO2HIC_EPI_CHECKPOINT env var, then tries auto-detection
+                relative to EVO2HIC_CHECKPOINT. Falls back to mock if not found.
+            device: Torch device string. Auto-detected if None.
+        """
+        if device is None:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            self.device = device
+
+        # Resolve checkpoint path
+        ckpt = checkpoint_path or EVO2HIC_EPI_CHECKPOINT
+
+        # Auto-detect: look for epi_prediction/model.pt relative to the
+        # enhancement checkpoint directory
+        if ckpt is None and EVO2HIC_CHECKPOINT is not None:
+            parent = Path(EVO2HIC_CHECKPOINT).parent
+            candidate = parent / "epi_prediction" / "model.pt"
+            if candidate.is_file():
+                ckpt = str(candidate)
+                logger.info("Auto-detected epi checkpoint: %s", ckpt)
+
+        if ckpt is not None:
+            try:
+                self._load_real_model(ckpt)
+                return
+            except Exception:
+                logger.exception(
+                    "Failed to load real Evo2HiC epi model from %s; "
+                    "falling back to mock inference",
+                    ckpt,
+                )
+
+        logger.info("Epi model running in mock inference mode")
+        self._loaded = False
+
+    def _load_real_model(self, checkpoint_path: str) -> None:
+        """Load the real CDNAtrack model from a checkpoint.
+
+        Follows the same loading pattern as Evo2HiCModel._load_real_model()
+        but imports create_model from model.create_CDNA1d instead of 2d.
+        """
+        if not _ensure_evo2hic_importable():
+            raise RuntimeError(
+                "EVO2HIC_REPO_PATH is not set or invalid. "
+                "Cannot import Evo2HiC model code."
+            )
+
+        # Resolve symlinks
+        try:
+            ckpt = os.readlink(checkpoint_path)
+        except OSError:
+            ckpt = checkpoint_path
+
+        if not os.path.isfile(ckpt):
+            raise FileNotFoundError(f"Epi checkpoint not found: {ckpt}")
+
+        # Load args.json from the same directory as the checkpoint
+        args_file = os.path.join(os.path.dirname(ckpt), "args.json")
+        if not os.path.isfile(args_file):
+            raise FileNotFoundError(
+                f"args.json not found next to epi checkpoint: {args_file}"
+            )
+
+        with open(args_file) as f:
+            args = json.load(f)
+
+        self.model_args = args
+
+        # Import Evo2HiC modules
+        from dataset.normalizer import Normalizer  # type: ignore[import-untyped]
+        from model.create_CDNA1d import create_model  # type: ignore[import-untyped]
+
+        # Build normalizer
+        self.normalizer = Normalizer(
+            args["normalization"],
+            max_reads=args["max_reads"],
+            denominator=args["denominator"],
+            step=args["step"],
+        )
+
+        # Supply defaults for args that create_model expects
+        model_defaults = {
+            "input_channels": args.get("input_channels", 1),
+            "track_input_dim": args.get("track_input_dim", 256),
+            "use_multiresolution_block": args.get("use_multiresolution_block", True),
+            "relative_resolutions": args.get("relative_resolutions", [1, 2, 4, 5]),
+            "emb_dim": args.get("emb_dim", 128),
+            "normalize_emb": args.get("normalize_emb", True),
+            "force_final_conv": args.get("force_final_conv", False),
+            "use_mrcrossembed": args.get("use_mrcrossembed", True),
+            "encoder_version": args.get("encoder_version", "v1"),
+            "resolution": args.get("resolution", 2000),
+        }
+
+        model = create_model(**{**model_defaults, **args})
+
+        # Load state dict with unet->decoder key remapping
+        state = torch.load(ckpt, map_location="cpu", weights_only=True)
+        state_unified = {
+            k.replace("unet", "decoder"): v
+            for k, v in state["model"].items()
+        }
+        model.load_state_dict(state_unified)
+
+        model.to(self.device)
+        model.eval()
+
+        self.model = model
+        self._loaded = True
+
+        # Extract chunk size from model args
+        if "chunk" in args:
+            self.chunk_size = args["chunk"]
+        elif "chunk_size" in args:
+            self.chunk_size = args["chunk_size"]
+
+        global EPI_MODEL_VERSION, EPI_MODEL_LOADED
+        EPI_MODEL_VERSION = f"evo2hic-epi-{Path(ckpt).stem}"
+        EPI_MODEL_LOADED = True
+
+        logger.info(
+            "Loaded real Evo2HiC epi model from %s (device=%s, chunk_size=%d)",
+            ckpt,
+            self.device,
+            self.chunk_size,
+        )
+
+    def predict_tracks(
+        self,
+        contact_map: np.ndarray,
+        size: int,
+    ) -> list[dict]:
+        """Predict epigenomic tracks from a Hi-C contact map.
+
+        Args:
+            contact_map: Flattened float32 contact map (size * size elements).
+            size: Side length of the square contact map.
+
+        Returns:
+            List of 5 dicts with keys: name, values (np.ndarray), color.
+        """
+        matrix = contact_map.reshape(size, size).astype(np.float64)
+
+        if self._loaded and self.model is not None and self.normalizer is not None:
+            return self._real_predict(matrix)
+
+        return self._mock_predict(matrix)
+
+    # ------------------------------------------------------------------
+    # Real model inference
+    # ------------------------------------------------------------------
+
+    def _real_predict(self, matrix: np.ndarray) -> list[dict]:
+        """Run real CDNAtrack model inference."""
+        assert self.model is not None
+        assert self.normalizer is not None
+
+        size = matrix.shape[0]
+
+        # Normalize the contact map
+        normalized = self.normalizer.normalize(matrix)  # type: ignore[union-attr]
+
+        chunk = self.chunk_size
+        padded_size = math.ceil(size / chunk) * chunk
+
+        # Pad with zeros to nearest multiple of chunk_size
+        padded = np.zeros((padded_size, padded_size), dtype=np.float64)
+        padded[:size, :size] = normalized
+
+        # Build input tensor: (batch=1, S=1, H=1, channels=1, height, width)
+        input_tensor = (
+            torch.from_numpy(padded)
+            .float()
+            .unsqueeze(0)  # channels
+            .unsqueeze(0)  # H
+            .unsqueeze(0)  # S
+            .unsqueeze(0)  # batch
+        )
+
+        data = {
+            "input_matrix": input_tensor.to(self.device),
+            "DNA_row": torch.empty(0).to(self.device),
+            "DNA_col": torch.empty(0).to(self.device),
+            "mappability_row": torch.empty(0).to(self.device),
+            "mappability_col": torch.empty(0).to(self.device),
+        }
+
+        with torch.no_grad():
+            output = self.model(**data)
+
+        # Output shape: (batch, S, H, num_positions, num_tracks)
+        # Flatten batch dims and crop to original size
+        tracks_array = output[0, 0, 0, :size, :].cpu().numpy()
+        tracks_array = np.clip(tracks_array, 0.0, 1.0)
+
+        results = []
+        for i, (name, color) in enumerate(TRACK_INFO):
+            results.append({
+                "name": name,
+                "values": tracks_array[:, i].astype(np.float32),
+                "color": color,
+            })
+        return results
+
+    # ------------------------------------------------------------------
+    # Mock inference (fallback)
+    # ------------------------------------------------------------------
+
+    def _mock_predict(self, matrix: np.ndarray) -> list[dict]:
+        """Generate plausible mock epigenomic tracks from diagonal signal.
+
+        Produces 5 tracks correlated with Hi-C contact map features:
+        - DNase: high where diagonal signal is strong
+        - CTCF: peaks at contig boundaries (insulator binding)
+        - H3K27ac: correlated with DNase but smoother
+        - H3K27me3: anti-correlated with H3K27ac (repressive mark)
+        - H3K4me3: sharp peaks at intervals (promoters)
+        """
+        size = matrix.shape[0]
+
+        # Extract diagonal signal as the base feature
+        diagonal = np.array([matrix[i, i] for i in range(size)], dtype=np.float64)
+        if diagonal.max() > 0:
+            diagonal /= diagonal.max()
+
+        # DNase: smoothed diagonal signal
+        dnase = gaussian_filter(diagonal, sigma=2.0)
+        dnase = np.clip(dnase, 0, 1)
+
+        # CTCF: peaks near local drops in off-diagonal contact (boundary-like)
+        off_diag = np.zeros(size, dtype=np.float64)
+        for i in range(size):
+            window = min(3, size - i - 1, i)
+            if window > 0:
+                off_diag[i] = np.mean([
+                    matrix[i, i + d] for d in range(1, window + 1)
+                ])
+        if off_diag.max() > 0:
+            off_diag /= off_diag.max()
+        # Negative derivative of off-diagonal → boundary signal
+        ctcf = np.zeros(size, dtype=np.float64)
+        ctcf[1:] = np.maximum(-np.diff(off_diag), 0)
+        ctcf = gaussian_filter(ctcf, sigma=1.0)
+        if ctcf.max() > 0:
+            ctcf /= ctcf.max()
+
+        # H3K27ac: smoother version of DNase (active enhancers)
+        h3k27ac = gaussian_filter(diagonal, sigma=4.0)
+        h3k27ac = np.clip(h3k27ac, 0, 1)
+
+        # H3K27me3: anti-correlated with H3K27ac (repressive mark)
+        h3k27me3 = 1.0 - h3k27ac
+        h3k27me3 = gaussian_filter(h3k27me3, sigma=3.0)
+        h3k27me3 = np.clip(h3k27me3, 0, 1)
+
+        # H3K4me3: sharp peaks at regular intervals (promoters)
+        h3k4me3 = np.zeros(size, dtype=np.float64)
+        interval = max(1, size // 20)
+        for i in range(0, size, interval):
+            h3k4me3[i] = 0.8 + 0.2 * diagonal[i]
+        h3k4me3 = gaussian_filter(h3k4me3, sigma=1.0)
+        if h3k4me3.max() > 0:
+            h3k4me3 /= h3k4me3.max()
+
+        track_arrays = [dnase, ctcf, h3k27ac, h3k27me3, h3k4me3]
+
+        results = []
+        for i, (name, color) in enumerate(TRACK_INFO):
+            results.append({
+                "name": name,
+                "values": track_arrays[i].astype(np.float32),
+                "color": color,
+            })
+        return results

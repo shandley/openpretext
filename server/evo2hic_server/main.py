@@ -13,16 +13,25 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import inference
-from .inference import Evo2HiCModel
-from .schemas import EnhanceRequest, EnhanceResponse, HealthResponse
+from .inference import Evo2HiCEpiModel, Evo2HiCModel
+from .schemas import (
+    EnhanceRequest,
+    EnhanceResponse,
+    HealthResponse,
+    PredictTracksRequest,
+    PredictTracksResponse,
+    TrackPrediction,
+)
 
 model = Evo2HiCModel()
+epi_model = Evo2HiCEpiModel()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Load model on startup."""
+    """Load models on startup."""
     model.load_model()
+    epi_model.load_model()
     yield
 
 
@@ -46,6 +55,7 @@ async def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         model_loaded=model.is_loaded,
+        epi_model_loaded=epi_model.is_loaded,
         device=model.device,
         model_version=inference.MODEL_VERSION,
     )
@@ -91,6 +101,49 @@ async def enhance(request: EnhanceRequest) -> EnhanceResponse:
         enhanced_size=new_size,
         upscale_factor=upscale_factor,
         model_version=inference.MODEL_VERSION,
+        elapsed_ms=round(elapsed_ms, 2),
+    )
+
+
+@app.post("/api/v1/predict-tracks")
+async def predict_tracks(request: PredictTracksRequest) -> PredictTracksResponse:
+    t0 = time.perf_counter()
+
+    # Decode base64 contact map to float32 array
+    try:
+        raw = base64.b64decode(request.contact_map)
+        contact_map = np.frombuffer(raw, dtype=np.float32)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid contact_map encoding: {e}")
+
+    expected_len = request.map_size * request.map_size
+    if len(contact_map) != expected_len:
+        raise HTTPException(
+            status_code=400,
+            detail=f"contact_map has {len(contact_map)} elements, expected {expected_len} ({request.map_size}x{request.map_size})",
+        )
+
+    # Run track prediction
+    try:
+        tracks = epi_model.predict_tracks(contact_map, request.map_size)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Track prediction failed: {e}")
+
+    # Encode track values to base64
+    track_predictions = [
+        TrackPrediction(
+            name=t["name"],
+            values=base64.b64encode(t["values"].tobytes()).decode("ascii"),
+            color=t["color"],
+        )
+        for t in tracks
+    ]
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    return PredictTracksResponse(
+        tracks=track_predictions,
+        model_version=inference.EPI_MODEL_VERSION,
         elapsed_ms=round(elapsed_ms, 2),
     )
 

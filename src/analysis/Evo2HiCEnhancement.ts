@@ -69,6 +69,50 @@ export function downscaleMap(
   return result;
 }
 
+/** Decode a base64 string to a Float32Array of arbitrary length (no size*size check). */
+export function decodeFloat32Array(base64: string): Float32Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Float32Array(bytes.buffer);
+}
+
+/** Encode a Float32Array to a base64 string (alias for encodeContactMap). */
+export function encodeFloat32Array(arr: Float32Array): string {
+  return encodeContactMap(arr);
+}
+
+import type { TrackConfig } from '../renderer/TrackRenderer';
+
+/**
+ * Convert predicted epigenomic tracks to TrackConfig objects for rendering.
+ * Maps from overviewSize coordinates to textureSize coordinates.
+ */
+export function trackPredictionToConfigs(
+  tracks: { name: string; values: Float32Array; color: string }[],
+  overviewSize: number,
+  textureSize: number,
+): TrackConfig[] {
+  return tracks.map(track => {
+    const data = new Float32Array(textureSize);
+    for (let tp = 0; tp < textureSize; tp++) {
+      const op = Math.min(
+        Math.floor((tp / textureSize) * overviewSize),
+        overviewSize - 1,
+      );
+      data[tp] = track.values[op];
+    }
+    return {
+      name: track.name,
+      type: 'line' as const,
+      data,
+      color: track.color,
+      height: 25,
+      visible: true,
+    };
+  });
+}
+
 /** Validate that an enhanced map has the expected dimensions and finite values. */
 export function validateEnhancedMap(map: Float32Array, expectedSize: number): boolean {
   if (map.length !== expectedSize * expectedSize) return false;

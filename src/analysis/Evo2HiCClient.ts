@@ -5,7 +5,7 @@
  * AbortController-based timeouts.
  */
 
-import { encodeContactMap, decodeContactMap } from './Evo2HiCEnhancement';
+import { encodeContactMap, decodeContactMap, decodeFloat32Array } from './Evo2HiCEnhancement';
 
 // ---------------------------------------------------------------------------
 // Error classes
@@ -50,6 +50,18 @@ export interface HealthStatus {
   modelLoaded: boolean;
   device: string;
   modelVersion: string;
+}
+
+export interface EpiTrackPrediction {
+  name: string;
+  values: Float32Array;
+  color: string;
+}
+
+export interface TrackPredictionResult {
+  tracks: EpiTrackPrediction[];
+  modelVersion: string;
+  elapsedMs: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +194,70 @@ export class Evo2HiCClient {
       enhancedMap,
       enhancedSize,
       upscaleFactor: data.upscale_factor as number,
+      modelVersion: data.model_version as string,
+      elapsedMs: data.elapsed_ms as number,
+    };
+  }
+
+  async predictTracks(
+    contactMap: Float32Array,
+    size: number,
+    fastaSequences?: Map<string, string>,
+  ): Promise<TrackPredictionResult> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+
+    const payload: Record<string, unknown> = {
+      contact_map: encodeContactMap(contactMap),
+      map_size: size,
+    };
+
+    if (fastaSequences && fastaSequences.size > 0) {
+      const seqObj: Record<string, string> = {};
+      fastaSequences.forEach((seq, name) => {
+        seqObj[name] = seq;
+      });
+      payload.fasta_sequences = seqObj;
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.serverUrl}/api/v1/predict-tracks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      clearTimeout(timer);
+      if (err.name === 'AbortError') {
+        throw new Evo2HiCConnectionError('Request timed out');
+      }
+      throw new Evo2HiCConnectionError(
+        `Connection failed: ${err.message ?? 'fetch failed'}`,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Evo2HiCServerError(
+        `Track prediction failed (${response.status}): ${text}`,
+        response.status,
+      );
+    }
+
+    const data = await response.json();
+    const rawTracks = data.tracks as Array<{ name: string; values: string; color: string }>;
+    const tracks: EpiTrackPrediction[] = rawTracks.map(t => ({
+      name: t.name,
+      values: decodeFloat32Array(t.values),
+      color: t.color,
+    }));
+
+    return {
+      tracks,
       modelVersion: data.model_version as string,
       elapsedMs: data.elapsed_ms as number,
     };

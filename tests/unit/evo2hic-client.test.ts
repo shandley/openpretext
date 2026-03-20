@@ -239,6 +239,115 @@ describe('Evo2HiCClient', () => {
   });
 
   // -----------------------------------------------------------------------
+  // predictTracks
+  // -----------------------------------------------------------------------
+
+  describe('predictTracks', () => {
+    const smallMap = new Float32Array([1, 2, 3, 4]);
+
+    function makeTrackBase64(length: number): string {
+      const arr = new Float32Array(length);
+      for (let i = 0; i < length; i++) arr[i] = i * 0.1;
+      return encodeContactMap(arr);
+    }
+
+    function mockPredictSuccess(numTracks = 5, trackLength = 4) {
+      const tracks = [];
+      const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'];
+      const names = ['CTCF', 'H3K27ac', 'H3K4me3', 'H3K27me3', 'ATAC'];
+      for (let i = 0; i < numTracks; i++) {
+        tracks.push({
+          name: names[i] ?? `Track${i}`,
+          values: makeTrackBase64(trackLength),
+          color: colors[i] ?? '#aaaaaa',
+        });
+      }
+      mockFetch(200, {
+        tracks,
+        model_version: '3.0',
+        elapsed_ms: 200,
+      });
+    }
+
+    it('returns TrackPredictionResult with 5 tracks', async () => {
+      mockPredictSuccess(5, 4);
+      const client = new Evo2HiCClient({ serverUrl: 'http://localhost:8000' });
+      const result = await client.predictTracks(smallMap, 2);
+
+      expect(result.tracks).toHaveLength(5);
+      expect(result.modelVersion).toBe('3.0');
+      expect(result.elapsedMs).toBe(200);
+      for (const t of result.tracks) {
+        expect(t.values).toBeInstanceOf(Float32Array);
+        expect(t.values.length).toBe(4);
+        expect(typeof t.name).toBe('string');
+        expect(typeof t.color).toBe('string');
+      }
+    });
+
+    it('sends POST to /api/v1/predict-tracks', async () => {
+      mockPredictSuccess();
+      const client = new Evo2HiCClient({ serverUrl: 'http://localhost:8000' });
+      await client.predictTracks(smallMap, 2);
+
+      const [url, options] = (globalThis.fetch as any).mock.calls[0];
+      expect(url).toBe('http://localhost:8000/api/v1/predict-tracks');
+      expect(options.method).toBe('POST');
+      expect(options.headers['Content-Type']).toBe('application/json');
+    });
+
+    it('encodes contact_map and map_size in request body', async () => {
+      mockPredictSuccess();
+      const client = new Evo2HiCClient({ serverUrl: 'http://localhost:8000' });
+      await client.predictTracks(smallMap, 2);
+
+      const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+      expect(body.contact_map).toBe(encodeContactMap(smallMap));
+      expect(body.map_size).toBe(2);
+    });
+
+    it('throws Evo2HiCServerError on 500', async () => {
+      mockFetch(500, { error: 'model crashed' });
+      const client = new Evo2HiCClient({ serverUrl: 'http://localhost:8000' });
+      await expect(client.predictTracks(smallMap, 2)).rejects.toThrow(Evo2HiCServerError);
+    });
+
+    it('includes fasta when provided', async () => {
+      mockPredictSuccess();
+      const client = new Evo2HiCClient({ serverUrl: 'http://localhost:8000' });
+      const fasta = new Map([['chr1', 'ATCG']]);
+      await client.predictTracks(smallMap, 2, fasta);
+
+      const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+      expect(body.fasta_sequences).toEqual({ chr1: 'ATCG' });
+    });
+
+    it('omits fasta when not provided', async () => {
+      mockPredictSuccess();
+      const client = new Evo2HiCClient({ serverUrl: 'http://localhost:8000' });
+      await client.predictTracks(smallMap, 2);
+
+      const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+      expect(body.fasta_sequences).toBeUndefined();
+    });
+
+    it('omits fasta when empty map provided', async () => {
+      mockPredictSuccess();
+      const client = new Evo2HiCClient({ serverUrl: 'http://localhost:8000' });
+      await client.predictTracks(smallMap, 2, new Map());
+
+      const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+      expect(body.fasta_sequences).toBeUndefined();
+    });
+
+    it('throws Evo2HiCConnectionError on network failure', async () => {
+      (globalThis.fetch as any).mockRejectedValue(new TypeError('Network error'));
+      const client = new Evo2HiCClient({ serverUrl: 'http://localhost:8000' });
+      await expect(client.predictTracks(smallMap, 2)).rejects.toThrow(Evo2HiCConnectionError);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // localStorage helpers
   // -----------------------------------------------------------------------
 

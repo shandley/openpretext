@@ -182,6 +182,12 @@ export interface SessionEnhancement {
   active: boolean;
 }
 
+/** Serialized epigenomic track prediction state. */
+export interface SessionEpiTracks {
+  tracks: { name: string; valuesBase64: string; color: string }[];
+  modelVersion: string;
+}
+
 export interface SessionAnalysisData {
   insulationWindowSize: number;
   insulation?: SessionInsulation;
@@ -195,6 +201,7 @@ export interface SessionAnalysisData {
   quality?: SessionQuality;
   saddle?: SessionSaddle;
   enhancement?: SessionEnhancement;
+  epiTracks?: SessionEpiTracks;
 }
 
 /**
@@ -389,6 +396,19 @@ function validateSessionAnalysis(v: unknown): boolean {
     if (!isFiniteNumber(v.enhancement.upscaleFactor)) return false;
     if (typeof v.enhancement.modelVersion !== 'string') return false;
     if (typeof v.enhancement.active !== 'boolean') return false;
+  }
+
+  // Optional epigenomic track predictions
+  if (v.epiTracks !== undefined) {
+    if (!isObject(v.epiTracks)) return false;
+    if (typeof v.epiTracks.modelVersion !== 'string') return false;
+    if (!Array.isArray(v.epiTracks.tracks)) return false;
+    for (const t of v.epiTracks.tracks) {
+      if (!isObject(t)) return false;
+      if (!isNonEmptyString(t.name)) return false;
+      if (!isNonEmptyString(t.valuesBase64)) return false;
+      if (typeof t.color !== 'string') return false;
+    }
   }
 
   return true;
