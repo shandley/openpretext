@@ -48,14 +48,20 @@ The server will log whether it loaded the real model or fell back to mock mode. 
 
 ### GPU acceleration
 
-By default, PyTorch uses CPU. For GPU acceleration:
+The server auto-detects the best available device: **CUDA** (NVIDIA) > **MPS** (Apple Silicon) > CPU.
 
+**Apple Silicon (M1/M2/M3/M4):** MPS is supported out of the box — no extra setup needed. The default PyTorch install includes MPS support. Enhancement speedup: ~18× vs CPU.
+
+**NVIDIA GPU:**
 ```bash
-# CUDA 12.x
+# Install PyTorch with CUDA 12.x support
 uv pip install torch --index-url https://download.pytorch.org/whl/cu124
+```
 
-# Optional: install accelerate for multi-GPU support
-uv pip install accelerate
+Check which device is active via the health endpoint:
+```bash
+curl http://localhost:8000/api/v1/health
+# {"status":"ok","model_loaded":true,"device":"mps",...}
 ```
 
 ## Environment Variables

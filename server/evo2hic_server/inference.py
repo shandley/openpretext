@@ -37,6 +37,18 @@ EPI_MODEL_LOADED = False
 
 # Default chunk size the Evo2HiC model expects (bins at 2kb resolution)
 DEFAULT_CHUNK_SIZE = 100
+
+
+def _detect_device() -> str:
+    """Auto-detect the best available torch device.
+
+    Priority: CUDA (NVIDIA GPU) > MPS (Apple Silicon GPU) > CPU.
+    """
+    if torch.cuda.is_available():
+        return "cuda"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 # Overlap for tiling large maps (in bins)
 TILE_OVERLAP = 10
 # Threshold for whole-map vs tiled inference
@@ -90,7 +102,7 @@ class Evo2HiCModel:
                 if None.
         """
         if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = _detect_device()
         else:
             self.device = device
 
@@ -546,7 +558,7 @@ class Evo2HiCEpiModel:
             device: Torch device string. Auto-detected if None.
         """
         if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = _detect_device()
         else:
             self.device = device
 
