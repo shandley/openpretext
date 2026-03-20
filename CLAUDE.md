@@ -69,6 +69,8 @@ src/
     CurationProgress.ts      Real-time ordering progress scoring + trends
     AnalysisWorker.ts        Background Web Worker for analysis computation
     AnalysisWorkerClient.ts  Promise-based main-thread worker client
+    Evo2HiCClient.ts          HTTP client for Evo2HiC enhancement server
+    Evo2HiCEnhancement.ts     Contact map encode/decode/downscale utilities
   ai/
     AIClient.ts              Anthropic Messages API wrapper (vision)
     AIContext.ts             Assembly state context builder for AI prompts
@@ -117,6 +119,11 @@ public/data/
   lessons/                   Tutorial lesson JSON files (9 lessons)
   pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
   prompt-strategies.json     AI prompt strategy library (8 strategies)
+server/                        Evo2HiC enhancement server (Python/FastAPI, optional)
+  evo2hic_server/
+    main.py                    FastAPI app (/api/v1/health, /api/v1/enhance)
+    inference.py               Model loading (mock or real Evo2HiC weights)
+    schemas.py                 Pydantic request/response models
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)
   runner.ts                  Benchmark pipeline orchestrator
@@ -129,7 +136,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      2151 unit tests across 80 files (vitest)
+  unit/                      2200 unit tests across 82 files (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -210,6 +217,8 @@ tests/
     ui-color-map.test.ts         Color map controls
     ui-shortcuts-modal.test.ts   Shortcuts reference modal
     contact-map-reorder.test.ts  Contact map reorder permutation (12 tests)
+    evo2hic-client.test.ts       Evo2HiC HTTP client (20 tests)
+    evo2hic-enhancement.test.ts  Encode/decode/downscale utilities (30 tests)
   e2e/                       35 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
@@ -461,6 +470,17 @@ themselves. The undo stack is the source of truth for curation history.
   section shows ordering percentage bar, longest run count, trend arrow
   (green up / red down / grey neutral), and "Set Reference" button.
   Updated after every curation operation via `refreshAfterCuration()`.
+- **Evo2HiC Enhancement**: Optional ML-powered contact map resolution
+  enhancement via companion FastAPI server. `Evo2HiCClient` sends
+  base64-encoded overview contactMap to server, receives enhanced map.
+  `downscaleMap()` reduces enhanced output to overview dimensions for
+  display. `cachedEnhancedOverview` in AnalysisPanel follows the same
+  pattern as `cachedNormalizedMap` — downstream analyses use the enhanced
+  map when toggle is active. Cleared on curation operations via
+  `clearEnhancedMap()` in EventWiring. Session-persisted as base64
+  in `SessionEnhancement`. Server supports real Evo2HiC model weights
+  (via EVO2HIC_REPO_PATH + EVO2HIC_CHECKPOINT env vars) or mock
+  inference (Gaussian denoise + bicubic upscale) for testing.
 
 ## Companion Repository
 
@@ -478,7 +498,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 2151 tests must pass
+- Run `npm test` before committing; all 2200 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls

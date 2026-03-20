@@ -103,6 +103,23 @@ required.
 - Adjustable insulation window size; auto-computation on file load
 - BedGraph and TSV export for all analysis tracks
 
+### ML-Powered Hi-C Enhancement
+
+- **Evo2HiC resolution enhancement** — integrates the [Evo2HiC](https://github.com/CHNFTQ/Evo2HiC)
+  foundation model (81M parameters, trained on 177 species) to enhance low-resolution Hi-C overview
+  maps, revealing chromosome territory boundaries, inter-chromosomal contacts, and distance-decay
+  patterns below the raw data's noise floor
+- Optional companion server (`server/`) running locally — core app works fully without it
+- Toggle between original and enhanced views in real time
+- Enhanced map feeds into downstream analysis (insulation, compartments, P(s) decay)
+- Cleared automatically on curation operations (contig ordering changed)
+
+![Evo2HiC Enhancement: King Quail](docs/images/evo2hic-quail-original.png)
+*Original Hi-C overview of King quail (Coturnix chinensis) — 645 contigs, 30 chromosomes*
+
+![Evo2HiC Enhancement: King Quail Enhanced](docs/images/evo2hic-quail-enhanced.png)
+*Same genome after Evo2HiC enhancement — inter-chromosomal contacts, distance-decay gradients, and inter-haplotype signal now visible*
+
 ### Misassembly Detection and Curation
 
 - Automatic detection of potential chimeric contigs using TAD boundary and compartment
@@ -407,7 +424,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev          # Start development server with hot reload
-npm test             # Run unit tests (2,151 tests across 80 files)
+npm test             # Run unit tests (2,200 tests across 82 files)
 npm run test:visual  # Run E2E tests (35 tests, Playwright + Chromium)
 npm run build        # Production build to dist/
 npm run preview      # Preview the production build
@@ -495,6 +512,8 @@ src/
     CurationProgress.ts      Real-time ordering progress scoring
     AnalysisWorker.ts        Background Web Worker for analysis
     AnalysisWorkerClient.ts  Promise-based main-thread worker client
+    Evo2HiCClient.ts          HTTP client for Evo2HiC enhancement server
+    Evo2HiCEnhancement.ts     Contact map encode/decode/downscale utilities
   export/
     AGPWriter.ts             AGP 2.1 format generation
     BEDWriter.ts             BED6 format export (scaffold-aware)
@@ -511,7 +530,7 @@ public/data/
   pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
   prompt-strategies.json     AI prompt strategy library (8 strategies)
 tests/
-  unit/                      2,151 unit tests across 80 test files
+  unit/                      2,200 unit tests across 82 test files
   e2e/                       35 E2E tests (Playwright + Chromium)
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)
@@ -520,6 +539,11 @@ bench/
   baselines.json             Regression thresholds for CI
   metrics/                   AutoSort, AutoCut, chromosome metrics
   acquire/                   GenomeArk specimen download tools
+server/                        Evo2HiC enhancement server (Python/FastAPI)
+  evo2hic_server/
+    main.py                    FastAPI app with /health and /enhance endpoints
+    inference.py               Model loading + inference (mock or real)
+    schemas.py                 Pydantic request/response models
 ```
 
 ### Technology
@@ -531,6 +555,7 @@ bench/
 - **Vitest** for unit testing
 - **Playwright** for E2E testing
 - Pure DOM manipulation for UI (no React/Vue/Angular)
+- **Evo2HiC** (optional) for ML-powered contact map resolution enhancement
 
 ## Background
 

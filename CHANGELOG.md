@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Evo2HiC resolution enhancement** — ML-powered Hi-C contact map enhancement
+  using the Evo2HiC foundation model (81M parameters, 177 species). Optional
+  companion FastAPI server with real model weights or mock inference. Toggle
+  between original and enhanced views, with automatic invalidation on curation.
+  Tested on real King quail genome (645 contigs, 30 chromosomes).
+- 49 new unit tests for Evo2HiC client and enhancement utilities
 - **Contig meta tags** — classify contigs as haplotig, contaminant, unlocalised,
   or sex chromosome with colored sidebar badges and batch operations
 - **Telomere detection** — scan reference FASTA for TTAGGG/CCCTAA repeat motifs
