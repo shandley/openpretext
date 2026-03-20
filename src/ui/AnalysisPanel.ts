@@ -57,12 +57,13 @@ import type {
   SessionDirectionality,
   SessionQuality,
   SessionSaddle,
+  SessionPredictedHiC,
 } from '../io/SessionManager';
 import { openCutReview } from './CutReviewPanel';
 import { autoAssignScaffolds } from './Sidebar';
 import { computeProgress, computeTrend } from '../analysis/CurationProgress';
 import type { DetectedPattern } from '../analysis/PatternDetector';
-import { Evo2HiCClient, getStoredServerUrl, setStoredServerUrl, type EpiTrackPrediction } from '../analysis/Evo2HiCClient';
+import { Evo2HiCClient, getStoredServerUrl, setStoredServerUrl, type EpiTrackPrediction, type HiCPredictionResult } from '../analysis/Evo2HiCClient';
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
 
@@ -88,6 +89,10 @@ let cachedTelomere: TelomereResult | null = null;
 let cachedEnhancedMap: Float32Array | null = null;
 let cachedEnhancedOverview: Float32Array | null = null;
 let enhancedMapActive = false;
+let cachedPredictedHiC: Float32Array | null = null;
+let cachedPredictedHiCSize: number = 0;
+let cachedPredictedHiCModelVersion: string | null = null;
+let predictedHiCActive = false;
 let cachedEpiTracks: EpiTrackPrediction[] | null = null;
 let cachedEpiModelVersion: string | null = null;
 let enhancing = false;
@@ -1236,12 +1241,32 @@ export function clearEnhancedMap(): void {
   enhancedMapActive = false;
   cachedEpiTracks = null;
   cachedEpiModelVersion = null;
+  cachedPredictedHiC = null;
+  cachedPredictedHiCSize = 0;
+  cachedPredictedHiCModelVersion = null;
+  predictedHiCActive = false;
   const toggleBtn = document.getElementById('btn-evo2hic-toggle') as HTMLButtonElement | null;
   if (toggleBtn) {
     toggleBtn.disabled = true;
     toggleBtn.textContent = 'Toggle Enhanced View';
     toggleBtn.classList.remove('enhance-active');
   }
+  const togglePredBtn = document.getElementById('btn-evo2hic-toggle-predicted') as HTMLButtonElement | null;
+  if (togglePredBtn) {
+    togglePredBtn.disabled = true;
+    togglePredBtn.textContent = 'Toggle Predicted vs Observed';
+    togglePredBtn.classList.remove('enhance-active');
+  }
+}
+
+/** Whether the predicted Hi-C (Seq2HiC) view is currently active. */
+export function getPredictedHiCActive(): boolean {
+  return predictedHiCActive;
+}
+
+/** Get the cached predicted Hi-C map, or null if not computed. */
+export function getPredictedHiC(): Float32Array | null {
+  return cachedPredictedHiC;
 }
 
 /** Clear predicted epigenomic tracks (called on curation operations). */
@@ -1625,6 +1650,15 @@ export function exportAnalysisState(): SessionAnalysisData | null {
     };
   }
 
+  // Predicted Hi-C (Seq2HiC)
+  if (cachedPredictedHiC) {
+    data.predictedHiC = {
+      mapBase64: encodeContactMap(cachedPredictedHiC),
+      mapSize: cachedPredictedHiCSize,
+      modelVersion: cachedPredictedHiCModelVersion ?? 'unknown',
+    };
+  }
+
   return data;
 }
 
@@ -1824,6 +1858,21 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
     }
   }
 
+  // Restore predicted Hi-C (Seq2HiC)
+  if (data.predictedHiC && data.predictedHiC.mapBase64) {
+    try {
+      cachedPredictedHiC = decodeFloat32Array(data.predictedHiC.mapBase64);
+      cachedPredictedHiCSize = data.predictedHiC.mapSize;
+      cachedPredictedHiCModelVersion = data.predictedHiC.modelVersion ?? null;
+      predictedHiCActive = false;
+    } catch {
+      cachedPredictedHiC = null;
+      cachedPredictedHiCSize = 0;
+      cachedPredictedHiCModelVersion = null;
+      predictedHiCActive = false;
+    }
+  }
+
   // Re-derive misassembly detection from restored insulation + compartments
   if (cachedInsulation && cachedCompartments) {
     runMisassemblyDetection(ctx);
@@ -1881,7 +1930,9 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       <div id="evo2hic-status" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
       <button class="analysis-btn" id="btn-evo2hic-enhance" style="width:100%;margin-bottom:2px;background:#00b894;color:#fff;" disabled>Enhance (Evo2HiC)</button>
       <button class="analysis-btn" id="btn-evo2hic-toggle" style="width:100%;margin-bottom:2px;" disabled>Toggle Enhanced View</button>
-      <button class="analysis-btn" id="btn-evo2hic-predict-tracks" style="width:100%;margin-bottom:4px;background:#0984e3;color:#fff;" disabled>Predict Tracks</button>
+      <button class="analysis-btn" id="btn-evo2hic-predict-tracks" style="width:100%;margin-bottom:2px;background:#0984e3;color:#fff;" disabled>Predict Tracks</button>
+      <button class="analysis-btn" id="btn-evo2hic-predict-hic" style="width:100%;margin-bottom:2px;background:#e17055;color:#fff;" disabled>Predict Hi-C (Seq2HiC)</button>
+      <button class="analysis-btn" id="btn-evo2hic-toggle-predicted" style="width:100%;margin-bottom:4px;" disabled>Toggle Predicted vs Observed</button>
       <div id="evo2hic-fasta-hint" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
     </div>
     <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
@@ -2000,6 +2051,8 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
   const btnEnhance = document.getElementById('btn-evo2hic-enhance') as HTMLButtonElement | null;
   const btnToggle = document.getElementById('btn-evo2hic-toggle') as HTMLButtonElement | null;
   const btnPredictTracks = document.getElementById('btn-evo2hic-predict-tracks') as HTMLButtonElement | null;
+  const btnPredictHiC = document.getElementById('btn-evo2hic-predict-hic') as HTMLButtonElement | null;
+  const btnTogglePredicted = document.getElementById('btn-evo2hic-toggle-predicted') as HTMLButtonElement | null;
 
   // Show FASTA hint
   if (evo2hicFastaHint) {
@@ -2032,6 +2085,9 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       }
       if (btnEnhance) btnEnhance.disabled = false;
       if (btnPredictTracks) btnPredictTracks.disabled = false;
+      // Predict Hi-C requires FASTA
+      const hasFasta = ctx.referenceSequences && ctx.referenceSequences.size > 0;
+      if (btnPredictHiC) btnPredictHiC.disabled = !hasFasta;
     } catch (err: unknown) {
       if (evo2hicStatus) {
         evo2hicStatus.textContent = `Error: ${(err as Error).message}`;
@@ -2039,6 +2095,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       }
       if (btnEnhance) btnEnhance.disabled = true;
       if (btnPredictTracks) btnPredictTracks.disabled = true;
+      if (btnPredictHiC) btnPredictHiC.disabled = true;
     }
   });
 
@@ -2144,6 +2201,75 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     }
   });
 
+  // Restore toggle state if predicted Hi-C exists
+  if (btnTogglePredicted && cachedPredictedHiC) {
+    btnTogglePredicted.disabled = false;
+    btnTogglePredicted.textContent = predictedHiCActive ? 'Show Observed' : 'Toggle Predicted vs Observed';
+    if (predictedHiCActive) btnTogglePredicted.classList.add('enhance-active');
+  }
+
+  btnPredictHiC?.addEventListener('click', async () => {
+    const url = evo2hicUrlInput?.value?.trim();
+    if (!url) return;
+    if (!ctx.referenceSequences || ctx.referenceSequences.size === 0) {
+      ctx.showToast('FASTA sequences required for Hi-C prediction', 3000);
+      return;
+    }
+    const s2 = state.get();
+    if (!s2.map) return;
+
+    btnPredictHiC.disabled = true;
+    btnPredictHiC.textContent = 'Predicting...';
+
+    try {
+      const overviewSz = getOverviewSize();
+      const contigNames = s2.contigOrder.map(id => s2.map!.contigs[id].name);
+      const client = new Evo2HiCClient({ serverUrl: url });
+      const result = await client.predictHiC(ctx.referenceSequences, contigNames, overviewSz);
+
+      cachedPredictedHiC = result.predictedMap;
+      cachedPredictedHiCSize = result.mapSize;
+      cachedPredictedHiCModelVersion = result.modelVersion;
+      ctx.showToast(`Hi-C predicted in ${(result.elapsedMs / 1000).toFixed(1)}s (${result.modelVersion})`);
+
+      if (btnTogglePredicted) {
+        btnTogglePredicted.disabled = false;
+        btnTogglePredicted.textContent = 'Toggle Predicted vs Observed';
+      }
+    } catch (err: unknown) {
+      ctx.showToast(`Hi-C prediction failed: ${(err as Error).message}`, 4000);
+    } finally {
+      btnPredictHiC.disabled = false;
+      btnPredictHiC.textContent = 'Predict Hi-C (Seq2HiC)';
+    }
+  });
+
+  btnTogglePredicted?.addEventListener('click', () => {
+    if (!cachedPredictedHiC) return;
+    const s2 = state.get();
+    if (!s2.map) return;
+
+    predictedHiCActive = !predictedHiCActive;
+    const overviewSz = getOverviewSize();
+
+    if (predictedHiCActive) {
+      ctx.renderer.uploadContactMap(cachedPredictedHiC, overviewSz);
+      ctx.minimap.updateThumbnail(cachedPredictedHiC, overviewSz);
+      btnTogglePredicted.textContent = 'Show Observed';
+      btnTogglePredicted.classList.add('enhance-active');
+    } else {
+      const original = s2.map.originalContactMap;
+      if (original) {
+        const reordered = reorderContactMap(original, s2.map.contigs, s2.contigOrder, overviewSz);
+        ctx.renderer.uploadContactMap(reordered, overviewSz);
+        ctx.minimap.updateThumbnail(reordered, overviewSz);
+      }
+      btnTogglePredicted.textContent = 'Toggle Predicted vs Observed';
+      btnTogglePredicted.classList.remove('enhance-active');
+    }
+    ctx.showToast(`Predicted Hi-C view: ${predictedHiCActive ? 'ON' : 'OFF'}`);
+  });
+
   document.getElementById('btn-detect-patterns')?.addEventListener('click', () => {
     if (!computing) {
       computing = true;
@@ -2203,6 +2329,10 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedEnhancedMap = null;
   cachedEnhancedOverview = null;
   enhancedMapActive = false;
+  cachedPredictedHiC = null;
+  cachedPredictedHiCSize = 0;
+  cachedPredictedHiCModelVersion = null;
+  predictedHiCActive = false;
   if (cachedEpiTracks) {
     for (const t of cachedEpiTracks) {
       ctx.trackRenderer.removeTrack(t.name);

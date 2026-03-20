@@ -64,6 +64,13 @@ export interface TrackPredictionResult {
   elapsedMs: number;
 }
 
+export interface HiCPredictionResult {
+  predictedMap: Float32Array;
+  mapSize: number;
+  modelVersion: string;
+  elapsedMs: number;
+}
+
 // ---------------------------------------------------------------------------
 // localStorage helpers
 // ---------------------------------------------------------------------------
@@ -258,6 +265,68 @@ export class Evo2HiCClient {
 
     return {
       tracks,
+      modelVersion: data.model_version as string,
+      elapsedMs: data.elapsed_ms as number,
+    };
+  }
+
+  async predictHiC(
+    fastaSequences: Map<string, string>,
+    contigNames: string[],
+    mapSize: number,
+  ): Promise<HiCPredictionResult> {
+    if (!fastaSequences || fastaSequences.size === 0) {
+      throw new Error('FASTA sequences are required for Hi-C prediction');
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+
+    const seqObj: Record<string, string> = {};
+    fastaSequences.forEach((seq, name) => {
+      seqObj[name] = seq;
+    });
+
+    const payload: Record<string, unknown> = {
+      fasta_sequences: seqObj,
+      contig_names: contigNames,
+      map_size: mapSize,
+    };
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.serverUrl}/api/v1/predict-hic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      clearTimeout(timer);
+      if (err.name === 'AbortError') {
+        throw new Evo2HiCConnectionError('Request timed out');
+      }
+      throw new Evo2HiCConnectionError(
+        `Connection failed: ${err.message ?? 'fetch failed'}`,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Evo2HiCServerError(
+        `Hi-C prediction failed (${response.status}): ${text}`,
+        response.status,
+      );
+    }
+
+    const data = await response.json();
+    const predictedMap = decodeFloat32Array(data.predicted_map as string);
+
+    return {
+      predictedMap,
+      mapSize: data.map_size as number,
       modelVersion: data.model_version as string,
       elapsedMs: data.elapsed_ms as number,
     };
