@@ -24,8 +24,27 @@ class EnhanceResponse(BaseModel):
     elapsed_ms: float
 
 
+class PredictTracksRequest(BaseModel):
+    contact_map: str  # base64-encoded Float32Array
+    map_size: int
+    fasta_sequences: dict[str, str] | None = None
+
+
+class TrackPrediction(BaseModel):
+    name: str
+    values: str  # base64-encoded Float32Array
+    color: str   # hex color
+
+
+class PredictTracksResponse(BaseModel):
+    tracks: list[TrackPrediction]
+    model_version: str
+    elapsed_ms: float
+
+
 class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
+    epi_model_loaded: bool
     device: str
     model_version: str

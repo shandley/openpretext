@@ -6,8 +6,11 @@ import { describe, it, expect } from 'vitest';
 import {
   encodeContactMap,
   decodeContactMap,
+  decodeFloat32Array,
+  encodeFloat32Array,
   downscaleMap,
   validateEnhancedMap,
+  trackPredictionToConfigs,
 } from '../../src/analysis/Evo2HiCEnhancement';
 
 // ---------------------------------------------------------------------------
@@ -73,6 +76,134 @@ describe('encodeContactMap / decodeContactMap', () => {
     const map = new Float32Array([1]);
     const encoded = encodeContactMap(map);
     expect(() => decodeContactMap(encoded, 2)).toThrow(/Expected 4 floats/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// decodeFloat32Array / encodeFloat32Array
+// ---------------------------------------------------------------------------
+
+describe('decodeFloat32Array / encodeFloat32Array', () => {
+  it('round-trips a Float32Array', () => {
+    const arr = new Float32Array([1.5, 2.5, 3.5]);
+    const encoded = encodeFloat32Array(arr);
+    const decoded = decodeFloat32Array(encoded);
+    expect(decoded.length).toBe(3);
+    for (let i = 0; i < 3; i++) expect(decoded[i]).toBeCloseTo(arr[i]);
+  });
+
+  it('handles empty array', () => {
+    const arr = new Float32Array(0);
+    const decoded = decodeFloat32Array(encodeFloat32Array(arr));
+    expect(decoded.length).toBe(0);
+  });
+
+  it('does not enforce square dimensions', () => {
+    const arr = new Float32Array([1, 2, 3, 4, 5]);
+    const decoded = decodeFloat32Array(encodeFloat32Array(arr));
+    expect(decoded.length).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// trackPredictionToConfigs
+// ---------------------------------------------------------------------------
+
+describe('trackPredictionToConfigs', () => {
+  it('returns correct number of TrackConfigs', () => {
+    const tracks = [
+      { name: 'CTCF', values: new Float32Array([0.1, 0.2, 0.3, 0.4]), color: '#ff0000' },
+      { name: 'H3K27ac', values: new Float32Array([0.5, 0.6, 0.7, 0.8]), color: '#00ff00' },
+    ];
+    const configs = trackPredictionToConfigs(tracks, 4, 8);
+    expect(configs).toHaveLength(2);
+  });
+
+  it('maps overviewSize to textureSize', () => {
+    const tracks = [
+      { name: 'CTCF', values: new Float32Array([0, 0.5, 1.0, 0.5]), color: '#ff0000' },
+    ];
+    const configs = trackPredictionToConfigs(tracks, 4, 8);
+    expect(configs[0].data.length).toBe(8);
+    // First half should come from first two overview bins
+    expect(configs[0].data[0]).toBeCloseTo(0);
+    expect(configs[0].data[1]).toBeCloseTo(0);
+    expect(configs[0].data[2]).toBeCloseTo(0.5);
+    expect(configs[0].data[3]).toBeCloseTo(0.5);
+  });
+
+  it('preserves track names and colors', () => {
+    const tracks = [
+      { name: 'ATAC', values: new Float32Array([1, 2]), color: '#abcdef' },
+    ];
+    const configs = trackPredictionToConfigs(tracks, 2, 4);
+    expect(configs[0].name).toBe('ATAC');
+    expect(configs[0].color).toBe('#abcdef');
+  });
+
+  it('handles empty tracks array', () => {
+    const configs = trackPredictionToConfigs([], 4, 8);
+    expect(configs).toHaveLength(0);
+  });
+
+  it('sets type=line and visible=true', () => {
+    const tracks = [
+      { name: 'Test', values: new Float32Array([0.5, 0.5]), color: '#000000' },
+    ];
+    const configs = trackPredictionToConfigs(tracks, 2, 4);
+    expect(configs[0].type).toBe('line');
+    expect(configs[0].visible).toBe(true);
+  });
+
+  it('sets height to 25', () => {
+    const tracks = [
+      { name: 'Test', values: new Float32Array([0.5]), color: '#000000' },
+    ];
+    const configs = trackPredictionToConfigs(tracks, 1, 2);
+    expect(configs[0].height).toBe(25);
+  });
+
+  it('handles same overviewSize and textureSize', () => {
+    const values = new Float32Array([0.1, 0.2, 0.3, 0.4]);
+    const tracks = [{ name: 'Test', values, color: '#000000' }];
+    const configs = trackPredictionToConfigs(tracks, 4, 4);
+    expect(configs[0].data.length).toBe(4);
+    for (let i = 0; i < 4; i++) {
+      expect(configs[0].data[i]).toBeCloseTo(values[i]);
+    }
+  });
+
+  it('creates independent data arrays for each track', () => {
+    const tracks = [
+      { name: 'A', values: new Float32Array([1, 2]), color: '#ff0000' },
+      { name: 'B', values: new Float32Array([3, 4]), color: '#00ff00' },
+    ];
+    const configs = trackPredictionToConfigs(tracks, 2, 4);
+    expect(configs[0].data[0]).not.toEqual(configs[1].data[0]);
+  });
+
+  it('does not modify original values arrays', () => {
+    const original = new Float32Array([0.1, 0.2, 0.3, 0.4]);
+    const copy = new Float32Array(original);
+    const tracks = [{ name: 'Test', values: original, color: '#000000' }];
+    trackPredictionToConfigs(tracks, 4, 8);
+    expect(Array.from(original)).toEqual(Array.from(copy));
+  });
+
+  it('upscales from small overview to larger texture', () => {
+    const tracks = [
+      { name: 'Test', values: new Float32Array([0, 1]), color: '#000000' },
+    ];
+    const configs = trackPredictionToConfigs(tracks, 2, 10);
+    expect(configs[0].data.length).toBe(10);
+    // First 5 pixels should be from overview bin 0
+    for (let i = 0; i < 5; i++) {
+      expect(configs[0].data[i]).toBeCloseTo(0);
+    }
+    // Last 5 should be from overview bin 1
+    for (let i = 5; i < 10; i++) {
+      expect(configs[0].data[i]).toBeCloseTo(1);
+    }
   });
 });
 
