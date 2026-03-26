@@ -21,6 +21,7 @@ function makeInput(overrides: Partial<HealthScoreInput> = {}): HealthScoreInput 
     misassemblyCount: 0,
     eigenvalue: 0.5,
     cisTransRatio: 0.7,
+    checkerboardScore: null,
     ...overrides,
   };
 }
@@ -269,6 +270,22 @@ describe('compartments component', () => {
     const result = computeHealthScore(makeInput({ eigenvalue: 0.25 }));
     // 0.25 * 200 = 50
     expect(result.components.compartments).toBe(50);
+  });
+
+  it('blends eigenvalue and checkerboard when both present', () => {
+    const result = computeHealthScore(makeInput({ eigenvalue: 0.5, checkerboardScore: 60 }));
+    // eigenvalue 0.5 → 100, checkerboard 60 → blend = (100 + 60) / 2 = 80
+    expect(result.components.compartments).toBe(80);
+  });
+
+  it('uses only checkerboard when eigenvalue is null', () => {
+    const result = computeHealthScore(makeInput({ eigenvalue: null, checkerboardScore: 75 }));
+    expect(result.components.compartments).toBe(75);
+  });
+
+  it('uses only eigenvalue when checkerboard is null', () => {
+    const result = computeHealthScore(makeInput({ eigenvalue: 0.5, checkerboardScore: null }));
+    expect(result.components.compartments).toBe(100);
   });
 });
 

@@ -26,6 +26,8 @@ export interface HealthScoreInput {
   eigenvalue: number | null;
   /** Cis/trans ratio from Hi-C quality metrics. Null if not computed. */
   cisTransRatio: number | null;
+  /** Checkerboard score (0-100) from entropy-based compartment regularity. Null if not computed. */
+  checkerboardScore: number | null;
 }
 
 export interface HealthScoreResult {
@@ -83,12 +85,22 @@ function scoreIntegrity(misassemblyCount: number): number {
 }
 
 /**
- * Compartments: Eigenvalue indicates A/B compartment separation strength.
- * Higher eigenvalue = better signal.
+ * Compartments: Combines eigenvalue strength with checkerboard regularity.
+ *
+ * Eigenvalue measures A/B separation magnitude (from PCA).
+ * Checkerboard score (Che et al. 2025) measures regularity of the alternating
+ * pattern using information entropy of cosine distances.
+ *
+ * When both are available, blends 50/50. When only one is available, uses it alone.
  */
-function scoreCompartments(eigenvalue: number | null): number {
-  if (eigenvalue === null) return 50;
-  return Math.max(0, Math.min(100, eigenvalue * 200));
+function scoreCompartments(eigenvalue: number | null, checkerboardScore: number | null): number {
+  const eigenScore = eigenvalue !== null ? Math.max(0, Math.min(100, eigenvalue * 200)) : null;
+  if (eigenScore !== null && checkerboardScore !== null) {
+    return eigenScore * 0.5 + checkerboardScore * 0.5;
+  }
+  if (checkerboardScore !== null) return checkerboardScore;
+  if (eigenScore !== null) return eigenScore;
+  return 50; // default when nothing computed
 }
 
 /**
@@ -118,7 +130,7 @@ export function computeHealthScore(input: HealthScoreInput): HealthScoreResult {
   const contiguity = scoreContiguity(input.n50, input.totalLength, input.contigCount);
   const decayQuality = scoreDecayQuality(input.decayExponent);
   const integrity = scoreIntegrity(input.misassemblyCount);
-  const compartments = scoreCompartments(input.eigenvalue);
+  const compartments = scoreCompartments(input.eigenvalue, input.checkerboardScore);
   const libraryQuality = scoreLibraryQuality(input.cisTransRatio);
 
   const overall = Math.round(

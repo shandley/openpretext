@@ -1,0 +1,72 @@
+{
+  "source": "Che et al. 2025 (doi:10.1101/2025.07.05.663309v2)",
+  "description": "Checkerboard score reference data from 1,025 species (HiArch). Entropy values from the paper; normalized scores computed as (maxH - entropy) / maxH * 100 where maxH = ln(30) = 3.401.",
+  "totalSpecies": 1025,
+  "entropyRange": { "min": 2.3, "max": 3.0 },
+  "groups": [
+    {
+      "name": "Mammals",
+      "medianEntropy": 2.88,
+      "medianScore": 15.3,
+      "speciesCount": 45,
+      "description": "Strongest checkerboard pattern among all groups"
+    },
+    {
+      "name": "Birds",
+      "medianEntropy": 2.82,
+      "medianScore": 17.1,
+      "speciesCount": 35,
+      "description": "Strong compartmentalization, especially passerines"
+    },
+    {
+      "name": "Reptiles",
+      "medianEntropy": 2.75,
+      "medianScore": 19.1,
+      "speciesCount": 15,
+      "description": "Intermediate; some show one-compartment architecture"
+    },
+    {
+      "name": "Fish",
+      "medianEntropy": 2.70,
+      "medianScore": 20.6,
+      "speciesCount": 31,
+      "description": "Variable; teleosts generally moderate"
+    },
+    {
+      "name": "Amphibians",
+      "medianEntropy": 2.65,
+      "medianScore": 22.1,
+      "speciesCount": 8,
+      "description": "Limited sampling; moderate compartmentalization"
+    },
+    {
+      "name": "Invertebrates",
+      "medianEntropy": 2.60,
+      "medianScore": 23.5,
+      "speciesCount": 766,
+      "description": "Highly variable; insects show range from weak to moderate"
+    },
+    {
+      "name": "Plants",
+      "medianEntropy": 2.58,
+      "medianScore": 24.1,
+      "speciesCount": 107,
+      "description": "Weak checkerboard; rely on linear gene clusters instead"
+    },
+    {
+      "name": "Fungi",
+      "medianEntropy": 2.50,
+      "medianScore": 26.5,
+      "speciesCount": 22,
+      "description": "Minimal compartmentalization"
+    }
+  ],
+  "landmarks": [
+    { "species": "Homo sapiens", "entropy": 2.97, "score": 12.7, "group": "Mammals" },
+    { "species": "Fringilla coelebs", "entropy": 2.90, "score": 14.7, "group": "Birds" },
+    { "species": "Biston stratarius", "entropy": 2.75, "score": 19.1, "group": "Invertebrates" },
+    { "species": "Xenopus laevis", "entropy": 2.67, "score": 21.5, "group": "Amphibians" },
+    { "species": "Caenorhabditis elegans", "entropy": 2.53, "score": 25.6, "group": "Invertebrates" },
+    { "species": "Aedes aegypti", "entropy": 2.39, "score": 29.7, "group": "Invertebrates" }
+  ]
+}

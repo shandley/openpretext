@@ -264,6 +264,7 @@ describe('HealthScore with libraryQuality', () => {
       misassemblyCount: 0,
       eigenvalue: 0.5,
       cisTransRatio: 0.7,
+      checkerboardScore: null,
     });
     expect(result.components.libraryQuality).toBeDefined();
     expect(result.components.libraryQuality).toBeGreaterThan(0);
@@ -280,6 +281,7 @@ describe('HealthScore with libraryQuality', () => {
       misassemblyCount: 0,
       eigenvalue: 0.5,
       cisTransRatio: 0.7,
+      checkerboardScore: null,
     });
     expect(result.components.libraryQuality).toBe(100);
   });
@@ -295,6 +297,7 @@ describe('HealthScore with libraryQuality', () => {
       misassemblyCount: 0,
       eigenvalue: null,
       cisTransRatio: null,
+      checkerboardScore: null,
     });
     expect(result.components.libraryQuality).toBe(50);
   });
@@ -305,13 +308,13 @@ describe('HealthScore with libraryQuality', () => {
       n50: 100, totalLength: 100, contigCount: 1,
       decayExponent: null, decayRSquared: null,
       misassemblyCount: 0, eigenvalue: null,
-      cisTransRatio: 0.2,
+      cisTransRatio: 0.2, checkerboardScore: null,
     });
     const high = computeHealthScore({
       n50: 100, totalLength: 100, contigCount: 1,
       decayExponent: null, decayRSquared: null,
       misassemblyCount: 0, eigenvalue: null,
-      cisTransRatio: 0.6,
+      cisTransRatio: 0.6, checkerboardScore: null,
     });
     expect(high.components.libraryQuality).toBeGreaterThan(low.components.libraryQuality);
   });

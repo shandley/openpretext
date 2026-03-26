@@ -88,6 +88,36 @@ let cachedV4C: Virtual4CResult | null = null;
 let cachedKR: KRResult | null = null;
 let cachedTelomere: TelomereResult | null = null;
 let cachedCheckerboard: CheckerboardResult | null = null;
+
+interface CheckerboardRefGroup {
+  name: string;
+  medianEntropy: number;
+  medianScore: number;
+  speciesCount: number;
+  description: string;
+}
+interface CheckerboardRefLandmark {
+  species: string;
+  entropy: number;
+  score: number;
+  group: string;
+}
+interface CheckerboardReference {
+  totalSpecies: number;
+  entropyRange: { min: number; max: number };
+  groups: CheckerboardRefGroup[];
+  landmarks: CheckerboardRefLandmark[];
+}
+let checkerboardReference: CheckerboardReference | null = null;
+
+// Load reference data once
+(async () => {
+  try {
+    const url = new URL('data/checkerboard-reference.json', document.baseURI).href;
+    const resp = await fetch(url);
+    if (resp.ok) checkerboardReference = await resp.json();
+  } catch { /* silent */ }
+})();
 let cachedEnhancedMap: Float32Array | null = null;
 let cachedEnhancedOverview: Float32Array | null = null;
 let enhancedMapActive = false;
@@ -881,6 +911,7 @@ function buildHealthScore(ctx: AppContext): HealthScoreResult | null {
     misassemblyCount: misassemblyFlags.getFlaggedCount(),
     eigenvalue: cachedCompartments?.eigenvalue ?? null,
     cisTransRatio: cachedQuality?.cisTransRatio ?? null,
+    checkerboardScore: cachedCheckerboard?.score ?? null,
   });
 }
 
@@ -1026,6 +1057,36 @@ function updateResultsDisplay(ctx: AppContext): void {
     const cbColor = cachedCheckerboard.score >= 50 ? '#00b894' : cachedCheckerboard.score >= 25 ? '#fdcb6e' : '#d63031';
     html += `<div class="stats-row"><span>Checkerboard</span><span style="color:${cbColor};font-weight:bold;">${cachedCheckerboard.score.toFixed(1)}/100</span></div>`;
     html += `<div class="stats-row" style="font-size:10px;color:var(--text-secondary);"><span>Entropy</span><span>${cachedCheckerboard.entropy.toFixed(4)}</span></div>`;
+    // Species reference comparison (Che et al. 2025, 1,025 species)
+    if (checkerboardReference) {
+      const ref = checkerboardReference;
+      const ent = cachedCheckerboard.entropy;
+      // Find closest landmark and matching group
+      let closestLandmark = '';
+      let closestDist = Infinity;
+      for (const lm of ref.landmarks) {
+        const d = Math.abs(lm.entropy - ent);
+        if (d < closestDist) { closestDist = d; closestLandmark = lm.species; }
+      }
+      // Find which group this entropy falls closest to
+      let bestGroup = ref.groups[0];
+      let bestGroupDist = Infinity;
+      for (const g of ref.groups) {
+        const d = Math.abs(g.medianEntropy - ent);
+        if (d < bestGroupDist) { bestGroupDist = d; bestGroup = g; }
+      }
+      // Percentile: what fraction of 1,025 species have HIGHER entropy (weaker pattern)
+      // Approximate using linear interpolation within the entropy range
+      const pct = Math.max(0, Math.min(100,
+        ((ref.entropyRange.max - ent) / (ref.entropyRange.max - ref.entropyRange.min)) * 100
+      ));
+      html += `<div style="font-size:10px;color:var(--text-secondary);margin:2px 0;padding:4px 6px;background:rgba(108,92,231,0.1);border-radius:4px;">`;
+      html += `<div style="margin-bottom:2px;"><strong>vs 1,025 species</strong> <span style="font-style:italic;">(Che et al. 2025)</span></div>`;
+      html += `<div>Nearest: <em>${closestLandmark}</em></div>`;
+      html += `<div>Similar to: ${bestGroup.name} (median)</div>`;
+      html += `<div>Stronger than ~${pct.toFixed(0)}% of species</div>`;
+      html += `</div>`;
+    }
   }
 
   // Auto-assign scaffolds button (when P(s) computed but no scaffolds)
