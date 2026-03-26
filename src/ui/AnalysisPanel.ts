@@ -67,6 +67,7 @@ import { Evo2HiCClient, getStoredServerUrl, setStoredServerUrl, type EpiTrackPre
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
 import type { CheckerboardResult } from '../analysis/CheckerboardScore';
+import { detectCentromeres, centromereToTracks, type CentromereResult } from '../analysis/CentromereDetector';
 
 // ---------------------------------------------------------------------------
 // Cached state
@@ -88,6 +89,7 @@ let cachedV4C: Virtual4CResult | null = null;
 let cachedKR: KRResult | null = null;
 let cachedTelomere: TelomereResult | null = null;
 let cachedCheckerboard: CheckerboardResult | null = null;
+let cachedCentromeres: CentromereResult | null = null;
 
 interface CheckerboardRefGroup {
   name: string;
@@ -2025,6 +2027,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       <div id="evo2hic-fasta-hint" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
     </div>
     <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
+    <button class="analysis-btn" id="btn-detect-centromeres" style="margin-bottom:6px;width:100%;background:#e056a0;color:#fff;">Detect Centromeres</button>
     <div id="fasta-hint" style="color:var(--text-secondary);font-size:10px;margin:4px 0;"></div>
     <div id="pattern-results"></div>
     <div id="analysis-results">
@@ -2370,6 +2373,27 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     }
   });
 
+  document.getElementById('btn-detect-centromeres')?.addEventListener('click', () => {
+    const s = state.get();
+    if (!s.map?.contactMap) return;
+    const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+    const overviewSize = Math.round(Math.sqrt(contactMap.length));
+    const ranges = buildContigRanges();
+    if (ranges.length < 2) {
+      ctx.showToast('Need at least 2 contigs for centromere detection');
+      return;
+    }
+    cachedCentromeres = detectCentromeres(contactMap, overviewSize, ranges);
+    const textureSize = s.map.textureSize ?? overviewSize;
+    const { signalTrack, markerTrack } = centromereToTracks(cachedCentromeres, overviewSize, textureSize);
+    ctx.trackRenderer.removeTrack('Centromere Signal');
+    ctx.trackRenderer.removeTrack('Centromeres');
+    ctx.trackRenderer.addTrack(signalTrack);
+    ctx.trackRenderer.addTrack(markerTrack);
+    updateResultsDisplay(ctx);
+    ctx.showToast(`Detected ${cachedCentromeres.positions.length} centromere(s)`);
+  });
+
   // Auto-compute all analyses (async, in worker)
   computing = true;
   setButtonsDisabled(true);
@@ -2415,6 +2439,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedQuality = null;
   cachedSaddle = null;
   cachedCheckerboard = null;
+  cachedCentromeres = null;
   cachedTelomere = null;
   cachedEnhancedMap = null;
   cachedEnhancedOverview = null;
