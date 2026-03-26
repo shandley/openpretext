@@ -11,14 +11,11 @@ Institute's desktop application used by genome assembly teams worldwide
 It reads native `.pretext` files directly in the browser with no installation
 required.
 
-![OpenPretext Welcome Screen](docs/images/lesson-review-welcome.png)
-*Welcome screen with specimen catalog, tutorials, and quick-start options*
+![Contact Map with Sidebar](docs/images/screenshot-main.png)
+*Contact map with contig sidebar, misassembly badges, annotation tracks, and analysis overlays*
 
-![Contact Map with Analysis](docs/images/overview-with-sidebar.png)
-*Contact map with contig sidebar, MIS badges, scaffolds, meta tags, and analysis panels*
-
-![3D Analysis & Evo2HiC Panel](docs/images/analysis-panel-evo2hic.png)
-*Analysis panel showing health score, P(s) decay, export options, track configuration, and Evo2HiC ML integration*
+![Evo2HiC & Analysis Panel](docs/images/screenshot-evo2hic.png)
+*Evo2HiC ML integration, centromere detection, health score, P(s) decay chart, checkerboard score, and misassembly tools*
 
 ## Features
 
@@ -105,9 +102,17 @@ required.
 - **Telomere repeat detection** — scans loaded FASTA sequences for TTAGGG/CCCTAA repeat motifs
   at contig ends; computes genome-wide density profiles and identifies telomere-positive ends;
   requires loading a reference FASTA first
+- **Checkerboard score** — information-entropy-based compartment regularity metric
+  (Che et al. 2025, HiArch); quantifies how strongly a genome exhibits the alternating
+  A/B compartment "checkerboard" pattern; includes species reference comparison against
+  1,025 species showing nearest landmark, taxonomic group, and percentile
+- **Centromere detection** — predicts centromere positions from inter-chromosomal contact
+  hubs using the CenterFinder algorithm (Che et al. 2025); blends inter-contig row sums
+  with anti-diagonal Rabl folding signal; produces "Centromere Signal" line track and
+  "Centromeres" marker track
 - **Composite health score** — 0-100 score combining contiguity (N50), P(s) decay quality,
-  assembly integrity, compartment strength, and Hi-C library quality; displayed as a prominent
-  card in the sidebar
+  assembly integrity, compartment strength (eigenvalue + checkerboard), and Hi-C library
+  quality; displayed as a prominent card in the sidebar
 - All analyses run in a background Web Worker to avoid blocking the UI
 - Adjustable insulation window size; auto-computation on file load
 - BedGraph and TSV export for all analysis tracks
@@ -441,7 +446,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev          # Start development server with hot reload
-npm test             # Run unit tests (2,227 tests across 82 files)
+npm test             # Run unit tests (2,258 tests across 84 files)
 npm run test:visual  # Run E2E tests (35 tests, Playwright + Chromium)
 npm run build        # Production build to dist/
 npm run preview      # Preview the production build
@@ -523,6 +528,8 @@ src/
     Virtual4C.ts             Interactive locus contact profiling
     TelomereDetector.ts      Telomere repeat detection from FASTA
     MisassemblyDetector.ts   Chimeric contig detection + confidence scoring
+    CheckerboardScore.ts     Entropy-based compartment regularity (Che et al. 2025)
+    CentromereDetector.ts    Centromere prediction from inter-contig contact hubs
     HealthScore.ts           Composite assembly quality score (0-100)
     ScaffoldDetection.ts     Auto-detect chromosome blocks from contact map
     PatternDetector.ts       Inversion + translocation detection
@@ -547,7 +554,7 @@ public/data/
   pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
   prompt-strategies.json     AI prompt strategy library (8 strategies)
 tests/
-  unit/                      2,227 unit tests across 82 test files
+  unit/                      2,258 unit tests across 84 test files
   e2e/                       35 E2E tests (Playwright + Chromium)
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)

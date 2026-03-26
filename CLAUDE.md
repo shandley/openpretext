@@ -137,7 +137,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      2227 unit tests across 82 files (vitest)
+  unit/                      2258 unit tests across 84 files (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -520,7 +520,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 2227 tests must pass
+- Run `npm test` before committing; all 2258 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls

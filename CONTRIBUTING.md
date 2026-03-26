@@ -46,7 +46,7 @@ Key principles:
 ## Testing
 
 ```bash
-npm test                # Run all 2,227 unit tests (vitest)
+npm test                # Run all 2,258 unit tests (vitest)
 npx tsc --noEmit        # Type check (no output files)
 npm run test:visual     # Run 35 E2E tests (Playwright + Chromium)
 ```
