@@ -25,6 +25,7 @@ const LESSONS: LessonMeta[] = [
   { id: '07-analysis-workflow', title: '3D Genomics Analysis', difficulty: 'intermediate', estimatedMinutes: 20, introExcerpt: 'Run insulation scores, P(s) decay, and compartment analysis to assess assembly quality using 3D genomics metrics.' },
   { id: '08-contig-classification', title: 'Classifying Contigs with Meta Tags', difficulty: 'intermediate', estimatedMinutes: 15, introExcerpt: 'Learn to classify contigs as haplotigs, contaminants, or sex chromosomes using meta tags for better assembly organization.' },
   { id: '09-automated-misassembly', title: 'Automated Misassembly Detection', difficulty: 'advanced', estimatedMinutes: 25, introExcerpt: 'Use the automated detection pipeline combining TAD boundaries, compartment switching, and pattern recognition to find misassemblies.' },
+  { id: '10-ml-enhancement', title: 'ML-Powered Enhancement (Evo2HiC)', difficulty: 'intermediate', estimatedMinutes: 20, introExcerpt: 'Connect to the Evo2HiC server to enhance contact maps, predict epigenomic tracks, and compare observed vs sequence-predicted Hi-C patterns.' },
 ];
 
 export function isLessonBrowserVisible(): boolean {

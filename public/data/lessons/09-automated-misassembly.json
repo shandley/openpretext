@@ -10,7 +10,7 @@
       "id": "run-analysis",
       "title": "Run the Analysis Pipeline",
       "instruction": "Open the sidebar (**I**) and find the **3D Analysis** section. Click **Compute All** to run insulation, P(s), and compartment analysis.\n\nThese three analyses form the foundation for misassembly detection:\n\u2022 **Insulation** finds TAD boundaries \u2014 boundaries that fall inside a contig (not at its edges) suggest the contig is chimeric\n\u2022 **Compartments** find A/B switches \u2014 compartment changes inside a contig suggest it joins non-contiguous genomic regions\n\u2022 **P(s) decay** provides a baseline quality metric\n\nWait for all three to complete.",
-      "highlight": { "type": "ui-element", "selector": "#btn-compute-all" },
+      "highlight": { "type": "ui-element", "selector": "#btn-run-all-analysis" },
       "expectedAction": { "type": "observe" },
       "hint": "Computation runs in a background worker. Buttons are disabled during processing."
     },

@@ -59,7 +59,7 @@
       "instruction": "Notice the small overview map in the corner? That's the minimap. It shows your current viewport as a white rectangle.\n\nClick anywhere in the minimap to jump to that region instantly. Try it now—click on different parts of the minimap.",
       "highlight": {
         "type": "ui-element",
-        "selector": ".minimap-container"
+        "selector": "#btn-minimap"
       },
       "expectedAction": {
         "type": "observe"

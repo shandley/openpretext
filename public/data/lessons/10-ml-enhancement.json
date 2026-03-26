@@ -1,0 +1,108 @@
+{
+  "id": "10-ml-enhancement",
+  "title": "ML-Powered Enhancement (Evo2HiC)",
+  "difficulty": "intermediate",
+  "estimatedMinutes": 20,
+  "specimenId": "quail",
+  "introduction": "OpenPretext integrates three ML models from the Evo2HiC project that can enhance and predict Hi-C data. These run on a companion server that you start locally \u2014 the core app works fully without it.\n\nIn this lesson, you'll learn to:\n\u2022 Connect to the Evo2HiC companion server\n\u2022 Enhance a low-resolution contact map to reveal hidden structure\n\u2022 Predict epigenomic tracks (DNase, CTCF, H3K27ac, H3K27me3, H3K4me3) from the contact map\n\u2022 Predict a Hi-C contact map from DNA sequence alone (Seq2HiC)\n\u2022 Toggle between original, enhanced, and predicted views\n\u2022 Understand how enhanced data feeds into downstream analysis\n\nWe'll use the King quail genome, a bird with 30 chromosomes and micro-chromosomes \u2014 a real-world case where enhancement reveals inter-chromosomal contacts and distance-decay patterns below the noise floor.\n\nPrerequisite: The Evo2HiC server must be running locally. See server/README.md for setup instructions.",
+  "steps": [
+    {
+      "id": "prerequisites",
+      "title": "Prerequisites",
+      "instruction": "Before starting, you need the Evo2HiC companion server running locally. In a separate terminal:\n\n```\ncd server\nuv sync\nuv run evo2hic-server\n```\n\nThe server starts on http://localhost:8000. It works in **mock mode** by default (no model weights needed) \u2014 this is fine for learning the workflow. With real weights, the enhancement quality improves dramatically.\n\nOnce the server is running, proceed to the next step.",
+      "expectedAction": { "type": "observe" },
+      "hint": "You need Python 3.11+ and the uv package manager installed. The server runs independently from the browser app."
+    },
+    {
+      "id": "open-evo2hic-panel",
+      "title": "Find the Evo2HiC Section",
+      "instruction": "Open the sidebar (**I**) and scroll to the bottom of the **3D Analysis** section. Below the standard analysis tools, you'll find the **Evo2HiC** section with:\n\n\u2022 A **server URL** field (default: http://localhost:8000)\n\u2022 A **Check** button to test the connection\n\u2022 Buttons for enhancement, track prediction, and Hi-C prediction (initially disabled)\n\nThe section is self-contained \u2014 all server interaction happens here.",
+      "highlight": { "type": "ui-element", "selector": "#evo2hic-url" },
+      "expectedAction": { "type": "observe" },
+      "hint": "If you don't see the Evo2HiC section, scroll further down in the sidebar. It's the last section in 3D Analysis."
+    },
+    {
+      "id": "connect-server",
+      "title": "Connect to the Server",
+      "instruction": "Make sure the URL field shows **http://localhost:8000** (the default), then click **Check**.\n\nThe status line below the URL will show connection details:\n\u2022 **OK** \u2014 connected successfully\n\u2022 Device (cpu/mps/cuda) \u2014 which hardware is being used\n\u2022 Model status \u2014 whether real models or mock mode are loaded\n\nOnce connected, the action buttons become enabled. The server URL is saved to localStorage so you won't need to re-enter it next time.",
+      "highlight": { "type": "ui-element", "selector": "#btn-evo2hic-check" },
+      "expectedAction": { "type": "observe" },
+      "hint": "If the connection fails, verify the server is running (check the terminal for 'Uvicorn running on http://0.0.0.0:8000')."
+    },
+    {
+      "id": "enhance-map",
+      "title": "Enhance the Contact Map",
+      "instruction": "Click **Enhance (Evo2HiC)** to send the overview contact map to the server for resolution enhancement.\n\nThe Evo2HiC model (81M parameters, trained on 177 species) enhances the map by:\n\u2022 Denoising low-signal regions\n\u2022 Sharpening chromosome boundaries\n\u2022 Revealing inter-chromosomal contacts hidden in noise\n\u2022 Restoring distance-decay gradients within chromosomes\n\nA toast notification confirms completion with the processing time. The enhanced map is cached \u2014 it won't re-download until you perform a curation operation.",
+      "highlight": { "type": "ui-element", "selector": "#btn-evo2hic-enhance" },
+      "expectedAction": { "type": "observe" },
+      "hint": "Enhancement typically takes 1\u20135 seconds depending on map size and hardware. GPU (MPS/CUDA) is much faster than CPU."
+    },
+    {
+      "id": "toggle-enhanced",
+      "title": "Toggle Enhanced View",
+      "instruction": "Click **Toggle Enhanced View** to switch between the original and enhanced contact maps. Toggle back and forth a few times to see the difference.\n\nIn the enhanced view, notice:\n\u2022 **Chromosome blocks** are sharper and more distinct\n\u2022 **Distance-decay gradients** within chromosomes become visible (color fading away from diagonal)\n\u2022 **Inter-chromosomal contacts** between non-adjacent chromosomes may appear as faint off-diagonal signals\n\u2022 **Noise** in low-coverage regions is reduced\n\nThe toggle is a visual switch only \u2014 your curation operations always apply to the original contig structure.",
+      "highlight": { "type": "ui-element", "selector": "#btn-evo2hic-toggle" },
+      "expectedAction": { "type": "observe" },
+      "hint": "The enhanced view is especially useful for identifying subtle misassemblies and chromosome boundaries that are hard to see in the raw data."
+    },
+    {
+      "id": "enhanced-analysis",
+      "title": "Enhanced Data in Analysis",
+      "instruction": "When the enhanced view is active, downstream analyses automatically use the enhanced data. Try it:\n\n1. Make sure the enhanced view toggle is **on**\n2. Click **Compute All** in the 3D Analysis section\n3. Compare the health score and P(s) decay with and without enhancement\n\nThe enhanced data often produces cleaner analysis results \u2014 better P(s) fits, stronger compartment signals, and more accurate TAD boundaries. This is because the model has learned the expected structure from 177 species.\n\nNote: Enhancement is cleared automatically when you perform curation operations (cut, join, invert, move) because the contig ordering changes.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Toggle the enhanced view off and re-run Compute All to see the difference in health scores between raw and enhanced data."
+    },
+    {
+      "id": "predict-tracks",
+      "title": "Predict Epigenomic Tracks",
+      "instruction": "Click **Predict Tracks** to predict 5 epigenomic tracks from the contact map:\n\n\u2022 **DNase** (blue) \u2014 DNase I hypersensitivity, marks open chromatin\n\u2022 **CTCF** (orange) \u2014 CTCF binding, marks insulator/boundary elements\n\u2022 **H3K27ac** (green) \u2014 active enhancers and promoters\n\u2022 **H3K27me3** (red) \u2014 Polycomb-repressed regions\n\u2022 **H3K4me3** (purple) \u2014 active promoters\n\nThese tracks appear along the contact map edges, just like insulation or compartment tracks. For non-model organisms like King quail where no ChIP-seq data exists, predicted tracks provide useful chromatin context for curation decisions.\n\nToggle tracks on with **X** if they aren't visible.",
+      "highlight": { "type": "ui-element", "selector": "#btn-evo2hic-predict-tracks" },
+      "expectedAction": { "type": "observe" },
+      "hint": "The predicted tracks are per-bin values scaled to [0,1]. High values indicate strong predicted signal at that genomic position."
+    },
+    {
+      "id": "explore-tracks",
+      "title": "Explore Predicted Tracks",
+      "instruction": "Zoom into a large chromosome block to examine the predicted tracks in detail. Look for patterns:\n\n\u2022 **DNase peaks** tend to cluster at TAD boundaries and active regions\n\u2022 **CTCF** often marks the same boundaries as insulation score dips\n\u2022 **H3K27ac** and **H3K4me3** correlate with active A compartments\n\u2022 **H3K27me3** is enriched in B compartments (repressed regions)\n\nCompare the predicted epigenomic tracks with the A/B compartment track (if computed). Active marks (DNase, H3K27ac, H3K4me3) should be enriched in A compartments, while H3K27me3 should be enriched in B compartments.\n\nYou can configure track visibility, colors, and rendering mode via the Tracks panel in the sidebar.",
+      "expectedAction": { "type": "zoom" },
+      "hint": "Click on the track name in the Tracks sidebar section to expand its settings (color, mode, visibility)."
+    },
+    {
+      "id": "load-fasta",
+      "title": "Load a FASTA File (for Seq2HiC)",
+      "instruction": "The Seq2HiC model predicts Hi-C contact maps from DNA sequence alone. To use it, you need to load a reference FASTA file first.\n\nClick the **Load FASTA** button in the toolbar (or drag-drop a .fasta/.fa file). Once loaded, a hint below the Evo2HiC buttons shows the number of sequences loaded.\n\nIf you don't have a FASTA file available, you can skip this step and the next one \u2014 the synthetic demo includes mock FASTA sequences that work for demonstration purposes.\n\nNote: For the synthetic demo data, FASTA sequences are automatically available.",
+      "expectedAction": { "type": "observe" },
+      "hint": "FASTA files for GenomeArk specimens can be downloaded from the same S3 bucket as the .pretext files."
+    },
+    {
+      "id": "predict-hic",
+      "title": "Predict Hi-C from Sequence (Seq2HiC)",
+      "instruction": "With FASTA sequences loaded, click **Predict Hi-C (Seq2HiC)** to predict what the Hi-C contact map should look like based on DNA sequence alone.\n\nThis is a powerful comparison tool:\n\u2022 If observed and predicted maps agree, the assembly structure is consistent with the sequence\n\u2022 Discrepancies may indicate misassemblies, structural variants, or regions where the Hi-C library has biases\n\nAfter prediction completes, the **Toggle Predicted vs Observed** button becomes active.",
+      "highlight": { "type": "ui-element", "selector": "#btn-evo2hic-predict-hic" },
+      "expectedAction": { "type": "observe" },
+      "hint": "Seq2HiC requires FASTA sequences. The button stays disabled if no sequences are loaded."
+    },
+    {
+      "id": "toggle-predicted",
+      "title": "Compare Predicted vs Observed",
+      "instruction": "Click **Toggle Predicted vs Observed** to switch between the observed Hi-C map and the sequence-predicted map.\n\nCompare the two views:\n\u2022 Both should show similar chromosome block structure if the assembly is correct\n\u2022 Differences in block boundaries might indicate misassembly\n\u2022 The predicted map won't show library-specific artifacts (restriction site biases, PCR duplicates)\n\nThis toggle is independent of the enhancement toggle \u2014 you can switch between original, enhanced, and sequence-predicted views.",
+      "highlight": { "type": "ui-element", "selector": "#btn-evo2hic-toggle-predicted" },
+      "expectedAction": { "type": "observe" },
+      "hint": "The predicted map is generated at overview resolution, matching the size of the overview contact map."
+    },
+    {
+      "id": "session-persistence",
+      "title": "Session Persistence",
+      "instruction": "All Evo2HiC outputs are saved when you save a session (Cmd+S or the Session section in the sidebar):\n\n\u2022 **Enhanced map** \u2014 the full enhanced overview is stored as base64\n\u2022 **Predicted tracks** \u2014 all 5 epigenomic tracks with their values and colors\n\u2022 **Predicted Hi-C** \u2014 the sequence-predicted contact map\n\nWhen you reload the session, these are restored without needing the server. This means you can run the server once, generate all predictions, save, and then work offline.\n\nNote: Curation operations (cut, join, invert, move) invalidate the enhanced map and predicted Hi-C because the contig ordering changes. Predicted epigenomic tracks are also cleared since they correspond to the pre-curation map layout.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Save a session after running all three predictions to avoid re-computing them later."
+    },
+    {
+      "id": "summary",
+      "title": "Evo2HiC Summary",
+      "instruction": "You've learned the three ML capabilities in OpenPretext:\n\n1. **Enhancement** \u2014 denoises and sharpens the contact map, revealing hidden structure\n2. **Epigenomic Track Prediction** \u2014 predicts 5 chromatin marks (DNase, CTCF, H3K27ac, H3K27me3, H3K4me3) from the Hi-C map alone\n3. **Seq2HiC** \u2014 predicts what the Hi-C map should look like from DNA sequence\n\nThese tools are most valuable for:\n\u2022 **Non-model organisms** with no existing ChIP-seq or epigenomic data\n\u2022 **Low-coverage assemblies** where the raw map is noisy\n\u2022 **Quality control** \u2014 comparing observed vs sequence-predicted structure\n\u2022 **Analysis improvement** \u2014 enhanced data produces cleaner TAD calls and compartment signals\n\nThe server runs in mock mode for testing and with real Evo2HiC weights (81M parameters, trained on 177 species) for production use. See server/README.md for instructions on downloading model weights.",
+      "expectedAction": { "type": "observe" }
+    }
+  ],
+  "assessment": null
+}

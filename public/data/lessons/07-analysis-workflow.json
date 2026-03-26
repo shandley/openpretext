@@ -17,7 +17,7 @@
       "id": "compute-all",
       "title": "Run the Core Analysis Pipeline",
       "instruction": "Click **Compute All** to run all three core analyses simultaneously:\n\n\u2022 **Insulation score** \u2014 measures how well each genomic region is insulated from its neighbors (detects TAD boundaries)\n\u2022 **P(s) decay** \u2014 measures how contact frequency drops with genomic distance (indicates genome compaction)\n\u2022 **A/B compartments** \u2014 identifies active (A) and inactive (B) chromatin compartments\n\nAll three run in a background Web Worker so the UI stays responsive. Watch for the results to appear below the buttons.",
-      "highlight": { "type": "ui-element", "selector": "#btn-compute-all" },
+      "highlight": { "type": "ui-element", "selector": "#btn-run-all-analysis" },
       "expectedAction": { "type": "observe" },
       "hint": "The computation may take a few seconds. Buttons are disabled during computation to prevent conflicts."
     },

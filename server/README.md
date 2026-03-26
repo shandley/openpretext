@@ -1,10 +1,15 @@
-# Evo2HiC Enhancement Server
+# Evo2HiC Server
 
-A FastAPI server that provides Hi-C contact map resolution enhancement for OpenPretext.
+A FastAPI server that provides Hi-C contact map enhancement, epigenomic track prediction, and sequence-to-Hi-C prediction for OpenPretext.
 
-Supports two modes:
-- **Mock mode** (default) -- Gaussian denoising, bicubic upscaling, and sharpening
-- **Real model** -- loads weights from the [CHNFTQ/Evo2HiC](https://github.com/CHNFTQ/Evo2HiC) repository
+Three model capabilities:
+- **Resolution enhancement** — upscales and denoises Hi-C contact maps (CDNA2d model)
+- **Epigenomic track prediction** — predicts 5 chromatin tracks from Hi-C (CDNAtrack model)
+- **Seq2HiC prediction** — predicts Hi-C contact maps from DNA sequence alone (Seq2HiC model)
+
+Each capability supports two modes:
+- **Mock mode** (default) — generates plausible synthetic outputs for testing
+- **Real model** — loads weights from the [CHNFTQ/Evo2HiC](https://github.com/CHNFTQ/Evo2HiC) repository
 
 ## Prerequisites
 
@@ -69,9 +74,11 @@ curl http://localhost:8000/api/v1/health
 | Variable | Description | Default |
 |---|---|---|
 | `EVO2HIC_REPO_PATH` | Path to cloned CHNFTQ/Evo2HiC repository | None (mock mode) |
-| `EVO2HIC_CHECKPOINT` | Path to `.pt` checkpoint file | None (mock mode) |
+| `EVO2HIC_CHECKPOINT` | Path to `.pt` checkpoint file for enhancement | None (mock mode) |
 
 Both must be set for real model inference. If either is missing, the server runs in mock mode.
+
+The epigenomic and Seq2HiC models are auto-detected from the checkpoint directory structure (e.g., `epi_prediction/model.pt` as a sibling of the main checkpoint).
 
 ## API
 
@@ -83,6 +90,8 @@ Returns server status and model info.
 {
   "status": "ok",
   "model_loaded": false,
+  "epi_model_loaded": false,
+  "seq2hic_model_loaded": false,
   "device": "cpu",
   "model_version": "mock-0.1.0"
 }
@@ -112,6 +121,51 @@ Enhances a Hi-C contact map.
 | `enhanced_map` | string | Base64-encoded enhanced Float32Array |
 | `enhanced_size` | int | Side length of the enhanced map |
 | `upscale_factor` | int | Applied upscale factor |
+| `model_version` | string | Model version string |
+| `elapsed_ms` | float | Processing time in milliseconds |
+
+### `POST /api/v1/predict-tracks`
+
+Predicts 5 epigenomic tracks from a Hi-C contact map.
+
+**Request body:**
+
+| Field | Type | Description |
+|---|---|---|
+| `contact_map` | string | Base64-encoded Float32Array bytes |
+| `map_size` | int | Side length of the square contact map |
+| `fasta_sequences` | object \| null | Contig name to sequence mapping |
+| `contig_names` | list \| null | Ordered contig names |
+
+**Response:**
+
+| Field | Type | Description |
+|---|---|---|
+| `tracks` | list | Array of track predictions |
+| `tracks[].name` | string | Track name (DNase, CTCF, H3K27ac, H3K27me3, H3K4me3) |
+| `tracks[].values` | string | Base64-encoded Float32Array (length = map_size) |
+| `tracks[].color` | string | Suggested hex color for rendering |
+| `model_version` | string | Model version string |
+| `elapsed_ms` | float | Processing time in milliseconds |
+
+### `POST /api/v1/predict-hic`
+
+Predicts a Hi-C contact map from DNA sequences (Seq2HiC).
+
+**Request body:**
+
+| Field | Type | Description |
+|---|---|---|
+| `fasta_sequences` | object | Contig name to sequence mapping (required) |
+| `contig_names` | list \| null | Ordered contig names |
+| `map_size` | int | Output overview size (default: 64) |
+
+**Response:**
+
+| Field | Type | Description |
+|---|---|---|
+| `predicted_map` | string | Base64-encoded Float32Array |
+| `map_size` | int | Side length of the predicted map |
 | `model_version` | string | Model version string |
 | `elapsed_ms` | float | Processing time in milliseconds |
 

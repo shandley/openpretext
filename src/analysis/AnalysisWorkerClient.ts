@@ -16,6 +16,7 @@ import { detectInversions, detectTranslocations, type DetectedPattern } from './
 import { computeICENormalization, type ICEParams, type ICEResult } from './ICENormalization';
 import { computeKRNormalization, type KRParams, type KRResult } from './KRNormalization';
 import { computeDirectionality, type DIParams, type DIResult } from './DirectionalityIndex';
+import { computeCheckerboardScore, type CheckerboardParams, type CheckerboardResult } from './CheckerboardScore';
 import type { ContigRange } from '../curation/AutoSort';
 import type {
   AnalysisRequest,
@@ -27,6 +28,7 @@ import type {
   ICEResponse,
   DIResponse,
   KRResponse,
+  CheckerboardResponse,
 } from './AnalysisWorker';
 
 // ---------------------------------------------------------------------------
@@ -333,6 +335,35 @@ export class AnalysisWorkerClient {
       }
     }
     return computeKRNormalization(contactMap, size, params);
+  }
+
+  async computeCheckerboard(
+    contactMap: Float32Array,
+    size: number,
+    params?: Partial<CheckerboardParams>,
+  ): Promise<CheckerboardResult> {
+    if (!this.workerFailed && this.worker) {
+      try {
+        const id = this.nextId++;
+        const resp = await this.postRequest({
+          type: 'checkerboard',
+          id,
+          contactMap,
+          size,
+          params,
+        }) as CheckerboardResponse;
+        return {
+          entropy: resp.entropy,
+          score: resp.score,
+          distanceHistogram: resp.distanceHistogram,
+          binEdges: resp.binEdges,
+          numChromosomes: resp.numChromosomes,
+        };
+      } catch {
+        // Fall through to synchronous
+      }
+    }
+    return computeCheckerboardScore(contactMap, size, params);
   }
 
   /**

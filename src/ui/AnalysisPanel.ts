@@ -66,6 +66,7 @@ import type { DetectedPattern } from '../analysis/PatternDetector';
 import { Evo2HiCClient, getStoredServerUrl, setStoredServerUrl, type EpiTrackPrediction, type HiCPredictionResult } from '../analysis/Evo2HiCClient';
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
+import type { CheckerboardResult } from '../analysis/CheckerboardScore';
 
 // ---------------------------------------------------------------------------
 // Cached state
@@ -86,6 +87,7 @@ let cachedSaddle: SaddleResult | null = null;
 let cachedV4C: Virtual4CResult | null = null;
 let cachedKR: KRResult | null = null;
 let cachedTelomere: TelomereResult | null = null;
+let cachedCheckerboard: CheckerboardResult | null = null;
 let cachedEnhancedMap: Float32Array | null = null;
 let cachedEnhancedOverview: Float32Array | null = null;
 let enhancedMapActive = false;
@@ -1016,6 +1018,16 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += `<div class="saddle-container">${renderSaddleSVG(cachedSaddle)}</div>`;
   }
 
+  // Checkerboard score (after compartments computed)
+  if (cachedCompartments && !cachedCheckerboard) {
+    html += `<button class="analysis-btn" id="btn-compute-checkerboard" style="width:100%;margin:4px 0;background:#6c5ce7;color:#fff;">Checkerboard Score</button>`;
+  }
+  if (cachedCheckerboard) {
+    const cbColor = cachedCheckerboard.score >= 50 ? '#00b894' : cachedCheckerboard.score >= 25 ? '#fdcb6e' : '#d63031';
+    html += `<div class="stats-row"><span>Checkerboard</span><span style="color:${cbColor};font-weight:bold;">${cachedCheckerboard.score.toFixed(1)}/100</span></div>`;
+    html += `<div class="stats-row" style="font-size:10px;color:var(--text-secondary);"><span>Entropy</span><span>${cachedCheckerboard.entropy.toFixed(4)}</span></div>`;
+  }
+
   // Auto-assign scaffolds button (when P(s) computed but no scaffolds)
   if (cachedDecay && ctx.scaffoldManager.getAllScaffolds().length === 0) {
     html += `<button class="analysis-btn" id="btn-auto-scaffold-analysis" style="width:100%;margin:4px 0;">Auto-assign Scaffolds</button>`;
@@ -1156,6 +1168,22 @@ function updateResultsDisplay(ctx: AppContext): void {
   // Wire saddle plot button
   document.getElementById('btn-compute-saddle')?.addEventListener('click', () => {
     runSaddlePlot(ctx);
+  });
+
+  // Wire checkerboard score button
+  document.getElementById('btn-compute-checkerboard')?.addEventListener('click', async () => {
+    if (!workerClient) return;
+    const s = state.get();
+    if (!s.map?.contactMap) return;
+    const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+    const overviewSize = Math.round(Math.sqrt(contactMap.length));
+    try {
+      cachedCheckerboard = await workerClient.computeCheckerboard(contactMap, overviewSize);
+      updateResultsDisplay(ctx);
+      ctx.showToast(`Checkerboard score: ${cachedCheckerboard.score.toFixed(1)}/100`);
+    } catch (err) {
+      ctx.showToast(`Checkerboard computation failed: ${err}`);
+    }
   });
 
   // Wire auto-assign scaffolds button
@@ -2325,6 +2353,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedDI = null;
   cachedQuality = null;
   cachedSaddle = null;
+  cachedCheckerboard = null;
   cachedTelomere = null;
   cachedEnhancedMap = null;
   cachedEnhancedOverview = null;

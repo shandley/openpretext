@@ -11,6 +11,15 @@ Institute's desktop application used by genome assembly teams worldwide
 It reads native `.pretext` files directly in the browser with no installation
 required.
 
+![OpenPretext Welcome Screen](docs/images/lesson-review-welcome.png)
+*Welcome screen with specimen catalog, tutorials, and quick-start options*
+
+![Contact Map with Analysis](docs/images/overview-with-sidebar.png)
+*Contact map with contig sidebar, MIS badges, scaffolds, meta tags, and analysis panels*
+
+![3D Analysis & Evo2HiC Panel](docs/images/analysis-panel-evo2hic.png)
+*Analysis panel showing health score, P(s) decay, export options, track configuration, and Evo2HiC ML integration*
+
 ## Features
 
 ### Rendering
@@ -103,16 +112,23 @@ required.
 - Adjustable insulation window size; auto-computation on file load
 - BedGraph and TSV export for all analysis tracks
 
-### ML-Powered Hi-C Enhancement
+### ML-Powered Hi-C Enhancement and Prediction
 
-- **Evo2HiC resolution enhancement** — integrates the [Evo2HiC](https://github.com/CHNFTQ/Evo2HiC)
-  foundation model (81M parameters, trained on 177 species) to enhance low-resolution Hi-C overview
-  maps, revealing chromosome territory boundaries, inter-chromosomal contacts, and distance-decay
-  patterns below the raw data's noise floor
-- Optional companion server (`server/`) running locally — core app works fully without it
-- Toggle between original and enhanced views in real time
-- Enhanced map feeds into downstream analysis (insulation, compartments, P(s) decay)
-- Cleared automatically on curation operations (contig ordering changed)
+Integrates [Evo2HiC](https://github.com/CHNFTQ/Evo2HiC) foundation models via an optional
+companion server (`server/`). The core app works fully without it.
+
+- **Resolution enhancement** — Evo2HiC (81M parameters, trained on 177 species) enhances
+  low-resolution Hi-C overview maps, revealing chromosome territory boundaries,
+  inter-chromosomal contacts, and distance-decay patterns below the raw data's noise floor
+- **Epigenomic track prediction** — predicts 5 epigenomic tracks (DNase, CTCF, H3K27ac,
+  H3K27me3, H3K4me3) from the Hi-C contact map using the CDNAtrack model, providing
+  predicted chromatin marks for non-model organisms where no ChIP-seq data exists
+- **Seq2HiC prediction** — predicts a Hi-C contact map from DNA sequence alone using the
+  Seq2HiC model, enabling comparison between observed and sequence-predicted contact patterns
+- Toggle between original, enhanced, and predicted views in real time
+- Enhanced/predicted maps feed into downstream analysis (insulation, compartments, P(s) decay)
+- All ML outputs cleared automatically on curation operations (contig ordering changed)
+- Session persistence for enhanced maps and predicted tracks
 
 ![Evo2HiC Enhancement: King Quail](docs/images/evo2hic-quail-original.png)
 *Original Hi-C overview of King quail (Coturnix chinensis) — 645 contigs, 30 chromosomes*
@@ -182,7 +198,7 @@ required.
 
 ### Tutorial System
 
-- 9 interactive lessons covering the full curation workflow:
+- 10 interactive lessons covering the full curation workflow:
   1. Reading the Contact Map
   2. Understanding Chromosomes
   3. Detecting Misassembly
@@ -192,6 +208,7 @@ required.
   7. 3D Genomics Analysis
   8. Classifying Contigs with Meta Tags
   9. Automated Misassembly Detection
+  10. ML-Powered Enhancement (Evo2HiC)
 - Step-based progression with instructions, hints, and UI element highlighting
 - Auto-advance when the expected user action is detected
 - Assessment scoring using Kendall tau similarity against ground-truth orderings
@@ -424,7 +441,7 @@ For technical details on the binary format, see
 
 ```bash
 npm run dev          # Start development server with hot reload
-npm test             # Run unit tests (2,221 tests across 82 files)
+npm test             # Run unit tests (2,227 tests across 82 files)
 npm run test:visual  # Run E2E tests (35 tests, Playwright + Chromium)
 npm run build        # Production build to dist/
 npm run preview      # Preview the production build
@@ -512,8 +529,8 @@ src/
     CurationProgress.ts      Real-time ordering progress scoring
     AnalysisWorker.ts        Background Web Worker for analysis
     AnalysisWorkerClient.ts  Promise-based main-thread worker client
-    Evo2HiCClient.ts          HTTP client for Evo2HiC enhancement server
-    Evo2HiCEnhancement.ts     Contact map encode/decode/downscale utilities
+    Evo2HiCClient.ts          HTTP client for Evo2HiC server (enhance/predict/seq2hic)
+    Evo2HiCEnhancement.ts     Contact map encode/decode/downscale + track utilities
   export/
     AGPWriter.ts             AGP 2.1 format generation
     BEDWriter.ts             BED6 format export (scaffold-aware)
@@ -526,11 +543,11 @@ src/
   ui/                        38 UI modules (pure DOM, no framework)
 public/data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
-  lessons/                   Tutorial lesson JSON files (9 lessons)
+  lessons/                   Tutorial lesson JSON files (10 lessons)
   pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
   prompt-strategies.json     AI prompt strategy library (8 strategies)
 tests/
-  unit/                      2,221 unit tests across 82 test files
+  unit/                      2,227 unit tests across 82 test files
   e2e/                       35 E2E tests (Playwright + Chromium)
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)
@@ -539,11 +556,12 @@ bench/
   baselines.json             Regression thresholds for CI
   metrics/                   AutoSort, AutoCut, chromosome metrics
   acquire/                   GenomeArk specimen download tools
-server/                        Evo2HiC enhancement server (Python/FastAPI)
+server/                        Evo2HiC server (Python/FastAPI)
   evo2hic_server/
-    main.py                    FastAPI app with /health and /enhance endpoints
-    inference.py               Model loading + inference (mock or real)
+    main.py                    FastAPI app (/health, /enhance, /predict-tracks, /predict-hic)
+    inference.py               Model loading + inference (mock or real) for 3 models
     schemas.py                 Pydantic request/response models
+    dna_encoder.py             DNA sequence one-hot encoding for model input
 ```
 
 ### Technology
@@ -555,7 +573,7 @@ server/                        Evo2HiC enhancement server (Python/FastAPI)
 - **Vitest** for unit testing
 - **Playwright** for E2E testing
 - Pure DOM manipulation for UI (no React/Vue/Angular)
-- **Evo2HiC** (optional) for ML-powered contact map resolution enhancement
+- **Evo2HiC** (optional) for ML-powered contact map enhancement, epigenomic track prediction, and Seq2HiC
 
 ## Background
 

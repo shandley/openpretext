@@ -69,8 +69,8 @@ src/
     CurationProgress.ts      Real-time ordering progress scoring + trends
     AnalysisWorker.ts        Background Web Worker for analysis computation
     AnalysisWorkerClient.ts  Promise-based main-thread worker client
-    Evo2HiCClient.ts          HTTP client for Evo2HiC enhancement server
-    Evo2HiCEnhancement.ts     Contact map encode/decode/downscale utilities
+    Evo2HiCClient.ts          HTTP client for Evo2HiC server (enhance/predict/seq2hic)
+    Evo2HiCEnhancement.ts     Contact map encode/decode/downscale + track utilities
   ai/
     AIClient.ts              Anthropic Messages API wrapper (vision)
     AIContext.ts             Assembly state context builder for AI prompts
@@ -116,14 +116,15 @@ src/
     index.ts                 Barrel exports for UI modules
 public/data/
   specimen-catalog.json      Curated multi-specimen catalog (10 species)
-  lessons/                   Tutorial lesson JSON files (9 lessons)
+  lessons/                   Tutorial lesson JSON files (10 lessons)
   pattern-gallery.json       Hi-C pattern reference gallery (11 patterns)
   prompt-strategies.json     AI prompt strategy library (8 strategies)
-server/                        Evo2HiC enhancement server (Python/FastAPI, optional)
+server/                        Evo2HiC server (Python/FastAPI, optional)
   evo2hic_server/
-    main.py                    FastAPI app (/api/v1/health, /api/v1/enhance)
-    inference.py               Model loading (mock or real Evo2HiC weights)
+    main.py                    FastAPI app (/health, /enhance, /predict-tracks, /predict-hic)
+    inference.py               Model loading + inference for 3 models (mock or real)
     schemas.py                 Pydantic request/response models
+    dna_encoder.py             DNA sequence one-hot encoding for model input
 bench/
   cli.ts                     Benchmark CLI (run/sweep/report/regression)
   runner.ts                  Benchmark pipeline orchestrator
@@ -136,7 +137,7 @@ bench/
     summary.ts               Aggregate statistics
   acquire/                   GenomeArk specimen download tools
 tests/
-  unit/                      2221 unit tests across 82 files (vitest)
+  unit/                      2227 unit tests across 82 files (vitest)
     basic.test.ts            Synthetic data, color maps, camera
     curation.test.ts         CurationEngine operations
     scaffold.test.ts         ScaffoldManager
@@ -217,8 +218,8 @@ tests/
     ui-color-map.test.ts         Color map controls
     ui-shortcuts-modal.test.ts   Shortcuts reference modal
     contact-map-reorder.test.ts  Contact map reorder permutation (12 tests)
-    evo2hic-client.test.ts       Evo2HiC HTTP client (20 tests)
-    evo2hic-enhancement.test.ts  Encode/decode/downscale utilities (30 tests)
+    evo2hic-client.test.ts       Evo2HiC HTTP client (34 tests)
+    evo2hic-enhancement.test.ts  Encode/decode/downscale utilities (42 tests)
   e2e/                       35 E2E tests (Playwright + Chromium)
     curation.spec.ts         Cut/join UI, undo/redo (7 tests)
     edit-mode-ux.spec.ts     Edit mode UX: toast, draggable, selection (4 tests)
@@ -481,6 +482,27 @@ themselves. The undo stack is the source of truth for curation history.
   in `SessionEnhancement`. Server supports real Evo2HiC model weights
   (via EVO2HIC_REPO_PATH + EVO2HIC_CHECKPOINT env vars) or mock
   inference (Gaussian denoise + bicubic upscale) for testing.
+- **Evo2HiC Epigenomic Track Prediction**: Predicts 5 epigenomic tracks
+  (DNase, CTCF, H3K27ac, H3K27me3, H3K4me3) from the Hi-C contact map
+  via `Evo2HiCClient.predictTracks()`. Uses the CDNAtrack model (CDNA1d
+  architecture). `trackPredictionToConfigs()` converts predictions to
+  `TrackConfig[]` for rendering. Cached as `cachedEpiTracks` in
+  AnalysisPanel with `clearEpiTracks()` on curation. Session-persisted
+  as `SessionEpiTracks` in SessionManager. Mock mode generates
+  plausible tracks correlated with diagonal signal.
+- **Evo2HiC Seq2HiC Prediction**: Predicts a Hi-C contact map from DNA
+  sequence alone via `Evo2HiCClient.predictHiC()`. Requires loaded FASTA
+  sequences. Uses the Seq2HiC model to generate a predicted contact map
+  that can be toggled alongside the observed map. Cached as
+  `cachedPredictedHiC` in AnalysisPanel. Session-persisted as
+  `SessionPredictedHiC` in SessionManager. Mock mode generates synthetic
+  contact maps from sequence GC content and contig structure.
+- **DNA Encoder** (`server/evo2hic_server/dna_encoder.py`): Pure numpy
+  functions for one-hot encoding DNA sequences (A/C/G/T → 4-channel
+  float32 arrays). `prepare_dna_for_tile()` maps overview bins to genomic
+  coordinates, extracts FASTA subsequences, and subsamples to model
+  resolution. `prepare_dna_tensor()` and `prepare_mappability_tensor()`
+  create model-ready PyTorch tensors.
 
 ## Companion Repository
 
@@ -498,7 +520,7 @@ structure, filename conventions, and ID uniqueness on every PR.
 - Exported functions use JSDoc for public API; internal functions do not
 - Test files mirror source structure: `curation.test.ts` tests
   `CurationEngine.ts`
-- Run `npm test` before committing; all 2221 tests must pass
+- Run `npm test` before committing; all 2227 tests must pass
 - Run `npx tsc --noEmit` to verify types
 
 ## Common Pitfalls

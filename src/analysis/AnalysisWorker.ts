@@ -15,6 +15,7 @@ import { detectInversions, detectTranslocations, type DetectedPattern } from './
 import { computeICENormalization, type ICEParams } from './ICENormalization';
 import { computeKRNormalization, type KRParams } from './KRNormalization';
 import { computeDirectionality, type DIParams } from './DirectionalityIndex';
+import { computeCheckerboardScore, type CheckerboardParams } from './CheckerboardScore';
 import type { ContigRange } from '../curation/AutoSort';
 
 // ---------------------------------------------------------------------------
@@ -80,7 +81,15 @@ export interface KRRequest {
   params?: Partial<KRParams>;
 }
 
-export type AnalysisRequest = InsulationRequest | DecayRequest | CompartmentRequest | PatternRequest | ICERequest | DIRequest | KRRequest;
+export interface CheckerboardRequest {
+  type: 'checkerboard';
+  id: number;
+  contactMap: Float32Array;
+  size: number;
+  params?: Partial<CheckerboardParams>;
+}
+
+export type AnalysisRequest = InsulationRequest | DecayRequest | CompartmentRequest | PatternRequest | ICERequest | DIRequest | KRRequest | CheckerboardRequest;
 
 export interface InsulationResponse {
   type: 'insulation';
@@ -147,6 +156,16 @@ export interface KRResponse {
   maxDeviation: number;
 }
 
+export interface CheckerboardResponse {
+  type: 'checkerboard';
+  id: number;
+  entropy: number;
+  score: number;
+  distanceHistogram: Float32Array;
+  binEdges: Float32Array;
+  numChromosomes: number;
+}
+
 export interface ErrorResponse {
   type: 'error';
   id: number;
@@ -161,6 +180,7 @@ export type AnalysisResponse =
   | ICEResponse
   | DIResponse
   | KRResponse
+  | CheckerboardResponse
   | ErrorResponse;
 
 // ---------------------------------------------------------------------------
@@ -299,6 +319,24 @@ self.onmessage = (event: MessageEvent<AnalysisRequest>) => {
         self.postMessage(response, [
           response.biasVector.buffer,
           response.normalizedMatrix.buffer,
+        ] as any);
+        break;
+      }
+
+      case 'checkerboard': {
+        const result = computeCheckerboardScore(msg.contactMap, msg.size, msg.params);
+        const response: CheckerboardResponse = {
+          type: 'checkerboard',
+          id: msg.id,
+          entropy: result.entropy,
+          score: result.score,
+          distanceHistogram: result.distanceHistogram,
+          binEdges: result.binEdges,
+          numChromosomes: result.numChromosomes,
+        };
+        self.postMessage(response, [
+          response.distanceHistogram.buffer,
+          response.binEdges.buffer,
         ] as any);
         break;
       }
