@@ -103,6 +103,16 @@ export class TrackRenderer {
     return this.tracks.find(t => t.name === name);
   }
 
+  /**
+   * Total stacked height (in CSS pixels) of all currently visible tracks.
+   * Used by the rendering pipeline to offset the contact map below the tracks.
+   */
+  getVisibleTrackHeight(): number {
+    const visible = this.tracks.filter(t => t.visible);
+    if (visible.length === 0) return 0;
+    return visible.reduce((sum, t) => sum + t.height + 2, 0) - 2; // subtract last gap
+  }
+
   clearTracks(): void {
     this.tracks = [];
   }
@@ -214,8 +224,8 @@ export class TrackRenderer {
     ctx.rect(screenLeft, trackTop, screenRight - screenLeft, track.height);
     ctx.clip();
 
-    // Draw a subtle dark background so the track is readable
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    // Opaque dark background so tracks don't overlap map content
+    ctx.fillStyle = 'rgba(18, 18, 26, 0.92)';
     ctx.fillRect(screenLeft, trackTop, screenRight - screenLeft, track.height);
 
     switch (track.type) {
@@ -254,8 +264,8 @@ export class TrackRenderer {
     ctx.rect(trackLeft, 0, track.height, h);
     ctx.clip();
 
-    // Subtle background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    // Opaque dark background so tracks don't overlap map content
+    ctx.fillStyle = 'rgba(18, 18, 26, 0.92)';
     ctx.fillRect(trackLeft, 0, track.height, h);
 
     switch (track.type) {

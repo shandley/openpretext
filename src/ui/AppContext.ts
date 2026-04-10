@@ -58,6 +58,11 @@ export interface AppContext {
   progressReference: number[] | null;
   previousProgress: ProgressScore | null;
 
+  // Curation flash highlight (shows a brief yellow pulse after operations)
+  flashHighlightStart: number;
+  flashHighlightEnd: number;
+  flashHighlightUntil: number;
+
   // Cross-module callbacks (readonly after init)
   readonly showToast: (message: string, duration?: number) => void;
   readonly refreshAfterCuration: () => void;

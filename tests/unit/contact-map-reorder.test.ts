@@ -84,6 +84,31 @@ describe('buildPixelRemapTable', () => {
     const remap = buildPixelRemapTable(contigs, [0], 4);
     expect(Array.from(remap)).toEqual([0, 1, 2, 3]);
   });
+
+  it('reverses pixel order when contig is inverted', () => {
+    const contigs = [makeContig(0, 0, 2), makeContig(1, 2, 4)];
+    contigs[0].inverted = true;
+    const remap = buildPixelRemapTable(contigs, [0, 1], 4);
+    // Contig 0 pixels reversed: display 0→orig 1, display 1→orig 0
+    // Contig 1 unchanged: display 2→orig 2, display 3→orig 3
+    expect(Array.from(remap)).toEqual([1, 0, 2, 3]);
+  });
+
+  it('reverses pixel order for second inverted contig', () => {
+    const contigs = [makeContig(0, 0, 2), makeContig(1, 2, 4)];
+    contigs[1].inverted = true;
+    const remap = buildPixelRemapTable(contigs, [0, 1], 4);
+    // Contig 0 unchanged, contig 1 reversed
+    expect(Array.from(remap)).toEqual([0, 1, 3, 2]);
+  });
+
+  it('reverses both contigs when both inverted', () => {
+    const contigs = [makeContig(0, 0, 2), makeContig(1, 2, 4)];
+    contigs[0].inverted = true;
+    contigs[1].inverted = true;
+    const remap = buildPixelRemapTable(contigs, [0, 1], 4);
+    expect(Array.from(remap)).toEqual([1, 0, 3, 2]);
+  });
 });
 
 describe('reorderContactMap', () => {
@@ -190,6 +215,42 @@ describe('reorderContactMap', () => {
         expect(result[r * size + c]).toBe(result[c * size + r]);
       }
     }
+  });
+
+  it('inverts contig pixels in the contact map', () => {
+    // Build a 4x4 map with asymmetric values within contig 0
+    const size = 4;
+    const map = new Float32Array(size * size);
+    // Row 0: [0.9, 0.1, 0, 0]
+    // Row 1: [0.1, 0.2, 0, 0]
+    map[0 * 4 + 0] = 0.9;
+    map[0 * 4 + 1] = 0.1;
+    map[1 * 4 + 0] = 0.1;
+    map[1 * 4 + 1] = 0.2;
+    // Contig 1 block
+    map[2 * 4 + 2] = 0.5;
+    map[2 * 4 + 3] = 0.5;
+    map[3 * 4 + 2] = 0.5;
+    map[3 * 4 + 3] = 0.5;
+
+    const contigs = [makeContig(0, 0, 2), makeContig(1, 2, 4)];
+    contigs[0].inverted = true;
+
+    const result = reorderContactMap(map, contigs, [0, 1], size);
+
+    // After inversion of contig 0: pixel order reversed within contig 0
+    // Display (0,0) ← Original (1,1) = 0.2
+    // Display (0,1) ← Original (1,0) = 0.1
+    // Display (1,0) ← Original (0,1) = 0.1
+    // Display (1,1) ← Original (0,0) = 0.9
+    expect(result[0 * 4 + 0]).toBeCloseTo(0.2, 5);
+    expect(result[0 * 4 + 1]).toBeCloseTo(0.1, 5);
+    expect(result[1 * 4 + 0]).toBeCloseTo(0.1, 5);
+    expect(result[1 * 4 + 1]).toBeCloseTo(0.9, 5);
+
+    // Contig 1 block unchanged
+    expect(result[2 * 4 + 2]).toBeCloseTo(0.5, 5);
+    expect(result[3 * 4 + 3]).toBeCloseTo(0.5, 5);
   });
 
   it('handles overview map smaller than full resolution', () => {

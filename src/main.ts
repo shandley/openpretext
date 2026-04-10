@@ -118,6 +118,9 @@ class OpenPretextApp {
       tutorialManager: null,
       progressReference: null,
       previousProgress: null,
+      flashHighlightStart: 0,
+      flashHighlightEnd: 0,
+      flashHighlightUntil: 0,
 
       // Cross-module callbacks
       showToast,

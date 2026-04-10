@@ -151,6 +151,8 @@ function createMockElement(tag?: string): any {
     getAttribute: vi.fn(),
     setAttribute: vi.fn(),
     classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), contains: vi.fn() },
+    querySelectorAll: vi.fn(() => []),
+    querySelector: vi.fn(() => null),
   };
   return el;
 }

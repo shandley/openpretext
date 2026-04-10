@@ -7,15 +7,13 @@ import { state } from '../core/State';
 import { SelectionManager } from '../curation/SelectionManager';
 import { triggerVirtual4C } from './AnalysisPanel';
 
-let editModeHintShown = false;
-
 export function setupClickInteractions(ctx: AppContext, canvas: HTMLCanvasElement): void {
   let mouseDownPos = { x: 0, y: 0 };
 
   canvas.addEventListener('mousedown', (e) => {
     mouseDownPos = { x: e.clientX, y: e.clientY };
 
-    // Try to initiate drag reorder in edit mode
+    // Try to initiate drag reorder in edit mode only
     if (ctx.currentMode === 'edit' && ctx.hoveredContigIndex >= 0) {
       ctx.dragReorder.onMouseDown(e.clientX, e.clientY, ctx.hoveredContigIndex);
     }
@@ -32,22 +30,38 @@ export function setupClickInteractions(ctx: AppContext, canvas: HTMLCanvasElemen
     const dy = Math.abs(e.clientY - mouseDownPos.y);
     if (dx > 5 || dy > 5) return;
 
-    // Navigate mode hint: suggest Edit mode on first click
-    if (ctx.currentMode === 'navigate' && ctx.hoveredContigIndex >= 0 && !e.altKey && !editModeHintShown) {
-      editModeHintShown = true;
-      ctx.showToast('Press E to enter Edit mode for contig selection');
+    // Alt+click: Virtual 4C viewpoint selection (any mode)
+    if (e.altKey && ctx.mouseMapPos.x >= 0 && ctx.mouseMapPos.x <= 1) {
+      const overviewSize = Math.round(Math.sqrt(state.get().map?.contactMap?.length ?? 0));
+      if (overviewSize > 0) {
+        const bin = Math.floor(ctx.mouseMapPos.x * overviewSize);
+        triggerVirtual4C(ctx, bin);
+        return;
+      }
     }
 
-    if (ctx.currentMode === 'edit' && ctx.hoveredContigIndex >= 0) {
-      if (e.shiftKey) {
+    // Contig selection — works in any mode with Cmd/Ctrl+click or Shift+click.
+    // Plain click selects in Edit mode; in other modes plain click is mode-specific.
+    if (ctx.hoveredContigIndex >= 0) {
+      if (e.shiftKey && ctx.currentMode !== 'waypoint' && ctx.currentMode !== 'scaffold') {
         SelectionManager.selectRange(ctx.hoveredContigIndex);
-      } else if (e.metaKey || e.ctrlKey) {
-        SelectionManager.selectToggle(ctx.hoveredContigIndex);
-      } else {
-        SelectionManager.selectSingle(ctx.hoveredContigIndex);
+        ctx.updateSidebarContigList();
+        ctx.showToast(`Selected: ${getContigNameAt(ctx.hoveredContigIndex)}`);
+        return;
       }
-      ctx.updateSidebarContigList();
-      ctx.showToast(`Selected: ${getContigNameAt(ctx.hoveredContigIndex)}`);
+      if (e.metaKey || e.ctrlKey) {
+        SelectionManager.selectToggle(ctx.hoveredContigIndex);
+        ctx.updateSidebarContigList();
+        ctx.showToast(`Selected: ${getContigNameAt(ctx.hoveredContigIndex)}`);
+        return;
+      }
+      // Plain click: mode-specific behavior
+      if (ctx.currentMode === 'edit') {
+        SelectionManager.selectSingle(ctx.hoveredContigIndex);
+        ctx.updateSidebarContigList();
+        ctx.showToast(`Selected: ${getContigNameAt(ctx.hoveredContigIndex)}`);
+        return;
+      }
     }
 
     // Scaffold painting mode
@@ -67,16 +81,6 @@ export function setupClickInteractions(ctx: AppContext, canvas: HTMLCanvasElemen
       }
       ctx.updateSidebarContigList();
       ctx.updateSidebarScaffoldList();
-    }
-
-    // Alt+click: Virtual 4C viewpoint selection (any mode)
-    if (e.altKey && ctx.mouseMapPos.x >= 0 && ctx.mouseMapPos.x <= 1) {
-      const overviewSize = Math.round(Math.sqrt(state.get().map?.contactMap?.length ?? 0));
-      if (overviewSize > 0) {
-        const bin = Math.floor(ctx.mouseMapPos.x * overviewSize);
-        triggerVirtual4C(ctx, bin);
-        return;
-      }
     }
 
     // Waypoint mode: click to place waypoint, shift+click to remove nearest

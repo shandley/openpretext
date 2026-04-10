@@ -89,6 +89,8 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
           runAutoCut(ctx);
         } else if (ctx.currentMode === 'edit') {
           cutAtCursorPosition(ctx);
+        } else if (!cmd) {
+          ctx.showToast('Cut requires Edit mode (press E)');
         }
         break;
 
@@ -103,12 +105,16 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
       case 'f':
         if (ctx.currentMode === 'edit') {
           invertSelectedContigs(ctx);
+        } else {
+          ctx.showToast('Invert requires Edit mode (press E)');
         }
         break;
 
       case 'h':
         if (ctx.currentMode === 'edit') {
           toggleContigExclusion(ctx);
+        } else {
+          ctx.showToast('Exclude requires Edit mode (press E)');
         }
         break;
 
@@ -150,6 +156,8 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
           const sc = ctx.scaffoldManager.getScaffold(id);
           ctx.showToast(`Created: ${sc?.name ?? 'Scaffold'}`);
           ctx.updateSidebarScaffoldList();
+        } else {
+          ctx.showToast('New scaffold requires Scaffold mode (press S)');
         }
         break;
 

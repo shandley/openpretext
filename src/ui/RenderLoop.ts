@@ -17,10 +17,16 @@ export function startRenderLoop(ctx: AppContext): void {
     const cam = ctx.camera.getState();
     const s = state.get();
 
-    // Highlight from hover or single selection
+    // Highlight from hover, single selection, or curation flash
     let highlightStart: number | undefined;
     let highlightEnd: number | undefined;
-    if (ctx.hoveredContigIndex >= 0 && ctx.hoveredContigIndex < ctx.contigBoundaries.length) {
+    const now = performance.now();
+
+    if (ctx.flashHighlightUntil > now) {
+      // Active curation flash — override hover/selection highlight
+      highlightStart = ctx.flashHighlightStart;
+      highlightEnd = ctx.flashHighlightEnd;
+    } else if (ctx.hoveredContigIndex >= 0 && ctx.hoveredContigIndex < ctx.contigBoundaries.length) {
       highlightStart = ctx.hoveredContigIndex === 0 ? 0 : ctx.contigBoundaries[ctx.hoveredContigIndex - 1];
       highlightEnd = ctx.contigBoundaries[ctx.hoveredContigIndex];
     } else if (s.selectedContigs.size === 1) {

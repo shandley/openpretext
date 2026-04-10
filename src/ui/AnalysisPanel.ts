@@ -1106,28 +1106,25 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += '<div id="cut-suggestions"></div>';
   }
 
-  // Export section — always shown when map is loaded, disabled buttons before analysis
-  {
-    html += '<div class="analysis-export-section" id="export-section">';
-    html += '<div class="analysis-export-header" id="export-section-toggle">';
-    html += '<h4>Export Analysis Data</h4>';
-    html += '<span class="export-toggle" id="export-toggle-icon">&#9660;</span>';
-    html += '</div>';
-    html += '<div class="analysis-export-buttons">';
-    html += `<button class="analysis-btn" id="btn-export-all"${!(cachedInsulation || cachedDecay || cachedCompartments || cachedDI || cachedICE || cachedKR || cachedQuality || cachedSaddle) ? ' disabled title="Run analysis first"' : ''}>Export All</button>`;
-    html += `<button class="analysis-btn" id="btn-export-insulation"${!cachedInsulation ? ' disabled title="Run analysis first"' : ''}>Insulation <span class="export-fmt">(BedGraph)</span></button>`;
-    html += `<button class="analysis-btn" id="btn-export-decay"${!cachedDecay ? ' disabled title="Run analysis first"' : ''}>P(s) <span class="export-fmt">(TSV)</span></button>`;
-    html += `<button class="analysis-btn" id="btn-export-compartments"${!cachedCompartments ? ' disabled title="Run analysis first"' : ''}>Compartments <span class="export-fmt">(BedGraph)</span></button>`;
-    html += `<button class="analysis-btn" id="btn-export-di"${!cachedDI ? ' disabled title="Run analysis first"' : ''}>DI <span class="export-fmt">(BedGraph)</span></button>`;
-    html += `<button class="analysis-btn" id="btn-export-ice"${!cachedICE ? ' disabled title="Run analysis first"' : ''}>ICE Bias <span class="export-fmt">(BedGraph)</span></button>`;
-    html += `<button class="analysis-btn" id="btn-export-kr"${!cachedKR ? ' disabled title="Run analysis first"' : ''}>KR Bias <span class="export-fmt">(BedGraph)</span></button>`;
-    html += `<button class="analysis-btn" id="btn-export-quality"${!cachedQuality ? ' disabled title="Run analysis first"' : ''}>Quality <span class="export-fmt">(TSV)</span></button>`;
-    html += `<button class="analysis-btn" id="btn-export-saddle"${!cachedSaddle ? ' disabled title="Run analysis first"' : ''}>Saddle <span class="export-fmt">(TSV)</span></button>`;
-    html += '</div>';
-    html += '</div>';
-  }
+  el.innerHTML = html || '<div style="color: var(--text-secondary); font-size: 11px;">Click Compute tab to run analyses.</div>';
 
-  el.innerHTML = html || '<div style="color: var(--text-secondary); font-size: 11px;">Click a button above to compute.</div>';
+  // Render export buttons into the Export tab
+  {
+    const exportEl = document.getElementById('analysis-export-container');
+    if (exportEl) {
+      let exportHtml = '';
+      exportHtml += `<button class="analysis-btn" id="btn-export-all" style="width:100%;margin-bottom:4px;"${!(cachedInsulation || cachedDecay || cachedCompartments || cachedDI || cachedICE || cachedKR || cachedQuality || cachedSaddle) ? ' disabled title="Run analysis first"' : ''}>Export All</button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-insulation"${!cachedInsulation ? ' disabled title="Run analysis first"' : ''}>Insulation <span class="export-fmt">(BedGraph)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-decay"${!cachedDecay ? ' disabled title="Run analysis first"' : ''}>P(s) <span class="export-fmt">(TSV)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-compartments"${!cachedCompartments ? ' disabled title="Run analysis first"' : ''}>Compartments <span class="export-fmt">(BedGraph)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-di"${!cachedDI ? ' disabled title="Run analysis first"' : ''}>DI <span class="export-fmt">(BedGraph)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-ice"${!cachedICE ? ' disabled title="Run analysis first"' : ''}>ICE Bias <span class="export-fmt">(BedGraph)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-kr"${!cachedKR ? ' disabled title="Run analysis first"' : ''}>KR Bias <span class="export-fmt">(BedGraph)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-quality"${!cachedQuality ? ' disabled title="Run analysis first"' : ''}>Quality <span class="export-fmt">(TSV)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-saddle"${!cachedSaddle ? ' disabled title="Run analysis first"' : ''}>Saddle <span class="export-fmt">(TSV)</span></button>`;
+      exportEl.innerHTML = exportHtml || '<div style="color: var(--text-secondary); font-size: 11px;">Run analyses first to enable export.</div>';
+    }
+  }
 
   // Restore recomputing indicator if auto-recompute is in progress
   if (autoRecomputing) showRecomputingIndicator(true);
@@ -1197,14 +1194,6 @@ function updateResultsDisplay(ctx: AppContext): void {
     if (cachedQuality) { downloadQualityTSV(cachedQuality, s); count++; }
     if (cachedSaddle) { downloadSaddleTSV(cachedSaddle); count++; }
     ctx.showToast(`Exported ${count} analysis file${count !== 1 ? 's' : ''}`);
-  });
-
-  // Wire export section collapse toggle
-  document.getElementById('export-section-toggle')?.addEventListener('click', () => {
-    const section = document.getElementById('export-section');
-    const icon = document.getElementById('export-toggle-icon');
-    if (section) section.classList.toggle('collapsed');
-    if (icon) icon.classList.toggle('collapsed');
   });
 
   // Wire suggest cuts button
@@ -1996,44 +1985,71 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
   const container = document.getElementById('analysis-content');
   if (!container) return;
 
-  // Build the controls UI
+  // Build the tabbed controls UI
   container.innerHTML = `
-    <div class="analysis-slider">
-      <label>Window</label>
-      <input type="range" id="insulation-window" min="3" max="50" value="${insulationWindowSize}">
-      <span class="slider-val" id="insulation-window-val">${insulationWindowSize}</span>
+    <div class="analysis-tabs">
+      <button class="analysis-tab active" data-tab="compute">Compute</button>
+      <button class="analysis-tab" data-tab="results">Results</button>
+      <button class="analysis-tab" data-tab="export">Export</button>
     </div>
-    <div class="analysis-buttons">
-      <button class="analysis-btn" id="btn-compute-insulation">Insulation</button>
-      <button class="analysis-btn" id="btn-compute-decay">P(s) Curve</button>
-      <button class="analysis-btn" id="btn-compute-compartments">Compartments</button>
-    </div>
-    <button class="analysis-btn" id="btn-run-all-analysis" style="margin-bottom:6px;width:100%;">Compute All</button>
-    <button class="analysis-btn" id="btn-compute-directionality" style="margin-bottom:2px;width:100%;">Directionality</button>
-    <button class="analysis-btn" id="btn-compute-quality" style="margin-bottom:2px;width:100%;">Library Quality</button>
-    <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:2px;width:100%;background:#6c5ce7;color:#fff;">Normalize (ICE)</button>
-    <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (KR)</button>
-    <div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;">
-      <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
-        <input type="text" id="evo2hic-url" placeholder="http://localhost:8000" style="flex:1;min-width:0;" value="${getStoredServerUrl() ?? ''}">
-        <button class="analysis-btn" id="btn-evo2hic-check" style="white-space:nowrap;">Check</button>
+    <div class="analysis-tab-content" id="tab-compute">
+      <div class="analysis-slider">
+        <label>Window</label>
+        <input type="range" id="insulation-window" min="3" max="50" value="${insulationWindowSize}">
+        <span class="slider-val" id="insulation-window-val">${insulationWindowSize}</span>
       </div>
-      <div id="evo2hic-status" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
-      <button class="analysis-btn" id="btn-evo2hic-enhance" style="width:100%;margin-bottom:2px;background:#00b894;color:#fff;" disabled>Enhance (Evo2HiC)</button>
-      <button class="analysis-btn" id="btn-evo2hic-toggle" style="width:100%;margin-bottom:2px;" disabled>Toggle Enhanced View</button>
-      <button class="analysis-btn" id="btn-evo2hic-predict-tracks" style="width:100%;margin-bottom:2px;background:#0984e3;color:#fff;" disabled>Predict Tracks</button>
-      <button class="analysis-btn" id="btn-evo2hic-predict-hic" style="width:100%;margin-bottom:2px;background:#e17055;color:#fff;" disabled>Predict Hi-C (Seq2HiC)</button>
-      <button class="analysis-btn" id="btn-evo2hic-toggle-predicted" style="width:100%;margin-bottom:4px;" disabled>Toggle Predicted vs Observed</button>
-      <div id="evo2hic-fasta-hint" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
+      <div class="analysis-buttons">
+        <button class="analysis-btn" id="btn-compute-insulation">Insulation</button>
+        <button class="analysis-btn" id="btn-compute-decay">P(s) Curve</button>
+        <button class="analysis-btn" id="btn-compute-compartments">Compartments</button>
+      </div>
+      <button class="analysis-btn" id="btn-run-all-analysis" style="margin-bottom:6px;width:100%;">Compute All</button>
+      <button class="analysis-btn" id="btn-compute-directionality" style="margin-bottom:2px;width:100%;">Directionality</button>
+      <button class="analysis-btn" id="btn-compute-quality" style="margin-bottom:2px;width:100%;">Library Quality</button>
+      <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:2px;width:100%;background:#6c5ce7;color:#fff;">Normalize (ICE)</button>
+      <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (KR)</button>
+      <div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;">
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+          <input type="text" id="evo2hic-url" placeholder="http://localhost:8000" style="flex:1;min-width:0;" value="${getStoredServerUrl() ?? ''}">
+          <button class="analysis-btn" id="btn-evo2hic-check" style="white-space:nowrap;">Check</button>
+        </div>
+        <div id="evo2hic-status" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
+        <button class="analysis-btn" id="btn-evo2hic-enhance" style="width:100%;margin-bottom:2px;background:#00b894;color:#fff;" disabled>Enhance (Evo2HiC)</button>
+        <button class="analysis-btn" id="btn-evo2hic-toggle" style="width:100%;margin-bottom:2px;" disabled>Toggle Enhanced View</button>
+        <button class="analysis-btn" id="btn-evo2hic-predict-tracks" style="width:100%;margin-bottom:2px;background:#0984e3;color:#fff;" disabled>Predict Tracks</button>
+        <button class="analysis-btn" id="btn-evo2hic-predict-hic" style="width:100%;margin-bottom:2px;background:#e17055;color:#fff;" disabled>Predict Hi-C (Seq2HiC)</button>
+        <button class="analysis-btn" id="btn-evo2hic-toggle-predicted" style="width:100%;margin-bottom:4px;" disabled>Toggle Predicted vs Observed</button>
+        <div id="evo2hic-fasta-hint" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
+      </div>
+      <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
+      <button class="analysis-btn" id="btn-detect-centromeres" style="margin-bottom:6px;width:100%;background:#e056a0;color:#fff;">Detect Centromeres</button>
+      <div id="fasta-hint" style="color:var(--text-secondary);font-size:10px;margin:4px 0;"></div>
     </div>
-    <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
-    <button class="analysis-btn" id="btn-detect-centromeres" style="margin-bottom:6px;width:100%;background:#e056a0;color:#fff;">Detect Centromeres</button>
-    <div id="fasta-hint" style="color:var(--text-secondary);font-size:10px;margin:4px 0;"></div>
-    <div id="pattern-results"></div>
-    <div id="analysis-results">
-      <div style="color: var(--text-secondary); font-size: 11px;">Computing...</div>
+    <div class="analysis-tab-content" id="tab-results" style="display:none;">
+      <div id="pattern-results"></div>
+      <div id="analysis-results">
+        <div style="color: var(--text-secondary); font-size: 11px;">Computing...</div>
+      </div>
+    </div>
+    <div class="analysis-tab-content" id="tab-export" style="display:none;">
+      <div id="analysis-export-container">
+        <div style="color: var(--text-secondary); font-size: 11px;">Run analyses first to enable export.</div>
+      </div>
     </div>
   `;
+
+  // Wire tab switching
+  const tabs = container.querySelectorAll?.('.analysis-tab');
+  tabs?.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const tabId = (tab as HTMLElement).dataset.tab!;
+      container.querySelectorAll('.analysis-tab-content').forEach(c => {
+        (c as HTMLElement).style.display = (c as HTMLElement).id === `tab-${tabId}` ? 'block' : 'none';
+      });
+    });
+  });
 
   // Update FASTA/telomere hint
   updateFastaHint(ctx);

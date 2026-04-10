@@ -55,12 +55,22 @@ export function setupEventListeners(ctx: AppContext): void {
   events.on('misassembly:updated', () => ctx.updateSidebarContigList());
   events.on('metatag:updated', () => ctx.updateSidebarContigList());
 
-  events.on('curation:cut', () => refreshAfterCuration(ctx));
-  events.on('curation:join', () => refreshAfterCuration(ctx));
-  events.on('curation:invert', () => refreshAfterCuration(ctx));
-  events.on('curation:move', () => refreshAfterCuration(ctx));
+  events.on('curation:cut', (data) => { refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
+  events.on('curation:join', (data) => { refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
+  events.on('curation:invert', (data) => { refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
+  events.on('curation:move', (data) => { refreshAfterCuration(ctx); flashContig(ctx, data?.toIndex ?? data?.fromIndex); });
   events.on('curation:undo', () => refreshAfterCuration(ctx));
   events.on('curation:redo', () => refreshAfterCuration(ctx));
+}
+
+/**
+ * Briefly flash-highlight a contig after a curation operation.
+ */
+function flashContig(ctx: AppContext, contigIndex?: number): void {
+  if (contigIndex == null || contigIndex < 0 || contigIndex >= ctx.contigBoundaries.length) return;
+  ctx.flashHighlightStart = contigIndex === 0 ? 0 : ctx.contigBoundaries[contigIndex - 1];
+  ctx.flashHighlightEnd = ctx.contigBoundaries[contigIndex];
+  ctx.flashHighlightUntil = performance.now() + 800;
 }
 
 /**

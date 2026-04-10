@@ -48,9 +48,12 @@ export function buildPixelRemapTable(
     const destSpan = Math.round((destPixel + contigPixels * scale)) - Math.round(destPixel);
 
     for (let i = 0; i < destSpan && Math.round(destPixel) + i < mapSize; i++) {
-      // Map display pixel back to the original pixel coordinate
-      const srcPixel = Math.round(c.pixelStart * scale) + i;
-      remap[Math.round(destPixel) + i] = Math.min(srcPixel, mapSize - 1);
+      // Map display pixel back to the original pixel coordinate.
+      // When a contig is inverted, reverse the pixel order within its span.
+      const srcPixel = c.inverted
+        ? Math.round(c.pixelStart * scale) + (destSpan - 1 - i)
+        : Math.round(c.pixelStart * scale) + i;
+      remap[Math.round(destPixel) + i] = Math.min(Math.max(srcPixel, 0), mapSize - 1);
     }
     destPixel += contigPixels * scale;
   }

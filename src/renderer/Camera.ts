@@ -77,14 +77,18 @@ export class Camera {
 
     window.addEventListener('mousemove', (e) => {
       if (!this.isDragging) return;
-      
+
       const dx = (e.clientX - this.dragStartX) / canvas.clientWidth;
       const dy = (e.clientY - this.dragStartY) / canvas.clientHeight;
-      
-      const scale = 1 / this.zoom;
-      this.x = this.dragStartCamX - dx * scale;
-      this.y = this.dragStartCamY - dy * scale;
-      
+
+      // Convert screen delta to map-space delta, accounting for aspect ratio
+      // to match the vertex shader's aspect correction.
+      const aspect = canvas.clientWidth / canvas.clientHeight;
+      const scaleX = (aspect > 1 ? aspect : 1) / this.zoom;
+      const scaleY = (aspect > 1 ? 1 : 1 / aspect) / this.zoom;
+      this.x = this.dragStartCamX - dx * scaleX;
+      this.y = this.dragStartCamY - dy * scaleY;
+
       this.clamp();
       this.emitChange();
     });
@@ -103,17 +107,18 @@ export class Camera {
       const rect = canvas.getBoundingClientRect();
       const mouseX = (e.clientX - rect.left) / rect.width;
       const mouseY = (e.clientY - rect.top) / rect.height;
+      const aspect = rect.width / rect.height;
+
+      // Convert mouse position to map-space, matching the shader's aspect correction
+      const mapMouseX = this.x + (mouseX - 0.5) * (aspect > 1 ? aspect : 1) / this.zoom;
+      const mapMouseY = this.y + (mouseY - 0.5) * (aspect > 1 ? 1 : 1 / aspect) / this.zoom;
 
       if (e.ctrlKey) {
         // Trackpad pinch gesture (macOS sends ctrlKey + wheel for pinch)
-        // Use a larger multiplier for smoother pinch feel
         const delta = -e.deltaY * 0.01;
         const factor = Math.exp(delta);
         const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom * factor));
-
         const zoomRatio = newZoom / this.zoom;
-        const mapMouseX = this.x + (mouseX - 0.5) / this.zoom;
-        const mapMouseY = this.y + (mouseY - 0.5) / this.zoom;
 
         this.x = mapMouseX - (mapMouseX - this.x) / zoomRatio;
         this.y = mapMouseY - (mapMouseY - this.y) / zoomRatio;
@@ -123,10 +128,7 @@ export class Camera {
         const delta = -e.deltaY * 0.001;
         const factor = Math.exp(delta);
         const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom * factor));
-
         const zoomRatio = newZoom / this.zoom;
-        const mapMouseX = this.x + (mouseX - 0.5) / this.zoom;
-        const mapMouseY = this.y + (mouseY - 0.5) / this.zoom;
 
         this.x = mapMouseX - (mapMouseX - this.x) / zoomRatio;
         this.y = mapMouseY - (mapMouseY - this.y) / zoomRatio;
@@ -181,9 +183,11 @@ export class Camera {
         const t = e.touches[0];
         const dx = (t.clientX - this.touchStartCenterX) / canvas.clientWidth;
         const dy = (t.clientY - this.touchStartCenterY) / canvas.clientHeight;
-        const scale = 1 / this.zoom;
-        this.x = this.touchStartCamX - dx * scale;
-        this.y = this.touchStartCamY - dy * scale;
+        const aspect = canvas.clientWidth / canvas.clientHeight;
+        const scaleX = (aspect > 1 ? aspect : 1) / this.zoom;
+        const scaleY = (aspect > 1 ? 1 : 1 / aspect) / this.zoom;
+        this.x = this.touchStartCamX - dx * scaleX;
+        this.y = this.touchStartCamY - dy * scaleY;
         this.clamp();
         this.emitChange();
       } else if (e.touches.length === 2) {
@@ -203,20 +207,23 @@ export class Camera {
           const rect = canvas.getBoundingClientRect();
           const pinchNormX = (this.touchStartCenterX - rect.left) / rect.width;
           const pinchNormY = (this.touchStartCenterY - rect.top) / rect.height;
-          const mapPinchX = this.touchStartCamX + (pinchNormX - 0.5) / this.touchStartZoom;
-          const mapPinchY = this.touchStartCamY + (pinchNormY - 0.5) / this.touchStartZoom;
+          const pAspect = rect.width / rect.height;
+          const axF = pAspect > 1 ? pAspect : 1;
+          const ayF = pAspect > 1 ? 1 : 1 / pAspect;
+          const mapPinchX = this.touchStartCamX + (pinchNormX - 0.5) * axF / this.touchStartZoom;
+          const mapPinchY = this.touchStartCamY + (pinchNormY - 0.5) * ayF / this.touchStartZoom;
 
-          this.x = mapPinchX - (pinchNormX - 0.5) / newZoom;
-          this.y = mapPinchY - (pinchNormY - 0.5) / newZoom;
+          this.x = mapPinchX - (pinchNormX - 0.5) * axF / newZoom;
+          this.y = mapPinchY - (pinchNormY - 0.5) * ayF / newZoom;
           this.zoom = newZoom;
         }
 
         // Also pan with the two-finger center movement
         const dx = (centerX - this.touchStartCenterX) / canvas.clientWidth;
         const dy = (centerY - this.touchStartCenterY) / canvas.clientHeight;
-        const scale = 1 / this.zoom;
-        this.x -= dx * scale * 0.5;
-        this.y -= dy * scale * 0.5;
+        const tAspect = canvas.clientWidth / canvas.clientHeight;
+        this.x -= dx * (tAspect > 1 ? tAspect : 1) / this.zoom * 0.5;
+        this.y -= dy * (tAspect > 1 ? 1 : 1 / tAspect) / this.zoom * 0.5;
 
         this.clamp();
         this.emitChange();
@@ -311,9 +318,13 @@ export class Camera {
     const cy = (y1 + y2) / 2;
     const width = Math.abs(x2 - x1);
     const height = Math.abs(y2 - y1);
-    const maxDim = Math.max(width, height);
+    // Account for aspect ratio: wider canvas can show more horizontal extent
+    const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
+    const hExtent = aspect > 1 ? width / aspect : width;
+    const vExtent = aspect > 1 ? height : height * aspect;
+    const maxDim = Math.max(hExtent, vExtent);
     const zoom = 1 / maxDim;
-    
+
     this.animateTo({ x: cx, y: cy, zoom: Math.min(zoom, this.maxZoom) });
   }
 
