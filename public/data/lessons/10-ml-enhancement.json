@@ -70,7 +70,7 @@
     {
       "id": "load-fasta",
       "title": "Load a FASTA File (for Seq2HiC)",
-      "instruction": "The Seq2HiC model predicts Hi-C contact maps from DNA sequence alone. To use it, you need to load a reference FASTA file first.\n\nClick the **Load FASTA** button in the toolbar (or drag-drop a .fasta/.fa file). Once loaded, a hint below the Evo2HiC buttons shows the number of sequences loaded.\n\nIf you don't have a FASTA file available, you can skip this step and the next one \u2014 the synthetic demo includes mock FASTA sequences that work for demonstration purposes.\n\nNote: For the synthetic demo data, FASTA sequences are automatically available.",
+      "instruction": "The Seq2HiC model predicts Hi-C contact maps from DNA sequence alone. To use it, you need to load a reference FASTA file first.\n\nClick the **Load FASTA** button in the toolbar (or drag-drop a .fasta/.fa file). Once loaded, a hint below the Evo2HiC buttons shows the number of sequences loaded.\n\nIf you don't have a FASTA file available, you can skip this step and the next one \u2014 Seq2HiC requires real FASTA sequences and is not available with the synthetic demo data.",
       "expectedAction": { "type": "observe" },
       "hint": "FASTA files for GenomeArk specimens can be downloaded from the same S3 bucket as the .pretext files."
     },

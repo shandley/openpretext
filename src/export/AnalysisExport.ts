@@ -134,6 +134,28 @@ export function exportInsulationBedGraph(
 }
 
 /**
+ * Export TAD boundaries as BED6 (chrom, start, end, name, score, strand).
+ */
+export function exportTADBoundariesBED(
+  result: InsulationResult,
+  appState: AppState,
+  overviewSize: number,
+): string {
+  const pixelMap = buildPixelToContigMap(appState, overviewSize);
+  const lines: string[] = [];
+  let tadIdx = 0;
+  for (let i = 0; i < result.boundaries.length; i++) {
+    const bIdx = result.boundaries[i];
+    if (bIdx < 0 || bIdx >= pixelMap.length) continue;
+    const m = pixelMap[bIdx];
+    const strength = i < result.boundaryStrengths.length ? result.boundaryStrengths[i] : 0;
+    tadIdx++;
+    lines.push(`${m.contigName}\t${m.bpStart}\t${m.bpEnd}\tTAD_${tadIdx}\t${(strength * 1000).toFixed(0)}\t.`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+/**
  * Export compartment eigenvector (signed) as BedGraph.
  */
 export function exportCompartmentBedGraph(
@@ -297,6 +319,16 @@ export function downloadInsulationBedGraph(
 ): void {
   const content = exportInsulationBedGraph(result, appState, overviewSize);
   triggerDownload(content, filename ?? `${defaultBasename(appState)}_insulation.bedgraph`);
+}
+
+export function downloadTADBoundariesBED(
+  result: InsulationResult,
+  appState: AppState,
+  overviewSize: number,
+  filename?: string,
+): void {
+  const content = exportTADBoundariesBED(result, appState, overviewSize);
+  triggerDownload(content, filename ?? `${defaultBasename(appState)}_tad_boundaries.bed`);
 }
 
 export function downloadCompartmentBedGraph(

@@ -104,6 +104,13 @@ export class TrackRenderer {
   }
 
   /**
+   * Clear the track canvas (used when tracks are hidden).
+   */
+  clear(): void {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  /**
    * Total stacked height (in CSS pixels) of all currently visible tracks.
    * Used by the rendering pipeline to offset the contact map below the tracks.
    */

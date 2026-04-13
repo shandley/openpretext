@@ -38,7 +38,7 @@
     {
       "id": "view-tracks",
       "title": "Examine Analysis Tracks",
-      "instruction": "The analysis results are also rendered as **tracks** along the edges of the contact map. Toggle tracks on with **X** or the **Tracks** button. You should see:\n\n\u2022 **Insulation Score** (green line) \u2014 dips indicate TAD boundaries\n\u2022 **TAD Boundaries** (red markers) \u2014 detected boundary positions\n\u2022 **A/B Compartments** (red heatmap) \u2014 positive = A (active), negative = B (inactive)\n\nZoom into a chromosome to see how these tracks relate to the contact map structure.",
+      "instruction": "The analysis results are also rendered as **tracks** along the edges of the contact map. Toggle tracks on with **X** or the **Tracks** button. You should see:\n\n\u2022 **Insulation Score** (green line) \u2014 dips indicate TAD boundaries\n\u2022 **TAD Boundaries** (red markers) \u2014 detected boundary positions\n\u2022 **A/B Compartments** (blue-yellow-red heatmap) \u2014 blue = B (inactive), red = A (active)\n\nZoom into a chromosome to see how these tracks relate to the contact map structure.",
       "expectedAction": { "type": "zoom" },
       "hint": "Compare the insulation dips with the visual boundaries between bright contact blocks in the map."
     },

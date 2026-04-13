@@ -27,6 +27,7 @@ import { detectTelomeres, telomereToTrack, type TelomereResult } from '../analys
 import { AnalysisWorkerClient } from '../analysis/AnalysisWorkerClient';
 import {
   downloadInsulationBedGraph,
+  downloadTADBoundariesBED,
   downloadCompartmentBedGraph,
   downloadDecayTSV,
   downloadDirectionalityBedGraph,
@@ -1115,6 +1116,7 @@ function updateResultsDisplay(ctx: AppContext): void {
       let exportHtml = '';
       exportHtml += `<button class="analysis-btn" id="btn-export-all" style="width:100%;margin-bottom:4px;"${!(cachedInsulation || cachedDecay || cachedCompartments || cachedDI || cachedICE || cachedKR || cachedQuality || cachedSaddle) ? ' disabled title="Run analysis first"' : ''}>Export All</button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-insulation"${!cachedInsulation ? ' disabled title="Run analysis first"' : ''}>Insulation <span class="export-fmt">(BedGraph)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-tad"${!cachedInsulation ? ' disabled title="Run analysis first"' : ''}>TAD Boundaries <span class="export-fmt">(BED)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-decay"${!cachedDecay ? ' disabled title="Run analysis first"' : ''}>P(s) <span class="export-fmt">(TSV)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-compartments"${!cachedCompartments ? ' disabled title="Run analysis first"' : ''}>Compartments <span class="export-fmt">(BedGraph)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-di"${!cachedDI ? ' disabled title="Run analysis first"' : ''}>DI <span class="export-fmt">(BedGraph)</span></button>`;
@@ -1137,6 +1139,12 @@ function updateResultsDisplay(ctx: AppContext): void {
     if (cachedInsulation) {
       downloadInsulationBedGraph(cachedInsulation, s, overviewSize);
       ctx.showToast('Insulation BedGraph exported');
+    }
+  });
+  document.getElementById('btn-export-tad')?.addEventListener('click', () => {
+    if (cachedInsulation) {
+      downloadTADBoundariesBED(cachedInsulation, s, overviewSize);
+      ctx.showToast('TAD boundaries BED exported');
     }
   });
   document.getElementById('btn-export-decay')?.addEventListener('click', () => {
@@ -1256,6 +1264,22 @@ function updateResultsDisplay(ctx: AppContext): void {
       ctx.showToast('Current P(s) saved as baseline');
     }
   });
+
+  // Auto-switch to Results tab when results are available
+  if (cachedInsulation || cachedDecay || cachedCompartments) {
+    const container = document.getElementById('analysis-content');
+    if (container) {
+      const tabs = container.querySelectorAll?.('.analysis-tab');
+      const contents = container.querySelectorAll?.('.analysis-tab-content');
+      tabs?.forEach(t => {
+        const isResults = (t as HTMLElement).dataset.tab === 'results';
+        t.classList.toggle('active', isResults);
+      });
+      contents?.forEach(c => {
+        (c as HTMLElement).style.display = (c as HTMLElement).id === 'tab-results' ? 'block' : 'none';
+      });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

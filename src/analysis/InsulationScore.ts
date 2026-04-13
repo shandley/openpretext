@@ -34,7 +34,7 @@ export interface InsulationResult {
 
 const DEFAULT_PARAMS: InsulationParams = {
   windowSize: 10,
-  boundaryProminence: 0.1,
+  boundaryProminence: 0.03,
 };
 
 // ---------------------------------------------------------------------------

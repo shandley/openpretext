@@ -124,6 +124,8 @@ export function startRenderLoop(ctx: AppContext): void {
         canvasHeight: h,
         textureSize: s.map.textureSize,
       });
+    } else if (ctx.trackRenderer) {
+      ctx.trackRenderer.clear();
     }
 
     // Waypoint overlay
