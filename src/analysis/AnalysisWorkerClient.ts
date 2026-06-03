@@ -16,7 +16,7 @@ import { detectInversions, detectTranslocations, type DetectedPattern } from './
 import { computeICENormalization, type ICEParams, type ICEResult } from './ICENormalization';
 import { computeKRNormalization, type KRParams, type KRResult } from './KRNormalization';
 import { computeDirectionality, type DIParams, type DIResult } from './DirectionalityIndex';
-import { computeCheckerboardScore, type CheckerboardParams, type CheckerboardResult } from './CheckerboardScore';
+import { computeCheckerboardScore, type CheckerboardParams, type CheckerboardResult, type ChromosomeRange } from './CheckerboardScore';
 import type { ContigRange } from '../curation/AutoSort';
 import type {
   AnalysisRequest,
@@ -341,6 +341,7 @@ export class AnalysisWorkerClient {
     contactMap: Float32Array,
     size: number,
     params?: Partial<CheckerboardParams>,
+    chromosomeRanges?: ChromosomeRange[],
   ): Promise<CheckerboardResult> {
     if (!this.workerFailed && this.worker) {
       try {
@@ -351,6 +352,7 @@ export class AnalysisWorkerClient {
           contactMap,
           size,
           params,
+          chromosomeRanges,
         }) as CheckerboardResponse;
         return {
           entropy: resp.entropy,
@@ -363,7 +365,7 @@ export class AnalysisWorkerClient {
         // Fall through to synchronous
       }
     }
-    return computeCheckerboardScore(contactMap, size, params);
+    return computeCheckerboardScore(contactMap, size, params, chromosomeRanges);
   }
 
   /**

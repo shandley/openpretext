@@ -15,7 +15,7 @@ import { detectInversions, detectTranslocations, type DetectedPattern } from './
 import { computeICENormalization, type ICEParams } from './ICENormalization';
 import { computeKRNormalization, type KRParams } from './KRNormalization';
 import { computeDirectionality, type DIParams } from './DirectionalityIndex';
-import { computeCheckerboardScore, type CheckerboardParams } from './CheckerboardScore';
+import { computeCheckerboardScore, type CheckerboardParams, type ChromosomeRange } from './CheckerboardScore';
 import type { ContigRange } from '../curation/AutoSort';
 
 // ---------------------------------------------------------------------------
@@ -87,6 +87,7 @@ export interface CheckerboardRequest {
   contactMap: Float32Array;
   size: number;
   params?: Partial<CheckerboardParams>;
+  chromosomeRanges?: ChromosomeRange[];
 }
 
 export type AnalysisRequest = InsulationRequest | DecayRequest | CompartmentRequest | PatternRequest | ICERequest | DIRequest | KRRequest | CheckerboardRequest;
@@ -324,7 +325,7 @@ self.onmessage = (event: MessageEvent<AnalysisRequest>) => {
       }
 
       case 'checkerboard': {
-        const result = computeCheckerboardScore(msg.contactMap, msg.size, msg.params);
+        const result = computeCheckerboardScore(msg.contactMap, msg.size, msg.params, msg.chromosomeRanges);
         const response: CheckerboardResponse = {
           type: 'checkerboard',
           id: msg.id,

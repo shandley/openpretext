@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { computeCheckerboardScore, type CheckerboardResult } from '../../src/analysis/CheckerboardScore';
+import { computeCheckerboardScore, type CheckerboardResult, type ChromosomeRange } from '../../src/analysis/CheckerboardScore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -86,7 +86,11 @@ describe('CheckerboardScore', () => {
       expect(result.entropy).toBeGreaterThanOrEqual(0);
     });
 
-    it('checkerboard map scores higher than uniform map', () => {
+    it('uniform map scores higher than binary checkerboard in whole-genome mode', () => {
+      // In whole-genome mode, the metric measures cosine distance spread across
+      // the full map. Binary checkerboard maps produce concentrated distributions
+      // (near 0 or near max) giving LOWER entropy than pseudo-random contact maps.
+      // This reflects that the whole-genome mode is not HiArch-comparable.
       const size = 64;
       const checkerboard = makeCheckerboardMap(size, 8);
       const uniform = makeUniformMap(size);
@@ -94,11 +98,11 @@ describe('CheckerboardScore', () => {
       const cbResult = computeCheckerboardScore(checkerboard, size);
       const uniResult = computeCheckerboardScore(uniform, size);
 
-      // Checkerboard should have lower entropy (stronger pattern) = higher score
-      expect(cbResult.score).toBeGreaterThan(uniResult.score);
+      // Uniform map should score higher (more varied cosine distances = higher entropy)
+      expect(uniResult.score).toBeGreaterThan(cbResult.score);
     });
 
-    it('checkerboard map scores higher than diagonal map', () => {
+    it('diagonal map scores higher than binary checkerboard in whole-genome mode', () => {
       const size = 64;
       const checkerboard = makeCheckerboardMap(size, 8);
       const diagonal = makeDiagonalMap(size);
@@ -106,7 +110,7 @@ describe('CheckerboardScore', () => {
       const cbResult = computeCheckerboardScore(checkerboard, size);
       const diagResult = computeCheckerboardScore(diagonal, size);
 
-      expect(cbResult.score).toBeGreaterThan(diagResult.score);
+      expect(diagResult.score).toBeGreaterThan(cbResult.score);
     });
 
     it('histogram has correct number of bins', () => {
@@ -194,7 +198,114 @@ describe('CheckerboardScore', () => {
       expect(result.binEdges[result.binEdges.length - 1]).toBeCloseTo(1.6, 5);
     });
 
-    it('score inversely correlates with entropy', () => {
+    describe('per-chromosome mode', () => {
+      /** Build a multi-chromosome map: N chromosomes of equal size, each with
+       *  a checkerboard A/B pattern internally, no inter-chromosomal contacts. */
+      function makeMultiChromosomeMap(mapSize: number, numChr: number, blockSize: number = 4): {
+        map: Float32Array;
+        ranges: ChromosomeRange[];
+      } {
+        const map = new Float32Array(mapSize * mapSize);
+        const chrSize = Math.floor(mapSize / numChr);
+        const ranges: ChromosomeRange[] = [];
+
+        for (let c = 0; c < numChr; c++) {
+          const cs = c * chrSize;
+          const ce = cs + chrSize;
+          ranges.push({ start: cs, end: ce });
+          // Fill intra-chromosomal block with A/B checkerboard
+          for (let i = cs; i < ce; i++) {
+            for (let j = cs; j < ce; j++) {
+              const blockI = Math.floor((i - cs) / blockSize) % 2;
+              const blockJ = Math.floor((j - cs) / blockSize) % 2;
+              map[i * mapSize + j] = blockI === blockJ ? 1.0 : 0.05;
+            }
+          }
+        }
+        return { map, ranges };
+      }
+
+      it('per-chromosome mode returns valid result', () => {
+        const { map, ranges } = makeMultiChromosomeMap(128, 4, 8);
+        const result = computeCheckerboardScore(map, 128, undefined, ranges);
+        expect(result).toHaveProperty('entropy');
+        expect(result).toHaveProperty('score');
+        expect(result.numChromosomes).toBe(4);
+        expect(Number.isFinite(result.entropy)).toBe(true);
+        expect(result.score).toBeGreaterThanOrEqual(0);
+        expect(result.score).toBeLessThanOrEqual(100);
+      });
+
+      it('per-chromosome mode produces nonzero entropy for multi-chr map', () => {
+        // Per-chromosome mode should capture intra-chromosomal structure.
+        const { map, ranges } = makeMultiChromosomeMap(128, 8, 8);
+        const perChr = computeCheckerboardScore(map, 128, undefined, ranges);
+        expect(perChr.entropy).toBeGreaterThan(0);
+        expect(Number.isFinite(perChr.entropy)).toBe(true);
+      });
+
+      it('per-chromosome numChromosomes matches scaffold count for valid map', () => {
+        // numChromosomes should equal the number of scaffolds with sufficient data.
+        const { map, ranges } = makeMultiChromosomeMap(256, 8, 16);
+        const result = computeCheckerboardScore(map, 256, undefined, ranges);
+        // All 8 chromosomes should have enough pixels to contribute
+        expect(result.numChromosomes).toBeGreaterThan(0);
+        expect(result.numChromosomes).toBeLessThanOrEqual(8);
+      });
+
+      it('falls back to whole-genome when fewer than 2 chromosome ranges given', () => {
+        const map = makeUniformMap(64);
+        const singleRange: ChromosomeRange[] = [{ start: 0, end: 64 }];
+        const withOne = computeCheckerboardScore(map, 64, undefined, singleRange);
+        const wholeGenome = computeCheckerboardScore(map, 64);
+        // Should produce identical results since single-range falls back
+        expect(withOne.entropy).toBeCloseTo(wholeGenome.entropy, 4);
+      });
+
+      it('skips chromosomes smaller than 5 pixels', () => {
+        const { map, ranges } = makeMultiChromosomeMap(128, 4, 8);
+        const rangesWithTiny: ChromosomeRange[] = [
+          ...ranges,
+          { start: 0, end: 2 }, // 2-pixel chromosome, too small
+        ];
+        const result = computeCheckerboardScore(map, 128, undefined, rangesWithTiny);
+        // Tiny chromosome should be skipped; numChromosomes should reflect actual used count
+        expect(result.numChromosomes).toBe(4);
+      });
+
+      it('per-chromosome checkerboard scores higher than per-chromosome diagonal', () => {
+        const size = 128;
+        const numChr = 4;
+        const chrSize = size / numChr;
+        const ranges: ChromosomeRange[] = Array.from({ length: numChr }, (_, c) => ({
+          start: c * chrSize,
+          end: (c + 1) * chrSize,
+        }));
+
+        // Checkerboard map
+        const { map: cbMap } = makeMultiChromosomeMap(size, numChr, 8);
+
+        // Diagonal map (distance decay within each chromosome block)
+        const diagMap = new Float32Array(size * size);
+        for (let c = 0; c < numChr; c++) {
+          const cs = c * chrSize;
+          const ce = cs + chrSize;
+          for (let i = cs; i < ce; i++) {
+            for (let j = cs; j < ce; j++) {
+              diagMap[i * size + j] = Math.exp(-Math.abs(i - j) * 0.1);
+            }
+          }
+        }
+
+        const cbResult = computeCheckerboardScore(cbMap, size, undefined, ranges);
+        const diagResult = computeCheckerboardScore(diagMap, size, undefined, ranges);
+        expect(cbResult.score).toBeGreaterThan(diagResult.score);
+      });
+    });
+
+    it('score directly correlates with entropy', () => {
+      // Higher entropy = more varied cosine distances = stronger compartmentalization
+      // signal in the HiArch sense = higher score.
       const size = 64;
       const maps = [
         makeCheckerboardMap(size, 8),
@@ -204,11 +315,11 @@ describe('CheckerboardScore', () => {
 
       const results = maps.map(m => computeCheckerboardScore(m, size));
 
-      // Higher entropy should mean lower score
+      // Higher entropy must produce higher score
       for (let i = 0; i < results.length; i++) {
         for (let j = i + 1; j < results.length; j++) {
           if (results[i].entropy < results[j].entropy) {
-            expect(results[i].score).toBeGreaterThan(results[j].score);
+            expect(results[i].score).toBeLessThan(results[j].score);
           }
         }
       }

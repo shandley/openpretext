@@ -43,8 +43,17 @@ export interface CheckerboardResult {
   distanceHistogram: Float32Array;
   /** Histogram bin edges. */
   binEdges: Float32Array;
-  /** Number of chromosome-level entries analyzed. */
+  /**
+   * When chromosomeRanges are provided: number of chromosomes with sufficient
+   * data. Otherwise: number of entropy batches from whole-genome sampling.
+   */
   numChromosomes: number;
+}
+
+/** Pixel range for one chromosome/scaffold in the overview contact map. */
+export interface ChromosomeRange {
+  start: number;
+  end: number;
 }
 
 const DEFAULT_PARAMS: CheckerboardParams = {
@@ -77,8 +86,7 @@ function vectorNorm(arr: Float32Array, offset: number, length: number): number {
 }
 
 /**
- * Compute cosine distance between two rows of the contact map.
- * cosine_distance = 1 - (a · b) / (|a| * |b|)
+ * Compute cosine distance between two rows of the contact map using all columns.
  */
 function cosineDistance(
   contactMap: Float32Array,
@@ -86,19 +94,33 @@ function cosineDistance(
   row1: number,
   row2: number,
 ): number {
+  return cosineDistanceSubset(contactMap, size, row1, row2, 0, size);
+}
+
+/**
+ * Compute cosine distance between two rows restricted to columns [colStart, colEnd).
+ * Used for per-chromosome checkerboard to exclude inter-chromosomal contacts.
+ */
+function cosineDistanceSubset(
+  contactMap: Float32Array,
+  size: number,
+  row1: number,
+  row2: number,
+  colStart: number,
+  colEnd: number,
+): number {
+  const len = colEnd - colStart;
+  const off1 = row1 * size + colStart;
+  const off2 = row2 * size + colStart;
   let dot = 0;
-  const offset1 = row1 * size;
-  const offset2 = row2 * size;
-  for (let j = 0; j < size; j++) {
-    dot += contactMap[offset1 + j] * contactMap[offset2 + j];
+  for (let k = 0; k < len; k++) {
+    dot += contactMap[off1 + k] * contactMap[off2 + k];
   }
-  const norm1 = vectorNorm(contactMap, offset1, size);
-  const norm2 = vectorNorm(contactMap, offset2, size);
+  const norm1 = vectorNorm(contactMap, off1, len);
+  const norm2 = vectorNorm(contactMap, off2, len);
   const denom = norm1 * norm2;
-  if (denom === 0) return 1.0; // orthogonal if either is zero
-  const similarity = dot / denom;
-  // Clamp to [0, 2] range for cosine distance
-  return Math.max(0, Math.min(2, 1 - similarity));
+  if (denom === 0) return 1.0;
+  return Math.max(0, Math.min(2, 1 - dot / denom));
 }
 
 /**
@@ -118,97 +140,153 @@ function shannonEntropy(probabilities: Float64Array): number {
 /**
  * Compute the checkerboard score for a contact map.
  *
- * Algorithm (Che et al. 2025):
- * 1. For each pair of rows at diagonal offset d (within min/max range),
- *    compute cosine distance
- * 2. Accumulate distances; when batch reaches minSamples, compute entropy
- * 3. Average entropies across all batches
- * 4. Convert to a 0-100 score (inverted: low entropy = high score)
+ * When chromosomeRanges are provided (recommended), computes per-chromosome
+ * by restricting both row and column sampling to within each chromosome's
+ * pixel range, then averages the per-chromosome entropies. This matches the
+ * HiArch algorithm (Che et al. 2026) and produces entropy values on the same
+ * scale as the 1,025-species reference (2.3–3.0).
+ *
+ * Without chromosomeRanges, operates on the whole-genome overview. This mixes
+ * intra- and inter-chromosomal contacts and produces artificially low entropy
+ * for genomes with many small chromosomes, which is not comparable to HiArch.
+ *
+ * Algorithm (Che et al. 2026):
+ * 1. For each chromosome, compute cosine distances between row pairs at
+ *    diagonal offsets d within [5%, 15%] of chromosome size, restricted to
+ *    intra-chromosomal columns
+ * 2. Compute Shannon entropy of the cosine distance histogram per chromosome
+ * 3. Average per-chromosome entropies
+ * 4. Convert to 0-100 score (inverted: lower entropy = higher score)
  */
 export function computeCheckerboardScore(
   contactMap: Float32Array,
   size: number,
   params?: Partial<CheckerboardParams>,
+  chromosomeRanges?: ChromosomeRange[],
 ): CheckerboardResult {
   const p = { ...DEFAULT_PARAMS, ...params };
 
+  if (chromosomeRanges && chromosomeRanges.length >= 2) {
+    return computeCheckerboardPerChromosome(contactMap, size, chromosomeRanges, p);
+  }
+
+  return computeCheckerboardWholeGenome(contactMap, size, p);
+}
+
+// ---------------------------------------------------------------------------
+// Per-chromosome implementation (correct, matches HiArch scale)
+// ---------------------------------------------------------------------------
+
+function computeCheckerboardPerChromosome(
+  contactMap: Float32Array,
+  size: number,
+  chromosomeRanges: ChromosomeRange[],
+  p: CheckerboardParams,
+): CheckerboardResult {
+  const binWidth = p.maxDistance / p.numBins;
+  const entropies: number[] = [];
+  let lastHistogram = new Float32Array(p.numBins);
+
+  for (const { start: cs, end: ce } of chromosomeRanges) {
+    const chrSize = ce - cs;
+    if (chrSize < 5) continue;
+
+    const minDist = Math.max(1, Math.round(chrSize * p.minDistanceFraction));
+    const maxDist = Math.max(minDist + 1, Math.round(chrSize * p.maxDistanceFraction));
+
+    const samples: number[] = [];
+    for (let d = minDist; d < maxDist && d < chrSize; d++) {
+      for (let i = cs; i + d < ce; i++) {
+        samples.push(cosineDistanceSubset(contactMap, size, i, i + d, cs, ce));
+      }
+    }
+
+    if (samples.length < 10) continue;
+
+    const histogram = new Float64Array(p.numBins);
+    for (const s of samples) {
+      histogram[Math.min(Math.floor(s / binWidth), p.numBins - 1)]++;
+    }
+    const total = samples.length;
+    for (let b = 0; b < p.numBins; b++) histogram[b] /= total;
+
+    entropies.push(shannonEntropy(histogram));
+    for (let b = 0; b < p.numBins; b++) lastHistogram[b] = histogram[b];
+  }
+
+  // Fall back to whole-genome if no chromosomes had sufficient data
+  if (entropies.length === 0) {
+    return computeCheckerboardWholeGenome(contactMap, size, p);
+  }
+
+  const entropy = entropies.reduce((a, b) => a + b, 0) / entropies.length;
+  const maxH = maxEntropy(p.numBins);
+  // Higher entropy = more varied cosine distances = stronger A/B alternation = higher score.
+  // This matches the HiArch reference scale where mammals (2.88) score above fungi (2.50).
+  const score = Math.max(0, Math.min(100, (entropy / maxH) * 100));
+
+  const binEdges = new Float32Array(p.numBins + 1);
+  for (let i = 0; i <= p.numBins; i++) binEdges[i] = i * binWidth;
+
+  return { entropy, score, distanceHistogram: lastHistogram, binEdges, numChromosomes: entropies.length };
+}
+
+// ---------------------------------------------------------------------------
+// Whole-genome fallback (original behavior, not HiArch-comparable)
+// ---------------------------------------------------------------------------
+
+function computeCheckerboardWholeGenome(
+  contactMap: Float32Array,
+  size: number,
+  p: CheckerboardParams,
+): CheckerboardResult {
   const minDist = Math.max(1, Math.round(size * p.minDistanceFraction));
   const maxDist = Math.max(minDist + 1, Math.round(size * p.maxDistanceFraction));
   const binWidth = p.maxDistance / p.numBins;
 
-  // Collect entropies per batch of diagonal distances
   const entropies: number[] = [];
   let samples: number[] = [];
   let lastHistogram = new Float32Array(p.numBins);
 
   for (let d = minDist; d < maxDist && d < size; d++) {
-    // Extract cosine distances at this diagonal offset
     for (let i = 0; i + d < size; i++) {
-      const dist = cosineDistance(contactMap, size, i, i + d);
-      samples.push(dist);
+      samples.push(cosineDistance(contactMap, size, i, i + d));
     }
 
-    // When we have enough samples, compute entropy for this batch
     if (samples.length >= p.minSamples) {
       const histogram = new Float64Array(p.numBins);
       for (const s of samples) {
-        const bin = Math.min(Math.floor(s / binWidth), p.numBins - 1);
-        histogram[bin]++;
+        histogram[Math.min(Math.floor(s / binWidth), p.numBins - 1)]++;
       }
-      // Normalize to probabilities
       const total = samples.length;
-      for (let b = 0; b < p.numBins; b++) {
-        histogram[b] /= total;
-      }
+      for (let b = 0; b < p.numBins; b++) histogram[b] /= total;
       entropies.push(shannonEntropy(histogram));
-
-      // Save last histogram for visualization
-      for (let b = 0; b < p.numBins; b++) {
-        lastHistogram[b] = histogram[b];
-      }
-
+      for (let b = 0; b < p.numBins; b++) lastHistogram[b] = histogram[b];
       samples = [];
     }
   }
 
-  // Handle remaining samples if we never reached minSamples
   if (entropies.length === 0 && samples.length > 0) {
     const histogram = new Float64Array(p.numBins);
     for (const s of samples) {
-      const bin = Math.min(Math.floor(s / binWidth), p.numBins - 1);
-      histogram[bin]++;
+      histogram[Math.min(Math.floor(s / binWidth), p.numBins - 1)]++;
     }
     const total = samples.length;
-    for (let b = 0; b < p.numBins; b++) {
-      histogram[b] /= total;
-    }
+    for (let b = 0; b < p.numBins; b++) histogram[b] /= total;
     entropies.push(shannonEntropy(histogram));
-    for (let b = 0; b < p.numBins; b++) {
-      lastHistogram[b] = histogram[b];
-    }
+    for (let b = 0; b < p.numBins; b++) lastHistogram[b] = histogram[b];
   }
 
-  // Average entropy across batches
   const entropy =
     entropies.length > 0
       ? entropies.reduce((a, b) => a + b, 0) / entropies.length
-      : maxEntropy(p.numBins); // maximum entropy if no data
+      : 0;
 
-  // Convert to 0-100 score: low entropy = high score
   const maxH = maxEntropy(p.numBins);
-  const score = Math.max(0, Math.min(100, ((maxH - entropy) / maxH) * 100));
+  const score = Math.max(0, Math.min(100, (entropy / maxH) * 100));
 
-  // Build bin edges array
   const binEdges = new Float32Array(p.numBins + 1);
-  for (let i = 0; i <= p.numBins; i++) {
-    binEdges[i] = i * binWidth;
-  }
+  for (let i = 0; i <= p.numBins; i++) binEdges[i] = i * binWidth;
 
-  return {
-    entropy,
-    score,
-    distanceHistogram: lastHistogram,
-    binEdges,
-    numChromosomes: entropies.length,
-  };
+  return { entropy, score, distanceHistogram: lastHistogram, binEdges, numChromosomes: entropies.length };
 }

@@ -1078,10 +1078,10 @@ function updateResultsDisplay(ctx: AppContext): void {
         const d = Math.abs(g.medianEntropy - ent);
         if (d < bestGroupDist) { bestGroupDist = d; bestGroup = g; }
       }
-      // Percentile: what fraction of 1,025 species have HIGHER entropy (weaker pattern)
-      // Approximate using linear interpolation within the entropy range
+      // Percentile: what fraction of 1,025 species have LOWER entropy (weaker pattern).
+      // Higher entropy = stronger compartmentalization, so higher entropy = higher percentile.
       const pct = Math.max(0, Math.min(100,
-        ((ref.entropyRange.max - ent) / (ref.entropyRange.max - ref.entropyRange.min)) * 100
+        ((ent - ref.entropyRange.min) / (ref.entropyRange.max - ref.entropyRange.min)) * 100
       ));
       html += `<div style="font-size:10px;color:var(--text-secondary);margin:2px 0;padding:4px 6px;background:rgba(108,92,231,0.1);border-radius:4px;">`;
       html += `<div style="margin-bottom:2px;"><strong>vs 1,025 species</strong> <span style="font-style:italic;">(Che et al. 2025)</span></div>`;
@@ -1237,10 +1237,30 @@ function updateResultsDisplay(ctx: AppContext): void {
     if (!s.map?.contactMap) return;
     const contactMap = cachedNormalizedMap ?? s.map.contactMap;
     const overviewSize = Math.round(Math.sqrt(contactMap.length));
+
+    // Build per-chromosome pixel ranges from scaffold assignments.
+    // Requires at least 2 scaffolds; falls back to whole-genome otherwise.
+    const scaffoldGroups = buildScaffoldGroups(ctx);
+    const contigRanges = buildContigRanges();
+    const chromosomeRanges = scaffoldGroups
+      .filter(g => g.scaffoldId !== -1 && g.orderIndices.length >= 1)
+      .map(g => {
+        const first = contigRanges[g.orderIndices[0]];
+        const last = contigRanges[g.orderIndices[g.orderIndices.length - 1]];
+        return { start: first.start, end: last.end };
+      })
+      .filter(r => r.end - r.start >= 5);
+
     try {
-      cachedCheckerboard = await workerClient.computeCheckerboard(contactMap, overviewSize);
+      cachedCheckerboard = await workerClient.computeCheckerboard(
+        contactMap,
+        overviewSize,
+        undefined,
+        chromosomeRanges.length >= 2 ? chromosomeRanges : undefined,
+      );
       updateResultsDisplay(ctx);
-      ctx.showToast(`Checkerboard score: ${cachedCheckerboard.score.toFixed(1)}/100`);
+      const mode = chromosomeRanges.length >= 2 ? `${chromosomeRanges.length} chr` : 'whole-genome';
+      ctx.showToast(`Checkerboard score: ${cachedCheckerboard.score.toFixed(1)}/100 (${mode})`);
     } catch (err) {
       ctx.showToast(`Checkerboard computation failed: ${err}`);
     }
