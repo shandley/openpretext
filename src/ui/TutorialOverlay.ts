@@ -8,6 +8,7 @@
 import type { AppContext } from './AppContext';
 import type { LessonStep } from '../data/LessonSchema';
 import type { TutorialManager } from './TutorialManager';
+import { togglePatternGallery } from './PatternGallery';
 
 export function setupTutorialOverlay(ctx: AppContext, tutorialManager: TutorialManager): void {
   const panel = document.getElementById('tutorial-panel');
@@ -37,6 +38,16 @@ export function setupTutorialOverlay(ctx: AppContext, tutorialManager: TutorialM
     const pct = progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
     progressBar.style.width = `${pct}%`;
     instructionEl.innerHTML = renderMarkdown(step.instruction);
+
+    // Append Pattern Gallery button when the step flags it
+    instructionEl.querySelector('.tutorial-gallery-btn')?.remove();
+    if (step.showPatternGallery) {
+      const btn = document.createElement('button');
+      btn.className = 'tutorial-gallery-btn';
+      btn.textContent = 'Open Pattern Gallery →';
+      btn.addEventListener('click', () => togglePatternGallery(ctx));
+      instructionEl.appendChild(btn);
+    }
 
     if (step.hint) {
       hintBtn.style.display = '';

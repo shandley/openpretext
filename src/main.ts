@@ -21,7 +21,7 @@ import { MetricsTracker } from './curation/QualityMetrics';
 import { TutorialManager } from './ui/TutorialManager';
 import { setupTutorialOverlay } from './ui/TutorialOverlay';
 import { setupAssessmentPanel } from './ui/AssessmentPanel';
-import { setupPatternGallery } from './ui/PatternGallery';
+import { setupPatternGallery, togglePatternGallery } from './ui/PatternGallery';
 import { setupLessonBrowser } from './ui/LessonBrowser';
 import { setupZoomControls } from './ui/ZoomControls';
 
@@ -165,6 +165,10 @@ class OpenPretextApp {
     setupTutorialOverlay(ctx, tutorialManager);
     setupAssessmentPanel(ctx, tutorialManager);
     setupPatternGallery();
+    document.getElementById('btn-welcome-pattern-gallery')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      togglePatternGallery(ctx);
+    });
     setupLessonBrowser(ctx);
     setupZoomControls(ctx);
     setupAnalysisPanel(ctx);

@@ -32,6 +32,8 @@ export interface LessonStep {
   };
   hint?: string;
   autoAdvance?: boolean;
+  /** Show a "Open Pattern Gallery" button below the instruction text. */
+  showPatternGallery?: boolean;
 }
 
 export interface LessonAssessment {

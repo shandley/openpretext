@@ -4,16 +4,17 @@
   "difficulty": "intermediate",
   "estimatedMinutes": 15,
   "specimenId": "finch",
-  "introduction": "Real-world genome assemblies often contain errors—regions where the assembler incorrectly joined DNA sequences. These misassemblies create distinctive patterns on Hi-C contact maps that you can learn to recognize.\n\nIn this lesson, you'll examine the finch genome and learn to identify common misassembly patterns: inversions (butterfly patterns), anti-diagonal signals, and translocations (off-diagonal blocks). Detecting these errors is the first step in manual curation.",
+  "introduction": "Real-world genome assemblies often contain errors—regions where the assembler incorrectly joined DNA sequences. These misassemblies create distinctive patterns on Hi-C contact maps that you can learn to recognize.\n\nIn this lesson, you'll examine a genome assembly and learn to identify common misassembly patterns: inversions (butterfly patterns), anti-diagonal signals, and translocations (off-diagonal blocks). Detecting these errors is the first step in manual curation.",
   "steps": [
     {
       "id": "intro-misassembly",
       "title": "What Misassemblies Look Like",
-      "instruction": "Misassemblies appear as disruptions to the expected contact pattern. While correct assemblies show strong signal along the diagonal, errors create characteristic \"artifacts\":\n\n• Inversions create butterfly or bow-tie patterns\n• Translocations appear as bright blocks off the diagonal\n• Anti-diagonal streaks indicate reversed sequences\n\nLet's examine the finch genome to find examples of each.",
+      "instruction": "Misassemblies appear as disruptions to the expected contact pattern. While correct assemblies show strong signal along the diagonal, errors create characteristic \"artifacts\":\n\n• Inversions create butterfly or bow-tie patterns\n• Translocations appear as bright blocks off the diagonal\n• Anti-diagonal streaks indicate reversed sequences\n\nLet's examine the assembly to find examples of each.",
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "Look for regions where the pattern breaks or looks unusual compared to the clean diagonal blocks."
+      "hint": "Look for regions where the pattern breaks or looks unusual compared to the clean diagonal blocks.",
+      "showPatternGallery": true
     },
     {
       "id": "identify-inversions",
@@ -22,7 +23,8 @@
       "expectedAction": {
         "type": "zoom"
       },
-      "hint": "Inversions often appear within chromosome blocks. Look for X-shaped or butterfly-shaped bright regions that cross the diagonal."
+      "hint": "Inversions often appear within chromosome blocks. Look for X-shaped or butterfly-shaped bright regions that cross the diagonal.",
+      "showPatternGallery": true
     },
     {
       "id": "anti-diagonal",
@@ -31,7 +33,8 @@
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "Anti-diagonal signals run from top-right to bottom-left, perpendicular to the main diagonal. They're usually easier to spot at lower zoom levels."
+      "hint": "Anti-diagonal signals run from top-right to bottom-left, perpendicular to the main diagonal. They're usually easier to spot at lower zoom levels.",
+      "showPatternGallery": true
     },
     {
       "id": "translocations",
@@ -40,12 +43,13 @@
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "True translocations are rare but very visible. They create bright rectangular blocks in the off-diagonal regions where signal should be weak."
+      "hint": "True translocations are rare but very visible. They create bright rectangular blocks in the off-diagonal regions where signal should be weak.",
+      "showPatternGallery": true
     },
     {
       "id": "practice-finding",
       "title": "Practice Finding Problems",
-      "instruction": "Now that you know what to look for, spend a few minutes exploring the finch genome and identifying potential misassemblies.\n\nFor each suspicious region:\n1. Zoom in to confirm the pattern\n2. Check if it's symmetric (inversions) or asymmetric (translocations)\n3. Note the approximate genomic position\n\nIn later lessons, you'll learn how to fix these errors using cut, join, and invert operations.",
+      "instruction": "Now that you know what to look for, spend a few minutes exploring the assembly and identifying potential misassemblies.\n\nFor each suspicious region:\n1. Zoom in to confirm the pattern\n2. Check if it's symmetric (inversions) or asymmetric (translocations)\n3. Note the approximate genomic position\n\nIn later lessons, you'll learn how to fix these errors using cut, join, and invert operations.",
       "expectedAction": {
         "type": "observe"
       },
