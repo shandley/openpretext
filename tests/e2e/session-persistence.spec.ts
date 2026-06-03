@@ -35,10 +35,26 @@ async function waitForAutoAnalysis(page: Page) {
   await expect(trackList).toContainText('A/B Compartments');
 }
 
-/** Scroll an element into view and click it via the native browser API.
- *  Playwright's page.click requires strict visibility which fails for
- *  elements inside overflow-y:auto containers; native .click() does not. */
+/** Click an analysis panel button reliably.
+ *
+ *  Two problems prevent a plain page.click():
+ *  1. The button lives inside the overflow-y:auto sidebar and may be outside
+ *     Playwright's visibility check even after scrolling.
+ *  2. After one computation completes and shows its toast, the function
+ *     may keep running (e.g. ICE re-runs compartments + P(s) after its toast),
+ *     keeping `computing=true` and the button disabled. A subsequent click on a
+ *     disabled <button> fires no event.
+ *
+ *  Fix: wait for !disabled in-page, then scroll+click via native browser API. */
 async function nativeClick(page: Page, id: string) {
+  await page.waitForFunction(
+    (elId) => {
+      const el = document.getElementById(elId) as HTMLButtonElement | null;
+      return !!el && !el.disabled;
+    },
+    id,
+    { timeout: 30_000 },
+  );
   await page.evaluate((elId) => {
     const el = document.getElementById(elId) as HTMLElement | null;
     el?.scrollIntoView({ block: 'center', behavior: 'instant' });
@@ -52,7 +68,7 @@ async function nativeClick(page: Page, id: string) {
 
 test.describe('Session persistence of analysis results', () => {
   test('all analysis results survive save/load round-trip', async ({ page }) => {
-    test.setTimeout(90_000);
+    test.setTimeout(150_000);
 
     // Phase A: Load demo and wait for auto-analysis
     await loadDemo(page);
