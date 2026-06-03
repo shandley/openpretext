@@ -35,6 +35,15 @@ async function waitForAutoAnalysis(page: Page) {
   await expect(trackList).toContainText('A/B Compartments');
 }
 
+/** Scroll an element into view using the native browser API, bypassing
+ *  Playwright's visibility prerequisite (needed for elements inside
+ *  overflow-y:auto containers that are scrolled out of view). */
+async function scrollTo(page: Page, id: string) {
+  await page.evaluate((elId) => {
+    document.getElementById(elId)?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+  }, id);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -49,12 +58,11 @@ test.describe('Session persistence of analysis results', () => {
     await waitForAutoAnalysis(page);
 
     // Phase B: Run additional analyses
-    // Scroll the 3D Analysis section into view — it sits above the Tracks section
-    // which was scrolled into view by waitForAutoAnalysis, leaving it off-screen.
-    await page.locator('#analysis-content').scrollIntoViewIfNeeded();
+    // waitForAutoAnalysis scrolls the sidebar to the Tracks section; scroll
+    // back up to the 3D Analysis buttons before clicking them.
 
     // ICE normalization
-    await page.locator('#btn-normalize-ice').scrollIntoViewIfNeeded();
+    await scrollTo(page, 'btn-normalize-ice');
     await page.click('#btn-normalize-ice');
     await expect(
       page.locator('.toast').filter({ hasText: /ICE:/ }),
@@ -64,7 +72,7 @@ test.describe('Session persistence of analysis results', () => {
     });
 
     // Directionality
-    await page.locator('#btn-compute-directionality').scrollIntoViewIfNeeded();
+    await scrollTo(page, 'btn-compute-directionality');
     await page.click('#btn-compute-directionality');
     await expect(
       page.locator('.toast').filter({ hasText: /Directionality:/ }),
@@ -74,7 +82,7 @@ test.describe('Session persistence of analysis results', () => {
     );
 
     // Library Quality
-    await page.locator('#btn-compute-quality').scrollIntoViewIfNeeded();
+    await scrollTo(page, 'btn-compute-quality');
     await page.click('#btn-compute-quality');
     await expect(
       page.locator('.toast').filter({ hasText: /Library:/ }),
@@ -84,7 +92,7 @@ test.describe('Session persistence of analysis results', () => {
     );
 
     // Saddle Plot (button appears after compartments computed)
-    await page.locator('#btn-compute-saddle').scrollIntoViewIfNeeded();
+    await scrollTo(page, 'btn-compute-saddle');
     await page.click('#btn-compute-saddle');
     await expect(
       page.locator('.toast').filter({ hasText: /Saddle:/ }),
