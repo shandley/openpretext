@@ -247,6 +247,13 @@ export class TrackRenderer {
         break;
     }
 
+    // Track name label — top-left corner, semi-transparent
+    ctx.font = '9px -apple-system, system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    ctx.fillText(track.name, 4, trackTop + 2);
+
     ctx.restore();
   }
 
@@ -286,6 +293,17 @@ export class TrackRenderer {
         this.drawMarkersVertical(ctx, track, trackLeft, track.height, cam, w, h, textureSize);
         break;
     }
+
+    // Track name label — rotated 90° to read bottom-to-top along the left edge
+    ctx.save();
+    ctx.translate(trackLeft + track.height - 2, h * 0.15);
+    ctx.rotate(-Math.PI / 2);
+    ctx.font = '9px -apple-system, system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.textBaseline = 'bottom';
+    ctx.textAlign = 'left';
+    ctx.fillText(track.name, 0, 0);
+    ctx.restore();
 
     ctx.restore();
   }
