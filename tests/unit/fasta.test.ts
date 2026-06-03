@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { AppState, ContigInfo, MapData } from '../../src/core/State';
-import { parseFASTA } from '../../src/formats/FASTAParser';
+import { parseFASTA, parseFASTAStream } from '../../src/formats/FASTAParser';
 import type { FASTARecord } from '../../src/formats/FASTAParser';
 import {
   exportFASTA,
@@ -170,6 +170,104 @@ describe('FASTAParser', () => {
       expect(records[0].name).toBe('seq1');
       expect(records[0].description).toBe('multiple   spaces   here');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseFASTAStream tests
+// ---------------------------------------------------------------------------
+
+/** Build a ReadableStream<string> from an array of string chunks. */
+function makeStringStream(chunks: string[]): ReadableStream<string> {
+  return new ReadableStream<string>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
+    },
+  });
+}
+
+describe('parseFASTAStream', () => {
+  it('should parse two sequences delivered in one chunk', async () => {
+    const input = '>seq1 first\nATCGATCG\n>seq2 second\nGCTAGCTA\n';
+    const records = await parseFASTAStream(makeStringStream([input]));
+    expect(records.length).toBe(2);
+    expect(records[0].name).toBe('seq1');
+    expect(records[0].description).toBe('first');
+    expect(records[0].sequence).toBe('ATCGATCG');
+    expect(records[1].name).toBe('seq2');
+    expect(records[1].sequence).toBe('GCTAGCTA');
+  });
+
+  it('should handle chunk boundary in the middle of a line', async () => {
+    // Split mid-header and mid-sequence
+    const records = await parseFASTAStream(makeStringStream([
+      '>seq',
+      '1\nATCG',
+      'GCTA\n',
+    ]));
+    expect(records.length).toBe(1);
+    expect(records[0].name).toBe('seq1');
+    expect(records[0].sequence).toBe('ATCGGCTA');
+  });
+
+  it('should handle chunk boundary splitting a header line', async () => {
+    const records = await parseFASTAStream(makeStringStream([
+      '>seq1 desc',
+      'ription\nATCG\n',
+    ]));
+    expect(records.length).toBe(1);
+    expect(records[0].description).toBe('description');
+    expect(records[0].sequence).toBe('ATCG');
+  });
+
+  it('should handle one chunk per line', async () => {
+    const records = await parseFASTAStream(makeStringStream([
+      '>seq1\n', 'ATCG\n', 'GCTA\n',
+      '>seq2\n', 'TTTT\n',
+    ]));
+    expect(records.length).toBe(2);
+    expect(records[0].sequence).toBe('ATCGGCTA');
+    expect(records[1].sequence).toBe('TTTT');
+  });
+
+  it('should handle CRLF line endings across chunks', async () => {
+    const records = await parseFASTAStream(makeStringStream([
+      '>seq1\r\nATCG\r\nGCTA\r\n',
+    ]));
+    expect(records.length).toBe(1);
+    expect(records[0].sequence).toBe('ATCGGCTA');
+  });
+
+  it('should skip comment lines and blank lines', async () => {
+    const input = '; comment\n\n>seq1\nATCG\n\n; mid\nGCTA\n';
+    const records = await parseFASTAStream(makeStringStream([input]));
+    expect(records.length).toBe(1);
+    expect(records[0].sequence).toBe('ATCGGCTA');
+  });
+
+  it('should return empty array for empty stream', async () => {
+    const records = await parseFASTAStream(makeStringStream([]));
+    expect(records).toEqual([]);
+  });
+
+  it('should finalize last record even without trailing newline', async () => {
+    const records = await parseFASTAStream(makeStringStream(['>seq1\nATCG']));
+    expect(records.length).toBe(1);
+    expect(records[0].sequence).toBe('ATCG');
+  });
+
+  it('produces same result as parseFASTA for identical input', async () => {
+    const input = [
+      '>chr1 chromosome 1',
+      'ATCGATCGATCG',
+      'GGGGCCCCTTTT',
+      '>chr2',
+      'NNNNNNNN',
+    ].join('\n');
+    const expected = parseFASTA(input);
+    const actual = await parseFASTAStream(makeStringStream([input]));
+    expect(actual).toEqual(expected);
   });
 });
 

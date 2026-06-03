@@ -39,6 +39,13 @@ vi.mock('../../src/io/SessionManager', () => ({
 
 vi.mock('../../src/formats/FASTAParser', () => ({
   parseFASTA: vi.fn(() => []),
+  parseFASTAStream: vi.fn(async () => []),
+}));
+
+vi.mock('../../src/ui/LoadingOverlay', () => ({
+  showLoading: vi.fn(),
+  updateLoading: vi.fn(),
+  hideLoading: vi.fn(),
 }));
 
 vi.mock('../../src/formats/BedGraphParser', () => ({
@@ -85,7 +92,8 @@ import { downloadBED } from '../../src/export/BEDWriter';
 import { downloadFASTA } from '../../src/export/FASTAWriter';
 import { downloadSnapshot } from '../../src/export/SnapshotExporter';
 import { exportSession, importSession, downloadSession } from '../../src/io/SessionManager';
-import { parseFASTA } from '../../src/formats/FASTAParser';
+import { parseFASTA, parseFASTAStream } from '../../src/formats/FASTAParser';
+import { showLoading, updateLoading, hideLoading } from '../../src/ui/LoadingOverlay';
 import { parseBedGraph, bedGraphToTrack } from '../../src/formats/BedGraphParser';
 import { syncColormapDropdown, syncGammaSlider } from '../../src/ui/ColorMapControls';
 import { rebuildContigBoundaries } from '../../src/ui/EventWiring';
@@ -150,7 +158,15 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
 function fakeFile(name: string, content: string): File {
   return {
     name,
+    size: new TextEncoder().encode(content).byteLength,
     text: vi.fn(async () => content),
+    arrayBuffer: vi.fn(async () => new TextEncoder().encode(content).buffer),
+    stream: vi.fn(() => new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(content));
+        controller.close();
+      },
+    })),
   } as unknown as File;
 }
 
@@ -730,46 +746,77 @@ describe('ExportSession', () => {
   // loadReferenceFasta
   // =========================================================================
   describe('loadReferenceFasta', () => {
-    it('should parse FASTA text, store sequences on ctx, and show success toast', async () => {
+    it('should stream-parse a plain FASTA file, store sequences, and show success toast', async () => {
       const records = [
         { name: 'chr1', description: '', sequence: 'ATCG' },
         { name: 'chr2', description: '', sequence: 'GCTA' },
       ];
-      (parseFASTA as ReturnType<typeof vi.fn>).mockReturnValue(records);
+      (parseFASTAStream as ReturnType<typeof vi.fn>).mockResolvedValue(records);
       const ctx = createMockCtx();
       const file = fakeFile('ref.fasta', '>chr1\nATCG\n>chr2\nGCTA');
 
       await loadReferenceFasta(ctx, file);
 
-      expect(parseFASTA).toHaveBeenCalledWith('>chr1\nATCG\n>chr2\nGCTA');
+      expect(parseFASTAStream).toHaveBeenCalled();
       expect(ctx.referenceSequences).toBeInstanceOf(Map);
       expect(ctx.referenceSequences!.get('chr1')).toBe('ATCG');
       expect(ctx.referenceSequences!.get('chr2')).toBe('GCTA');
       expect(ctx.showToast).toHaveBeenCalledWith('Loaded 2 reference sequences');
     });
 
+    it('should warn when no sequences are found in the file', async () => {
+      (parseFASTAStream as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      const ctx = createMockCtx();
+      const file = fakeFile('empty.fasta', '');
+
+      await loadReferenceFasta(ctx, file);
+
+      expect(ctx.showToast).toHaveBeenCalledWith(
+        'No sequences found in empty.fasta — is this a valid FASTA file?',
+      );
+      expect(ctx.referenceSequences).toBeNull();
+    });
+
+    it('should reject oversized gzip files with a helpful message', async () => {
+      const ctx = createMockCtx();
+      const bigGzipFile = { name: 'genome.fa.gz', size: 600 * 1024 * 1024 } as unknown as File;
+
+      await loadReferenceFasta(ctx, bigGzipFile);
+
+      expect(ctx.showToast).toHaveBeenCalledWith(
+        expect.stringContaining('Gzip FASTA files larger than 500 MB'),
+      );
+    });
+
     it('should catch parse errors and show failure toast with message', async () => {
-      (parseFASTA as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        throw new Error('Invalid FASTA format');
-      });
+      (parseFASTAStream as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('stream error'));
       const ctx = createMockCtx();
       const file = fakeFile('bad.fasta', 'garbage');
 
       await loadReferenceFasta(ctx, file);
 
-      expect(ctx.showToast).toHaveBeenCalledWith('FASTA load failed: Invalid FASTA format');
+      expect(ctx.showToast).toHaveBeenCalledWith('FASTA load failed: stream error');
     });
 
     it('should show generic error for non-Error throws', async () => {
-      (parseFASTA as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        throw 42;
-      });
+      (parseFASTAStream as ReturnType<typeof vi.fn>).mockRejectedValue(42);
       const ctx = createMockCtx();
       const file = fakeFile('bad.fasta', 'garbage');
 
       await loadReferenceFasta(ctx, file);
 
       expect(ctx.showToast).toHaveBeenCalledWith('FASTA load failed: Unknown error');
+    });
+
+    it('should show and hide the loading overlay', async () => {
+      (parseFASTAStream as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      const ctx = createMockCtx();
+      const file = fakeFile('ref.fasta', '');
+
+      await loadReferenceFasta(ctx, file);
+
+      expect(showLoading).toHaveBeenCalledWith('Loading FASTA', 'Reading file...');
+      expect(hideLoading).toHaveBeenCalled();
     });
   });
 
@@ -810,7 +857,7 @@ describe('ExportSession', () => {
       mockGetElementById.mockReturnValue(mockInput);
 
       const records = [{ name: 'chr1', description: '', sequence: 'ATCG' }];
-      (parseFASTA as ReturnType<typeof vi.fn>).mockReturnValue(records);
+      (parseFASTAStream as ReturnType<typeof vi.fn>).mockResolvedValue(records);
       const ctx = createMockCtx();
 
       setupFastaUpload(ctx);
@@ -819,7 +866,7 @@ describe('ExportSession', () => {
       const changeHandler = (mockInput.addEventListener as ReturnType<typeof vi.fn>).mock.calls[0][1];
       await changeHandler();
 
-      expect(parseFASTA).toHaveBeenCalled();
+      expect(parseFASTAStream).toHaveBeenCalled();
       expect(mockInput.value).toBe('');
     });
 

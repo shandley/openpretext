@@ -8,7 +8,7 @@ import { state } from '../core/State';
 import { downloadAGP } from '../export/AGPWriter';
 import { downloadBED } from '../export/BEDWriter';
 import { downloadFASTA } from '../export/FASTAWriter';
-import { parseFASTA } from '../formats/FASTAParser';
+import { parseFASTA, parseFASTAStream } from '../formats/FASTAParser';
 import { parseBedGraph, bedGraphToTrack } from '../formats/BedGraphParser';
 import { downloadSnapshot } from '../export/SnapshotExporter';
 import { exportSession, importSession, downloadSession } from '../io/SessionManager';
@@ -17,6 +17,8 @@ import type { ColorMapName } from '../renderer/ColorMaps';
 import { syncColormapDropdown, syncGammaSlider } from './ColorMapControls';
 import { rebuildContigBoundaries } from './EventWiring';
 import { exportAnalysisState, restoreAnalysisState } from './AnalysisPanel';
+import { inflate } from 'pako';
+import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 
 export function exportAGP(ctx: AppContext): void {
   const s = state.get();
@@ -179,18 +181,75 @@ export function exportFASTAFile(ctx: AppContext): void {
   }
 }
 
+// 500 MB compressed size guard for gzip FASTA files
+const GZIP_SIZE_LIMIT = 500 * 1024 * 1024;
+
 export async function loadReferenceFasta(ctx: AppContext, file: File): Promise<void> {
+  const isGzip = file.name.toLowerCase().endsWith('.gz');
+  showLoading('Loading FASTA', 'Reading file...');
   try {
-    const text = await file.text();
-    const records = parseFASTA(text);
-    ctx.referenceSequences = new Map(records.map(r => [r.name, r.sequence]));
-    ctx.showToast(`Loaded ${records.length} reference sequences`);
-    // Update FASTA hint in analysis panel
-    const { updateFastaHint } = await import('./AnalysisPanel');
-    updateFastaHint(ctx);
+    let records;
+
+    if (isGzip) {
+      if (file.size > GZIP_SIZE_LIMIT) {
+        hideLoading();
+        ctx.showToast(
+          `Gzip FASTA files larger than 500 MB are not supported — decompress first with: gunzip ${file.name}`,
+        );
+        return;
+      }
+      updateLoading('Decompressing gzip FASTA...', 20);
+      const buffer = await file.arrayBuffer();
+      updateLoading('Decompressing gzip FASTA...', 50);
+      const decompressed = inflate(new Uint8Array(buffer));
+      updateLoading('Parsing sequences...', 75);
+      const text = new TextDecoder().decode(decompressed);
+      records = parseFASTA(text);
+    } else {
+      // Stream line-by-line to avoid V8's ~1 GB string length limit on large files
+      updateLoading('Parsing FASTA sequences...', 10);
+      const totalBytes = file.size;
+      let bytesRead = 0;
+      let lastPct = 10;
+
+      const rawStream = file.stream();
+      const progressStream = new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          bytesRead += chunk.byteLength;
+          const pct = totalBytes > 0 ? Math.round(10 + (bytesRead / totalBytes) * 85) : lastPct;
+          if (pct !== lastPct) {
+            lastPct = pct;
+            const mb = (bytesRead / 1_048_576).toFixed(0);
+            const total = (totalBytes / 1_048_576).toFixed(0);
+            updateLoading(`Parsing FASTA... ${mb} / ${total} MB`, pct);
+          }
+          controller.enqueue(chunk);
+        },
+      });
+
+      // TextDecoderStream.writable is WritableStream<BufferSource>, but TypeScript's
+      // DOM types don't consider it assignable to WritableStream<Uint8Array>.
+      // The cast is safe: Uint8Array is a BufferSource.
+      const textStream = rawStream
+        .pipeThrough(progressStream)
+        .pipeThrough(new TextDecoderStream() as unknown as TransformStream<Uint8Array, string>);
+
+      records = await parseFASTAStream(textStream);
+    }
+
+    if (records.length === 0) {
+      ctx.showToast(`No sequences found in ${file.name} — is this a valid FASTA file?`);
+    } else {
+      ctx.referenceSequences = new Map(records.map(r => [r.name, r.sequence]));
+      ctx.showToast(`Loaded ${records.length} reference sequences`);
+      const { updateFastaHint } = await import('./AnalysisPanel');
+      updateFastaHint(ctx);
+    }
   } catch (err) {
     console.error('FASTA parse error:', err);
     ctx.showToast(`FASTA load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  } finally {
+    hideLoading();
   }
 }
 

@@ -89,3 +89,66 @@ export function parseFASTA(text: string): FASTARecord[] {
 
   return records;
 }
+
+/**
+ * Stream-parse FASTA from a ReadableStream<string>.
+ *
+ * Processes data chunk-by-chunk without loading the full file into memory.
+ * Use this for large FASTA files where file.text() would exceed V8's string
+ * length limit (~1GB) or exhaust available RAM.
+ *
+ * @param stream - A ReadableStream of decoded text chunks
+ * @returns An array of parsed FASTA records
+ */
+export async function parseFASTAStream(stream: ReadableStream<string>): Promise<FASTARecord[]> {
+  const records: FASTARecord[] = [];
+  let currentName = '';
+  let currentDescription = '';
+  let seqChunks: string[] = [];
+  let inRecord = false;
+  let leftover = '';
+
+  function finalizeCurrent(): void {
+    if (inRecord && currentName) {
+      records.push({ name: currentName, description: currentDescription, sequence: seqChunks.join('') });
+      seqChunks = [];
+    }
+  }
+
+  function processLine(raw: string): void {
+    const line = raw.trim();
+    if (line.length === 0 || line.startsWith(';')) return;
+
+    if (line.startsWith('>')) {
+      finalizeCurrent();
+      inRecord = true;
+      const header = line.substring(1).trim();
+      const ws = header.search(/\s/);
+      currentName = ws === -1 ? header : header.substring(0, ws);
+      currentDescription = ws === -1 ? '' : header.substring(ws).trim();
+      seqChunks = [];
+    } else if (inRecord) {
+      seqChunks.push(line.replace(/\s/g, ''));
+    }
+  }
+
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      const text = leftover + (value ?? '');
+      const lines = text.split(/\r?\n/);
+      // Keep the last (potentially incomplete) line in leftover unless stream ended
+      leftover = done ? '' : (lines.pop() ?? '');
+      for (const line of lines) processLine(line);
+      if (done) break;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (leftover) processLine(leftover);
+  finalizeCurrent();
+
+  return records;
+}
