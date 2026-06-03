@@ -6,6 +6,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Track name labels on canvas** — each analysis track now shows its name as a
+  semi-transparent label on the top-edge (horizontal) and left-edge (rotated 90°)
+  overlays, so tracks are identifiable without opening the sidebar config panel
+- **Pattern Gallery discoverability** — "Pattern Gallery" link added to welcome
+  screen hints row alongside Workflow Guide; steps 1-4 of the misassembly
+  detection tutorial now include an inline "Open Pattern Gallery →" button;
+  `showPatternGallery` field added to LessonStep schema
+- **FASTA streaming parser** — `parseFASTAStream()` in FASTAParser.ts processes
+  large files line-by-line via the Streams API, avoiding V8's ~1 GB string limit
+  that caused silent 0-sequence results on 2+ GB FASTA files (issue #53). Gzip
+  FASTA files (.fa.gz) now decompressed with pako; files >500 MB compressed show
+  a clear error. Loading overlay shows byte progress. 9 new unit tests.
+- **Export respects contig exclusion** — AGP, BED, and FASTA exporters now call
+  `contigExclusion.getIncludedOrder()` so contigs marked EXC are omitted from all
+  exported files. 4 new unit tests.
+
+### Fixed
+- Lesson 03 ("Detecting Misassembly Patterns") hardcoded "finch genome" references
+  in step text — replaced with "the assembly" so the tutorial reads correctly
+  regardless of what dataset is loaded
+- E2E session-persistence test flakiness — `waitForFunction(!el.disabled)` before
+  each analysis button click handles the ICE post-processing race (ICE re-runs
+  compartments + P(s) after showing its toast, keeping buttons disabled). Native
+  `el.click()` via `page.evaluate` bypasses Playwright's strict visibility
+  requirement for elements in overflow-y:auto containers. Timeout raised to 150s.
+
+### Changed
+- TypeScript 5.9.3 → 6.0.3; removed unused `baseUrl` and `@/*` path alias from
+  tsconfig.json (deprecated in TS 6.0, never referenced in source)
+- vite 8.0.1 → 8.0.16, vitest 4.1.0 → 4.1.8, @vitest/coverage-v8 4.1.0 → 4.1.8,
+  @playwright/test 1.58.2 → 1.60.0, @types/node 25.5.0 → 25.9.1
+- CI actions: upload-pages-artifact v4 → v5, deploy-pages v4 → v5
+
+### Added
 - **Evo2HiC resolution enhancement** — ML-powered Hi-C contact map enhancement
   using the Evo2HiC foundation model (81M parameters, 177 species). Optional
   companion FastAPI server with real model weights or mock inference. Toggle
