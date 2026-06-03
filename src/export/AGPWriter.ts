@@ -18,6 +18,7 @@
  */
 
 import type { AppState, ContigInfo } from '../core/State';
+import { contigExclusion } from '../curation/ContigExclusion';
 
 /** Configuration for AGP export. */
 export interface AGPExportOptions {
@@ -212,7 +213,7 @@ export function exportAGP(
   }
 
   const contigs = appState.map.contigs;
-  const contigOrder = appState.contigOrder;
+  const contigOrder = contigExclusion.getIncludedOrder(appState.contigOrder);
 
   if (contigOrder.length === 0) {
     throw new Error('Cannot export AGP: contig order is empty');

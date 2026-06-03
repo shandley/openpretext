@@ -13,6 +13,7 @@
  */
 
 import type { AppState } from '../core/State';
+import { contigExclusion } from '../curation/ContigExclusion';
 
 /** Configuration for FASTA export. */
 export interface FASTAExportOptions {
@@ -102,7 +103,7 @@ export function exportFASTA(
   }
 
   const contigs = appState.map.contigs;
-  const contigOrder = appState.contigOrder;
+  const contigOrder = contigExclusion.getIncludedOrder(appState.contigOrder);
 
   if (contigOrder.length === 0) {
     throw new Error('Cannot export FASTA: contig order is empty');

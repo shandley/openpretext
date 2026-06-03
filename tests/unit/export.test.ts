@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { AppState, ContigInfo, MapData } from '../../src/core/State';
 import {
   exportAGP,
@@ -6,6 +6,9 @@ import {
   buildScaffoldAGPLines,
   formatAGPLine,
 } from '../../src/export/AGPWriter';
+import { exportBED } from '../../src/export/BEDWriter';
+import { exportFASTA } from '../../src/export/FASTAWriter';
+import { contigExclusion } from '../../src/curation/ContigExclusion';
 import {
   CurationLog,
   takeSnapshot,
@@ -868,5 +871,87 @@ describe('CurationLog', () => {
       expect(result.finalState.contigOrder).toEqual([2, 0, 1]);
       expect(result.finalState.map!.contigs[1].inverted).toBe(true);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contig exclusion in exports
+// ---------------------------------------------------------------------------
+
+describe('Excluded contigs are omitted from all export formats', () => {
+  const contigs: ContigInfo[] = [
+    { name: 'ctg1', originalIndex: 0, length: 1000, pixelStart: 0, pixelEnd: 10, inverted: false, scaffoldId: null },
+    { name: 'ctg2', originalIndex: 1, length: 2000, pixelStart: 10, pixelEnd: 30, inverted: false, scaffoldId: null },
+    { name: 'ctg3', originalIndex: 2, length: 500,  pixelStart: 30, pixelEnd: 35, inverted: false, scaffoldId: null },
+  ];
+
+  const appState: AppState = {
+    map: {
+      filename: 'test.pretext',
+      textureSize: 100,
+      numMipMaps: 1,
+      tileResolution: 100,
+      tilesPerDimension: 1,
+      contigs,
+      contactMap: null,
+      rawTiles: null,
+      parsedHeader: null,
+      extensions: new Map(),
+    },
+    contigOrder: [0, 1, 2],
+    mode: 'navigate',
+    showGrid: true,
+    showTooltip: true,
+    showIdBar: false,
+    visibleTracks: new Set(),
+    colorMapName: 'red-white',
+    gamma: 0.35,
+    selectedContigs: new Set(),
+    camera: { x: 0, y: 0, zoom: 1 },
+    undoStack: [],
+    redoStack: [],
+  };
+
+  afterEach(() => {
+    contigExclusion.clearAll();
+  });
+
+  it('AGP omits excluded contigs', () => {
+    contigExclusion.set(1, true); // exclude ctg2
+
+    const agp = exportAGP(appState);
+    expect(agp).toContain('ctg1');
+    expect(agp).toContain('ctg3');
+    expect(agp).not.toContain('ctg2');
+  });
+
+  it('BED omits excluded contigs', () => {
+    contigExclusion.set(1, true); // exclude ctg2
+
+    const bed = exportBED(appState);
+    expect(bed).toContain('ctg1');
+    expect(bed).toContain('ctg3');
+    expect(bed).not.toContain('ctg2');
+  });
+
+  it('FASTA omits excluded contigs', () => {
+    contigExclusion.set(1, true); // exclude ctg2
+
+    const sequences = new Map([
+      ['ctg1', 'AAAA'],
+      ['ctg2', 'CCCC'],
+      ['ctg3', 'TTTT'],
+    ]);
+    const fasta = exportFASTA(appState, sequences);
+    expect(fasta).toContain('>ctg1');
+    expect(fasta).toContain('>ctg3');
+    expect(fasta).not.toContain('>ctg2');
+  });
+
+  it('exports include all contigs when nothing is excluded', () => {
+    const agp = exportAGP(appState);
+    expect(agp).toContain('ctg1');
+    expect(agp).toContain('ctg2');
+    expect(agp).toContain('ctg3');
   });
 });

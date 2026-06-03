@@ -17,6 +17,7 @@
 
 import type { AppState, ContigInfo } from '../core/State';
 import { groupContigsByScaffold } from './AGPWriter';
+import { contigExclusion } from '../curation/ContigExclusion';
 
 /** Configuration for BED export. */
 export interface BEDExportOptions {
@@ -112,7 +113,7 @@ export function exportBED(
   }
 
   const contigs = appState.map.contigs;
-  const contigOrder = appState.contigOrder;
+  const contigOrder = contigExclusion.getIncludedOrder(appState.contigOrder);
 
   if (contigOrder.length === 0) {
     throw new Error('Cannot export BED: contig order is empty');
