@@ -1,0 +1,4 @@
+assembly	unique k-mers	common k-mers	QV	error rate
+assembly_01	41509	1016482284	57.1117	1.94461e-06
+assembly_02	39199	1054998346	57.5219	1.76934e-06
+Both	80708	2071480630	57.3158	1.85534e-06
