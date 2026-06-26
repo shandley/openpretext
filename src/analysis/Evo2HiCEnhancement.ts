@@ -6,25 +6,14 @@
  * No DOM or network dependencies.
  */
 
-/** Encode a Float32Array contact map to a base64 string. */
-export function encodeContactMap(map: Float32Array): string {
-  const bytes = new Uint8Array(map.buffer, map.byteOffset, map.byteLength);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
-/** Decode a base64 string back to a Float32Array contact map. */
-export function decodeContactMap(base64: string, size: number): Float32Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  const result = new Float32Array(bytes.buffer);
-  if (result.length !== size * size) {
-    throw new Error(`Expected ${size * size} floats, got ${result.length}`);
-  }
-  return result;
-}
+// Base64 <-> Float32Array codecs live in MLCodec (shared across ML backends);
+// re-exported here for backward compatibility with existing importers.
+export {
+  encodeContactMap,
+  decodeContactMap,
+  encodeFloat32Array,
+  decodeFloat32Array,
+} from './MLCodec';
 
 /** Bilinear downscale of a square matrix using area averaging. */
 export function downscaleMap(
@@ -67,19 +56,6 @@ export function downscaleMap(
     }
   }
   return result;
-}
-
-/** Decode a base64 string to a Float32Array of arbitrary length (no size*size check). */
-export function decodeFloat32Array(base64: string): Float32Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Float32Array(bytes.buffer);
-}
-
-/** Encode a Float32Array to a base64 string (alias for encodeContactMap). */
-export function encodeFloat32Array(arr: Float32Array): string {
-  return encodeContactMap(arr);
 }
 
 import type { TrackConfig } from '../renderer/TrackRenderer';

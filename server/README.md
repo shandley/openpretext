@@ -26,6 +26,34 @@ uv run evo2hic-server
 
 The server starts on `http://localhost:8000`.
 
+## HiCFoundation backend (mock, Phase 0)
+
+An alternate **Hi-C-only** ML backend ([HiCFoundation](https://github.com/Noble-Lab/HiCFoundation)),
+mirroring the `/api/v1/enhance` and `/api/v1/predict-tracks` contracts so it is
+interchangeable with Evo2HiC on the client. It ships mock inference (Gaussian
+denoise + bicubic upscale; synthetic tracks) and runs with the same dependencies
+— no extra install, no GPU, no weights.
+
+```bash
+cd server
+uv sync
+uv run hicfoundation-server          # serves on http://localhost:8001
+# or, without the console script:
+uv run uvicorn hicfoundation_server.main:app --host 0.0.0.0 --port 8001
+```
+
+Smoke test:
+
+```bash
+curl -s http://localhost:8001/api/v1/health
+# {"status":"ok","model_loaded":true,"device":"cpu","model_version":"hicfoundation-mock-0.1.0"}
+```
+
+In OpenPretext, point the analysis ML backend at `http://localhost:8001`
+(client: `src/analysis/HiCFoundationClient.ts`). Real HiCFoundation weights
+(`HICFOUNDATION_CHECKPOINT`) and the embedding/anomaly/junction endpoints are
+later phases — see the integration plan.
+
 ## Running with Real Model Weights
 
 ### 1. Clone the Evo2HiC repository
