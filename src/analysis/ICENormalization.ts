@@ -83,8 +83,9 @@ export function filterLowCoverageBins(
   const n = rowSums.length;
   if (n === 0) return [];
 
-  // Sort row sums to find the quantile threshold
-  const sorted = Array.from(rowSums).sort((a, b) => a - b);
+  // Sort row sums to find the quantile threshold. Copy + typed-array sort
+  // (numeric by default) avoids boxing into a JS number[] with a comparator.
+  const sorted = rowSums.slice().sort();
   const idx = Math.min(Math.floor(quantile * n), n - 1);
   const threshold = sorted[idx];
 
@@ -205,23 +206,21 @@ export function computeICENormalization(
     };
   }
 
-  // Sanitize NaN/Infinity values in input
-  const sanitized = Float32Array.from(contactMap);
-  for (let i = 0; i < sanitized.length; i++) {
-    if (!isFinite(sanitized[i])) sanitized[i] = 0;
+  // Single working copy: sanitize NaN/Infinity in place (one full-matrix copy
+  // instead of two — the result matrix is balanced in place below).
+  const normalizedMatrix = Float32Array.from(contactMap);
+  for (let i = 0; i < normalizedMatrix.length; i++) {
+    if (!isFinite(normalizedMatrix[i])) normalizedMatrix[i] = 0;
   }
 
-  // Step 1: Row sums
-  const rowSums = computeRowSums(sanitized, size);
+  // Step 1: Row sums (on sanitized values, before masking)
+  const rowSums = computeRowSums(normalizedMatrix, size);
 
   // Step 2: Filter low-coverage bins
   const maskedBins = filterLowCoverageBins(rowSums, p.sparseFilterQuantile);
   const maskedSet = new Set(maskedBins);
 
-  // Step 3: Copy sanitized matrix and run Sinkhorn-Knopp
-  const normalizedMatrix = Float32Array.from(sanitized);
-
-  // Zero out masked bins in the copy
+  // Step 3: Zero out masked bins, then run Sinkhorn-Knopp in place
   for (const bin of maskedBins) {
     for (let j = 0; j < size; j++) {
       normalizedMatrix[bin * size + j] = 0;

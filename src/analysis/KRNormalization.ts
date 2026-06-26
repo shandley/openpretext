@@ -157,23 +157,21 @@ export function computeKRNormalization(
     };
   }
 
-  // Sanitize NaN/Infinity values in input
-  const sanitized = Float32Array.from(contactMap);
-  for (let i = 0; i < sanitized.length; i++) {
-    if (!isFinite(sanitized[i])) sanitized[i] = 0;
+  // Single working copy: sanitize NaN/Infinity in place (one full-matrix copy
+  // instead of two — the result matrix is balanced in place below).
+  const normalizedMatrix = Float32Array.from(contactMap);
+  for (let i = 0; i < normalizedMatrix.length; i++) {
+    if (!isFinite(normalizedMatrix[i])) normalizedMatrix[i] = 0;
   }
 
-  // Step 1: Row sums
-  const rowSums = computeRowSums(sanitized, size);
+  // Step 1: Row sums (on sanitized values, before masking)
+  const rowSums = computeRowSums(normalizedMatrix, size);
 
   // Step 2: Filter low-coverage bins
   const maskedBins = filterLowCoverageBins(rowSums, p.sparseFilterQuantile);
   const maskedSet = new Set(maskedBins);
 
-  // Step 3: Copy sanitized matrix and run Knight-Ruiz
-  const normalizedMatrix = Float32Array.from(sanitized);
-
-  // Zero out masked bins in the copy
+  // Step 3: Zero out masked bins, then run Knight-Ruiz in place
   for (const bin of maskedBins) {
     for (let j = 0; j < size; j++) {
       normalizedMatrix[bin * size + j] = 0;

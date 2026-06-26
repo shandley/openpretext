@@ -359,9 +359,7 @@ export function scoreCutConfidence(
       continue;
     }
 
-    // Convert suggestion's pixel offset back to overview pixel
-    const contigFraction = suggestion.pixelOffset / Math.max(1, suggestion.strength); // approximate
-    // Use flag map with nearby matching
+    // Match this suggestion to a flag at the same order index, nearest by pixel.
     let matchedFlag: MisassemblyFlag | undefined;
     for (const f of flags) {
       if (f.orderIndex === suggestion.orderIndex) {
