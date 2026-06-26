@@ -240,7 +240,8 @@ describe('Feature Integration', () => {
     });
 
     it('should return empty array when all are excluded', () => {
-      contigExclusion.excludeMany([0, 1, 2]);
+      // Exclusion is keyed by contig ID, so exclude the IDs that are in the order.
+      contigExclusion.excludeMany([10, 20, 30]);
 
       const included = contigExclusion.getIncludedOrder([10, 20, 30]);
       expect(included).toEqual([]);

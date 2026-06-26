@@ -89,14 +89,16 @@ export function joinSelectedContigs(ctx: AppContext): void {
 
 export function toggleContigExclusion(ctx: AppContext): void {
   if (ctx.currentMode !== 'edit') return;
+  const order = state.get().contigOrder;
   const selected = SelectionManager.getSelectedIndices();
   if (selected.length > 0) {
+    // Exclusion is keyed by contig identity, so map order positions to IDs.
     for (const idx of selected) {
-      contigExclusion.toggle(idx);
+      contigExclusion.toggle(order[idx]);
     }
     ctx.showToast(`Toggled exclusion on ${selected.length} contig(s)`);
   } else if (ctx.hoveredContigIndex >= 0) {
-    const wasExcluded = contigExclusion.toggle(ctx.hoveredContigIndex);
+    const wasExcluded = contigExclusion.toggle(order[ctx.hoveredContigIndex]);
     ctx.showToast(wasExcluded ? 'Contig excluded' : 'Contig included');
   } else {
     ctx.showToast('Hover or select contigs to exclude');

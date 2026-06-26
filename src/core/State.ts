@@ -11,6 +11,15 @@
 
 import type { PretextHeader } from '../formats/PretextParser';
 
+/**
+ * Maximum number of operations retained in the undo stack. When this is
+ * exceeded, the oldest operations are dropped so memory does not grow
+ * unbounded over a long editing session. Each operation is independent
+ * (it stores its own reverse data), so dropping the oldest is safe — the
+ * user simply cannot undo past this depth.
+ */
+const MAX_UNDO_DEPTH = 200;
+
 export interface ContigInfo {
   name: string;
   originalIndex: number;
@@ -201,9 +210,16 @@ class StateManager {
         data: { ...op.data, ...this.batchContext.metadata },
       };
     }
+    const grownUndoStack = [...this.state.undoStack, finalOp];
+    // Cap the undo stack to bound memory growth. Undo pops from the end
+    // (most recent), so drop the oldest entries from the front.
+    const cappedUndoStack =
+      grownUndoStack.length > MAX_UNDO_DEPTH
+        ? grownUndoStack.slice(-MAX_UNDO_DEPTH)
+        : grownUndoStack;
     this.state = {
       ...this.state,
-      undoStack: [...this.state.undoStack, finalOp],
+      undoStack: cappedUndoStack,
       redoStack: [],
     };
     this.notify();

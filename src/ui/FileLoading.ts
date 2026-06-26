@@ -6,12 +6,19 @@ import type { AppContext } from './AppContext';
 import type { SpecimenEntry } from '../data/SpecimenCatalog';
 import { state } from '../core/State';
 import { events } from '../core/EventBus';
-import { parsePretextFile, isPretextFile, tileLinearIndex } from '../formats/PretextParser';
+import { isPretextFile } from '../formats/PretextParser';
+import { ParseWorkerClient } from '../formats/ParseWorkerClient';
 import { generateSyntheticMap } from '../formats/SyntheticData';
 import { generateDemoTracks } from '../formats/SyntheticTracks';
 import { TileManager } from '../renderer/TileManager';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 import { loadSession, loadReferenceFasta, loadBedGraphTrack } from './ExportSession';
+
+// Reused across loads; created lazily so the worker only spins up when needed.
+let parseClient: ParseWorkerClient | null = null;
+function getParseClient(): ParseWorkerClient {
+  return (parseClient ??= new ParseWorkerClient());
+}
 
 async function loadPretextFromBuffer(
   ctx: AppContext,
@@ -26,48 +33,14 @@ async function loadPretextFromBuffer(
     return;
   }
 
-  updateLoading('Parsing header and metadata...', 20);
-  const parsed = await parsePretextFile(buffer, { coarsestOnly: true });
+  // Parse + assemble the overview off the main thread (no UI freeze on big files).
+  const parsed = await getParseClient().parse(buffer, (message, percent) => {
+    updateLoading(message, percent);
+  });
   const h = parsed.header;
-  const mapSize = h.numberOfPixels1D;
-
-  updateLoading('Assembling contact map...', 50);
-
-  const N = h.numberOfTextures1D;
-  const coarsestMip = h.mipMapLevels - 1;
-  const coarsestRes = h.textureResolution >> coarsestMip;
-  const overviewSize = N * coarsestRes;
-  const contactMap = new Float32Array(overviewSize * overviewSize);
-  const totalTiles = (N * (N + 1)) / 2;
-  let tilesDone = 0;
-
-  for (let tx = 0; tx < N; tx++) {
-    for (let ty = tx; ty < N; ty++) {
-      const linIdx = tileLinearIndex(tx, ty, N);
-      const tileData = parsed.tilesDecoded[linIdx]?.[coarsestMip];
-      if (!tileData) { tilesDone++; continue; }
-
-      for (let py = 0; py < coarsestRes; py++) {
-        for (let px = 0; px < coarsestRes; px++) {
-          const val = tileData[py * coarsestRes + px];
-          const gx = tx * coarsestRes + px;
-          const gy = ty * coarsestRes + py;
-          if (gx < overviewSize && gy < overviewSize) {
-            contactMap[gy * overviewSize + gx] = val;
-            contactMap[gx * overviewSize + gy] = val;
-          }
-        }
-      }
-
-      tilesDone++;
-      if (tilesDone % Math.max(1, Math.floor(totalTiles / 20)) === 0) {
-        updateLoading(
-          `Assembling tiles... (${tilesDone}/${totalTiles})`,
-          50 + Math.round((tilesDone / totalTiles) * 40),
-        );
-      }
-    }
-  }
+  const mapSize = parsed.mapSize;
+  const overviewSize = parsed.overviewSize;
+  const contactMap = parsed.overview;
 
   updateLoading('Uploading to GPU...', 92);
   ctx.renderer.uploadContactMap(contactMap, overviewSize);

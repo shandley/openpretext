@@ -30,9 +30,11 @@ vi.mock('../../src/curation/ContigExclusion', () => ({
 
 vi.mock('../../src/core/State', () => ({
   state: {
+    // Identity contigOrder so order positions map 1:1 to contig IDs in tests
+    // (exclusion is keyed by contig ID, mapped via state.get().contigOrder).
     get: vi.fn(() => ({
       map: null,
-      contigOrder: [],
+      contigOrder: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
       selectedContigs: new Set(),
     })),
   },
@@ -380,6 +382,16 @@ describe('CurationActions', () => {
   // toggleContigExclusion
   // -------------------------------------------------------------------------
   describe('toggleContigExclusion', () => {
+    beforeEach(() => {
+      // Pin an identity contigOrder so positions map 1:1 to contig IDs
+      // (clearAllMocks does not reset a prior test's state.get mockReturnValue).
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: null,
+        contigOrder: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        selectedContigs: new Set(),
+      });
+    });
+
     it('should be a no-op when not in edit mode', () => {
       const ctx = createMockCtx({ currentMode: 'navigate' });
 

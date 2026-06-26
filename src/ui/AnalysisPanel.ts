@@ -2580,13 +2580,19 @@ async function triggerAutoRecompute(ctx: AppContext): Promise<void> {
   showRecomputingIndicator(true);
 
   const hadInsulation = cachedInsulation !== null;
+  // Misassembly detection combines insulation + the compartment eigenvector.
+  // Auto-recompute normally skips compartments (expensive), but if misassembly
+  // flags are in use we must refresh compartments too — otherwise detection runs
+  // on a stale (pre-reorder) eigenvector and produces wrong flags.
+  const misassemblyActive = misassemblyFlags.getFlaggedCount() > 0;
   const tasks: Promise<void>[] = [];
   if (cachedInsulation) tasks.push(runInsulation(ctx));
   if (cachedDecay) tasks.push(runDecay(ctx));
   if (cachedDI) tasks.push(runDirectionality(ctx));
+  if (misassemblyActive && cachedCompartments) tasks.push(runCompartments(ctx));
 
   await Promise.all(tasks).finally(() => {
-    if (hadInsulation && cachedInsulation && cachedCompartments) {
+    if (hadInsulation && cachedInsulation && cachedCompartments && misassemblyActive) {
       runMisassemblyDetection(ctx);
     }
     updateResultsDisplay(ctx);

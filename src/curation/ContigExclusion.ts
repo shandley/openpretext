@@ -6,8 +6,10 @@
  * This uses a separate Set-based approach so that we do not need to
  * modify the ContigInfo interface or touch other files.
  *
- * Indices stored here refer to positions in the contigOrder array
- * (order indices), not to contig IDs in the map.contigs array.
+ * Keys stored here are contig IDs (the values in the contigOrder array, i.e.
+ * indices into map.contigs), NOT positions in contigOrder. Keying by identity
+ * means an exclusion follows its contig across reorders (move/sort) and is
+ * naturally dropped when that contig is destroyed by a cut/join.
  */
 
 class ContigExclusionManager {
@@ -104,14 +106,26 @@ class ContigExclusionManager {
 
   /**
    * Get a filtered contigOrder that omits excluded contigs.
-   * Returns the contig IDs (values from the contigOrder array) for
-   * non-excluded positions, preserving their relative order.
+   * Returns the contig IDs (values from the contigOrder array) that are not
+   * excluded, preserving their relative order.
    *
    * @param contigOrder - The full contigOrder array from state.
-   * @returns A new array containing only the contig IDs at non-excluded positions.
+   * @returns A new array containing only the contig IDs that are not excluded.
    */
   getIncludedOrder(contigOrder: number[]): number[] {
-    return contigOrder.filter((_, index) => !this.excludedIndices.has(index));
+    return contigOrder.filter((contigId) => !this.excludedIndices.has(contigId));
+  }
+
+  /**
+   * Count how many of the given order's contigs are currently excluded.
+   * Orphan-safe: ignores excluded IDs no longer present (e.g. after cut/join).
+   *
+   * @param contigOrder - The full contigOrder array from state.
+   */
+  getExcludedCountIn(contigOrder: number[]): number {
+    let n = 0;
+    for (const id of contigOrder) if (this.excludedIndices.has(id)) n++;
+    return n;
   }
 }
 

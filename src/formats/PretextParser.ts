@@ -93,12 +93,16 @@ export interface PretextFile {
  *   - byte 1: alpha1 (reference value 1)
  *   - bytes 2-7: 16 x 3-bit lookup indices (48 bits, little-endian)
  */
-function decodeBC4Block(data: Uint8Array, offset: number): Uint8Array {
+function decodeBC4Block(
+  data: Uint8Array,
+  offset: number,
+  palette: Uint8Array,
+  pixels: Uint8Array,
+): void {
   const alpha0 = data[offset];
   const alpha1 = data[offset + 1];
 
-  // Build the 8-entry interpolation palette
-  const palette = new Uint8Array(8);
+  // Build the 8-entry interpolation palette (into the caller's scratch buffer)
   palette[0] = alpha0;
   palette[1] = alpha1;
 
@@ -120,13 +124,7 @@ function decodeBC4Block(data: Uint8Array, offset: number): Uint8Array {
     palette[7] = 255;
   }
 
-  // Read 48 bits of index data (6 bytes, little-endian)
-  // Each pixel gets a 3-bit index into the palette.
-  // The 48 bits are stored across bytes 2..7.
-  const pixels = new Uint8Array(16);
-
-  // Pack the 6 index bytes into a single 48-bit value.
-  // We process in two 24-bit halves to avoid precision issues.
+  // Read 48 bits of index data (6 bytes, little-endian), two 24-bit halves.
   const lo24 =
     data[offset + 2] |
     (data[offset + 3] << 8) |
@@ -136,18 +134,12 @@ function decodeBC4Block(data: Uint8Array, offset: number): Uint8Array {
     (data[offset + 6] << 8) |
     (data[offset + 7] << 16);
 
-  // First 8 pixels from lo24
   for (let i = 0; i < 8; i++) {
-    const idx = (lo24 >> (i * 3)) & 0x7;
-    pixels[i] = palette[idx];
+    pixels[i] = palette[(lo24 >> (i * 3)) & 0x7];
   }
-  // Next 8 pixels from hi24
   for (let i = 0; i < 8; i++) {
-    const idx = (hi24 >> (i * 3)) & 0x7;
-    pixels[8 + i] = palette[idx];
+    pixels[8 + i] = palette[(hi24 >> (i * 3)) & 0x7];
   }
-
-  return pixels;
 }
 
 /**
@@ -172,10 +164,14 @@ function decodeBC4Level(
   const blocksPerDim = resolution >> 2; // resolution / 4
   let blockPtr = bc4Offset;
 
+  // Scratch buffers reused across every block (was ~2 allocations per 4x4 block).
+  const palette = new Uint8Array(8);
+  const pixels = new Uint8Array(16);
+
   // PretextMap iteration: outer x (column of blocks), inner y (row of blocks)
   for (let bx = 0; bx < blocksPerDim; bx++) {
     for (let by = 0; by < blocksPerDim; by++) {
-      const pixels = decodeBC4Block(bc4Data, blockPtr);
+      decodeBC4Block(bc4Data, blockPtr, palette, pixels);
       blockPtr += 8;
 
       // Map the 16 decoded pixels back into the output image.
@@ -406,7 +402,8 @@ export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptio
       break;
     }
 
-    const compData = bytes.slice(offset, offset + compSize);
+    // subarray (zero-copy view) instead of slice (copy): pako accepts a view.
+    const compData = bytes.subarray(offset, offset + compSize);
     offset += compSize;
 
     let decompressed: Uint8Array;
@@ -522,6 +519,88 @@ export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptio
     tiles,
     tilesDecoded,
     extensions,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Parse + overview assembly (shared by the parse worker and the sync fallback)
+// ---------------------------------------------------------------------------
+
+/** Result of parsing a .pretext file and assembling its overview texture. */
+export interface AssembledPretext {
+  header: PretextHeader;
+  contigs: PretextContig[];
+  extensions: PretextExtension[];
+  /** Raw inflated BC4 bytes per upper-triangular tile (for detail streaming). */
+  tiles: Uint8Array[];
+  /** Downsampled overview contact map (row-major, symmetric). */
+  overview: Float32Array;
+  overviewSize: number;
+  /** Full-resolution map dimension (numberOfPixels1D). */
+  mapSize: number;
+}
+
+/**
+ * Parse a .pretext file and assemble its downsampled overview texture.
+ *
+ * This is the heavy, CPU-bound part of loading (full-file inflate + BC4 decode
+ * of the coarsest mip per tile). It is pure (no DOM/GPU) so it can run inside a
+ * worker; `onProgress` is invoked with coarse progress updates.
+ */
+export async function parseAndAssemble(
+  buffer: ArrayBuffer,
+  onProgress?: (message: string, percent: number) => void,
+): Promise<AssembledPretext> {
+  onProgress?.('Parsing header and metadata...', 20);
+  const parsed = await parsePretextFile(buffer, { coarsestOnly: true });
+  const h = parsed.header;
+  const mapSize = h.numberOfPixels1D;
+
+  onProgress?.('Assembling contact map...', 50);
+  const N = h.numberOfTextures1D;
+  const coarsestMip = h.mipMapLevels - 1;
+  const coarsestRes = h.textureResolution >> coarsestMip;
+  const overviewSize = N * coarsestRes;
+  const overview = new Float32Array(overviewSize * overviewSize);
+  const totalTiles = (N * (N + 1)) / 2;
+  let tilesDone = 0;
+
+  for (let tx = 0; tx < N; tx++) {
+    for (let ty = tx; ty < N; ty++) {
+      const linIdx = tileLinearIndex(tx, ty, N);
+      const tileData = parsed.tilesDecoded[linIdx]?.[coarsestMip];
+      if (!tileData) { tilesDone++; continue; }
+
+      for (let py = 0; py < coarsestRes; py++) {
+        for (let px = 0; px < coarsestRes; px++) {
+          const val = tileData[py * coarsestRes + px];
+          const gx = tx * coarsestRes + px;
+          const gy = ty * coarsestRes + py;
+          if (gx < overviewSize && gy < overviewSize) {
+            overview[gy * overviewSize + gx] = val;
+            overview[gx * overviewSize + gy] = val;
+          }
+        }
+      }
+
+      tilesDone++;
+      if (tilesDone % Math.max(1, Math.floor(totalTiles / 20)) === 0) {
+        onProgress?.(
+          `Assembling tiles... (${tilesDone}/${totalTiles})`,
+          50 + Math.round((tilesDone / totalTiles) * 40),
+        );
+      }
+    }
+  }
+
+  return {
+    header: h,
+    contigs: parsed.contigs,
+    extensions: parsed.extensions,
+    tiles: parsed.tiles,
+    overview,
+    overviewSize,
+    mapSize,
   };
 }
 

@@ -294,4 +294,25 @@ describe('batch context', () => {
     const op = state.get().undoStack[0];
     expect(op.batchId).toBeUndefined();
   });
+
+  it('caps undoStack at MAX_UNDO_DEPTH and retains most recent op', () => {
+    state.reset();
+
+    const total = 250; // > MAX_UNDO_DEPTH (200)
+    for (let i = 0; i < total; i++) {
+      state.pushOperation({
+        type: 'invert',
+        timestamp: i,
+        description: `op-${i}`,
+        data: { seq: i },
+      });
+    }
+
+    const undoStack = state.get().undoStack;
+    expect(undoStack.length).toBe(200);
+    // Most recent op must remain at the end (undo pops from the end).
+    expect(undoStack[undoStack.length - 1].description).toBe(`op-${total - 1}`);
+    // Oldest retained op is the one at depth boundary; older ones dropped.
+    expect(undoStack[0].description).toBe(`op-${total - 200}`);
+  });
 });

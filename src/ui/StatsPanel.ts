@@ -3,6 +3,7 @@
  */
 
 import type { AppContext } from './AppContext';
+import { state } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { getHealthScore } from './AnalysisPanel';
 
@@ -17,7 +18,8 @@ export function updateStatsPanel(ctx: AppContext): void {
   }
 
   const m = summary.current;
-  const excluded = contigExclusion.getExcludedCount();
+  // Count only excluded contigs still present in the current order (orphan-safe).
+  const excluded = contigExclusion.getExcludedCountIn(state.get().contigOrder);
 
   const fmtBp = (bp: number) => {
     if (bp >= 1_000_000_000) return `${(bp / 1_000_000_000).toFixed(2)} Gb`;

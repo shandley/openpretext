@@ -83,7 +83,7 @@ export function updateSidebarContigList(ctx: AppContext): void {
   } else if (contigColorMetric === 'metatag') {
     metricColors = new Map();
     for (let i = 0; i < s.contigOrder.length; i++) {
-      const info = metaTags.getTag(i);
+      const info = metaTags.getTag(s.contigOrder[i]);
       if (info) {
         metricColors.set(i, META_TAG_COLORS[info.tag]);
       }
@@ -97,9 +97,9 @@ export function updateSidebarContigList(ctx: AppContext): void {
     const isSelected = selected.has(orderIdx);
     const lengthStr = formatBp(contig.length);
     const invertedBadge = contig.inverted ? '<span class="contig-badge inverted">INV</span>' : '';
-    const excludedBadge = contigExclusion.isExcluded(orderIdx) ? '<span class="contig-badge excluded">EXC</span>' : '';
+    const excludedBadge = contigExclusion.isExcluded(contigId) ? '<span class="contig-badge excluded">EXC</span>' : '';
     const misassemblyBadge = misassemblyFlags.isFlagged(orderIdx) ? '<span class="contig-badge misassembly">MIS</span>' : '';
-    const tagInfo = metaTags.getTag(orderIdx);
+    const tagInfo = metaTags.getTag(contigId);
     const metatagBadge = tagInfo
       ? `<span class="contig-badge metatag-${tagInfo.tag}">${tagInfo.tag === 'sex_chromosome' ? 'SEX' : tagInfo.tag.substring(0, 3).toUpperCase()}</span>`
       : '';
@@ -369,7 +369,8 @@ export function setupContigSearch(ctx: AppContext): void {
       ctx.showToast('Select contigs first');
       return;
     }
-    metaTags.setMany([...s.selectedContigs], tag);
+    // Meta tags are keyed by contig identity; map selected order positions to IDs.
+    metaTags.setMany([...s.selectedContigs].map((oi) => s.contigOrder[oi]), tag);
     ctx.showToast(`Tagged ${s.selectedContigs.size} contig(s) as ${tag}`);
     updateMetaTagSummary();
   });
@@ -380,7 +381,7 @@ export function setupContigSearch(ctx: AppContext): void {
       ctx.showToast('Select contigs first');
       return;
     }
-    metaTags.removeMany([...s.selectedContigs]);
+    metaTags.removeMany([...s.selectedContigs].map((oi) => s.contigOrder[oi]));
     ctx.showToast(`Cleared tags from ${s.selectedContigs.size} contig(s)`);
     updateMetaTagSummary();
   });

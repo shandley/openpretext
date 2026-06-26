@@ -241,31 +241,32 @@ describe('ContigExclusionManager', () => {
     });
 
     it('should preserve order of non-excluded contigs', () => {
-      contigExclusion.set(0, true);
+      contigExclusion.set(5, true); // exclude contig ID 5
       const order = [5, 3, 1, 4, 2];
-      // Excluding index 0 means we exclude the contig at position 0 (which is contig ID 5)
       const included = contigExclusion.getIncludedOrder(order);
       expect(included).toEqual([3, 1, 4, 2]);
     });
 
     it('should return empty array when all contigs are excluded', () => {
-      contigExclusion.excludeMany([0, 1, 2]);
+      contigExclusion.excludeMany([10, 20, 30]); // exclude by contig ID
       const order = [10, 20, 30];
       const included = contigExclusion.getIncludedOrder(order);
       expect(included).toEqual([]);
     });
 
-    it('should handle reordered contig order correctly', () => {
-      // Exclude indices 1 and 4
-      contigExclusion.excludeMany([1, 4]);
+    it('should exclude by contig identity regardless of position', () => {
+      contigExclusion.excludeMany([3, 5]); // exclude contigs 3 and 5 by ID
       const order = [7, 3, 9, 1, 5];
-      // index 0: contig 7 (included)
-      // index 1: contig 3 (excluded)
-      // index 2: contig 9 (included)
-      // index 3: contig 1 (included)
-      // index 4: contig 5 (excluded)
       const included = contigExclusion.getIncludedOrder(order);
       expect(included).toEqual([7, 9, 1]);
+    });
+
+    it('should keep an exclusion attached to its contig after reordering', () => {
+      contigExclusion.set(3, true); // exclude contig ID 3
+      // Same contigs in two different display orders: the exclusion must follow
+      // contig 3, not whatever sits at its old position.
+      expect(contigExclusion.getIncludedOrder([7, 3, 9, 1, 5])).toEqual([7, 9, 1, 5]);
+      expect(contigExclusion.getIncludedOrder([1, 5, 3, 9, 7])).toEqual([1, 5, 9, 7]);
     });
 
     it('should not modify the original order array', () => {

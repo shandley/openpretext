@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('../../src/curation/ContigExclusion', () => ({
   contigExclusion: {
     getExcludedCount: vi.fn(() => 0),
+    getExcludedCountIn: vi.fn(() => 0),
   },
 }));
 
@@ -284,7 +285,7 @@ describe('StatsPanel', () => {
     });
 
     it('should show excluded count when there are excluded contigs', () => {
-      (contigExclusion.getExcludedCount as ReturnType<typeof vi.fn>).mockReturnValue(7);
+      (contigExclusion.getExcludedCountIn as ReturnType<typeof vi.fn>).mockReturnValue(7);
 
       const mockSummary = {
         current: {
@@ -316,7 +317,7 @@ describe('StatsPanel', () => {
     });
 
     it('should not show excluded row when excluded count is 0', () => {
-      (contigExclusion.getExcludedCount as ReturnType<typeof vi.fn>).mockReturnValue(0);
+      (contigExclusion.getExcludedCountIn as ReturnType<typeof vi.fn>).mockReturnValue(0);
 
       const mockSummary = {
         current: {
