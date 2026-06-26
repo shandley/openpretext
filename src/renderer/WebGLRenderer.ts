@@ -148,7 +148,9 @@ void main() {
   }
 
   gl_Position = vec4(pos * 2.0, 0.0, 1.0);
-  v_texcoord = a_position;
+  // Flip V to match the overview quad's texcoords (data row 0 = top of map);
+  // without this the detail layer renders vertically mirrored (\\ -> /).
+  v_texcoord = vec2(a_position.x, 1.0 - a_position.y);
 }
 `;
 
@@ -167,6 +169,9 @@ out vec4 fragColor;
 
 void main() {
   float intensity = texture(u_tileTexture, v_texcoord).r;
+  // Skip empty/zero-data fragments so the overview shows through instead of
+  // painting an opaque color (e.g. white in the Red-White map) over it.
+  if (intensity <= 0.0039) discard;
   float mapped = pow(clamp(intensity, 0.0, 1.0), u_gamma);
   fragColor = texture(u_colorMap, vec2(mapped, 0.5));
 }
@@ -195,6 +200,11 @@ export class WebGLRenderer {
   // State
   private textureSize: number = 0;
   private needsRender: boolean = true;
+
+  // Cached uniform upload for contig boundaries (rebuilt only when the
+  // boundaries array reference changes, not every frame).
+  private boundaryUniformData: Float32Array = new Float32Array(0);
+  private lastBoundariesRef: number[] | null = null;
 
   private floatLinearSupported: boolean = false;
 
@@ -415,7 +425,11 @@ export class WebGLRenderer {
     const boundaries = options.contigBoundaries ?? [];
     gl.uniform1i(this.uniforms['u_numContigs']!, boundaries.length);
     if (boundaries.length > 0) {
-      gl.uniform1fv(this.uniforms['u_contigBoundaries']!, new Float32Array(boundaries));
+      if (boundaries !== this.lastBoundariesRef || this.boundaryUniformData.length !== boundaries.length) {
+        this.boundaryUniformData = new Float32Array(boundaries);
+        this.lastBoundariesRef = boundaries;
+      }
+      gl.uniform1fv(this.uniforms['u_contigBoundaries']!, this.boundaryUniformData);
     }
 
     // Highlight
@@ -578,6 +592,44 @@ export class WebGLRenderer {
     gl.bindVertexArray(this.tileVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
+  }
+
+  /**
+   * Begin a batch of detail-tile draws. Binds the tile program, uploads the
+   * uniforms shared by all tiles in the frame (camera, zoom, resolution, gamma),
+   * binds the color map, and binds the tile VAO once. Call drawTile() per tile,
+   * then endTiles().
+   */
+  beginTiles(camera: { x: number; y: number; zoom: number }, gamma: number): void {
+    const gl = this.gl;
+    if (!this.tileProgram || !this.tileVao) return;
+    gl.useProgram(this.tileProgram);
+    gl.uniform2f(this.tileUniforms['u_camera']!, camera.x, camera.y);
+    gl.uniform1f(this.tileUniforms['u_zoom']!, camera.zoom);
+    gl.uniform2f(this.tileUniforms['u_resolution']!, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.uniform1f(this.tileUniforms['u_gamma']!, gamma);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
+    gl.uniform1i(this.tileUniforms['u_colorMap']!, 1);
+    gl.bindVertexArray(this.tileVao);
+  }
+
+  /** Draw one tile within a beginTiles()/endTiles() batch. */
+  drawTile(texture: WebGLTexture, col: number, row: number, tilesPerDim: number): void {
+    const gl = this.gl;
+    if (!this.tileProgram || !this.tileVao) return;
+    const tileSize = 1.0 / tilesPerDim;
+    gl.uniform2f(this.tileUniforms['u_tileOffset']!, col * tileSize, row * tileSize);
+    gl.uniform2f(this.tileUniforms['u_tileScale']!, tileSize, tileSize);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(this.tileUniforms['u_tileTexture']!, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  /** End a detail-tile draw batch. */
+  endTiles(): void {
+    this.gl.bindVertexArray(null);
   }
 
   destroy(): void {

@@ -17,7 +17,6 @@ import { toggleScriptConsole } from './ScriptConsole';
 import { toggleShortcutsModal } from './ShortcutsModal';
 import { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoin, runBatchInvert, runSortByLength, runAutoSort, runAutoCut, undoLastBatch } from './BatchActions';
 import { togglePatternGallery } from './PatternGallery';
-import { toggleAIAssist } from './AIAssistPanel';
 import { exportAnalysisByKey } from './AnalysisPanel';
 import { toggleWorkflowGuide } from './WorkflowGuide';
 
@@ -135,7 +134,7 @@ function getCommands(ctx: AppContext) {
     { name: 'Tutorial: ML-Powered Enhancement (Evo2HiC)', shortcut: '', action: () => ctx.tutorialManager?.startLesson(ctx, '10-ml-enhancement') },
     { name: 'Pattern Gallery', shortcut: '', action: () => togglePatternGallery(ctx) },
     { name: 'Workflow Guide', shortcut: '', action: () => toggleWorkflowGuide() },
-    { name: 'AI: Analyze Contact Map', shortcut: '', action: () => toggleAIAssist() },
+    { name: 'AI: Analyze Contact Map', shortcut: '', action: () => ctx.openAIAssist() },
     { name: 'Export Insulation BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'insulation') },
     { name: 'Export P(s) TSV', shortcut: '', action: () => exportAnalysisByKey(ctx, 'decay') },
     { name: 'Export Compartments BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'compartments') },

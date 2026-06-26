@@ -13,6 +13,7 @@ import { Minimap } from './renderer/Minimap';
 import { TrackRenderer } from './renderer/TrackRenderer';
 import { ScaffoldOverlay } from './renderer/ScaffoldOverlay';
 import { WaypointOverlay } from './renderer/WaypointOverlay';
+import { TileDecodeWorkerClient } from './renderer/TileDecodeWorkerClient';
 import { DragReorder } from './curation/DragReorder';
 import { ScaffoldManager } from './curation/ScaffoldManager';
 import { WaypointManager } from './curation/WaypointManager';
@@ -47,7 +48,6 @@ import {
   startRenderLoop,
   onCameraChange,
   setupScriptConsole,
-  setupAIAssist,
   setupCommandPalette,
   setupKeyboardShortcuts,
   setupToolbar,
@@ -102,7 +102,8 @@ class OpenPretextApp {
       waypointManager,
       metricsTracker: new MetricsTracker(),
       tileManager: null,
-      cancelTileDecode: null,
+      tileDecoder: null,
+      tileDecodeDebounce: null,
       contigBoundaries: [],
       hoveredContigIndex: -1,
       mouseMapPos: { x: 0, y: 0 },
@@ -121,6 +122,9 @@ class OpenPretextApp {
       flashHighlightStart: 0,
       flashHighlightEnd: 0,
       flashHighlightUntil: 0,
+      suppressCurationRefresh: false,
+      renderDirty: true,
+      requestRender: () => { ctx.renderDirty = true; },
 
       // Cross-module callbacks
       showToast,
@@ -131,6 +135,7 @@ class OpenPretextApp {
       updateTrackConfigPanel: () => updateTrackConfigPanel(ctx),
       updateUndoHistoryPanel: () => updateUndoHistoryPanel(ctx),
       setMode: (mode) => setMode(ctx, mode),
+      openAIAssist: () => {}, // assigned below once the lazy loader is defined
     };
 
     minimap.setNavigateCallback((mapX, mapY) => {
@@ -138,6 +143,25 @@ class OpenPretextApp {
     });
 
     ctx.camera = new Camera(canvas, (cam) => onCameraChange(ctx, cam));
+
+    // Background tile decoder — routes decoded tiles into the current TileManager.
+    ctx.tileDecoder = new TileDecodeWorkerClient();
+    ctx.tileDecoder.setOnDecoded((key, data) => {
+      ctx.tileManager?.loadTile(key, data);
+      ctx.renderDirty = true; // a freshly decoded tile needs a redraw
+    });
+
+    // Lazy-load the AI assist subsystem on first use (keeps it out of the
+    // initial bundle). Both the toolbar button and the command palette route
+    // through ctx.openAIAssist().
+    let aiLoaded = false;
+    const ensureAI = async () => {
+      const m = await import('./ui/AIAssistPanel');
+      if (!aiLoaded) { m.setupAIAssist(ctx); aiLoaded = true; }
+      return m;
+    };
+    ctx.openAIAssist = () => { void ensureAI().then((m) => m.toggleAIAssist()); };
+    document.getElementById('btn-ai-assist')?.addEventListener('click', () => ctx.openAIAssist());
 
     // Setup all UI modules
     setupDragReorder(ctx, canvas);
@@ -150,7 +174,6 @@ class OpenPretextApp {
     setupClickInteractions(ctx, canvas);
     setupEventListeners(ctx);
     setupScriptConsole(ctx);
-    setupAIAssist(ctx);
     setupShortcutsModal();
     setupWorkflowGuide();
     setupContigSearch(ctx);

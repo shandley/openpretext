@@ -64,13 +64,25 @@ export function runBatchCut(ctx: AppContext): void {
     ctx.showToast('Invalid size');
     return;
   }
-  const result = batchCutBySize(minLength);
+  ctx.suppressCurationRefresh = true;
+  let result;
+  try {
+    result = batchCutBySize(minLength);
+  } finally {
+    ctx.suppressCurationRefresh = false;
+  }
   ctx.refreshAfterCuration();
   ctx.showToast(result.description);
 }
 
 export function runBatchJoin(ctx: AppContext): void {
-  const result = batchJoinSelected();
+  ctx.suppressCurationRefresh = true;
+  let result;
+  try {
+    result = batchJoinSelected();
+  } finally {
+    ctx.suppressCurationRefresh = false;
+  }
   if (result.operationsPerformed === 0) {
     ctx.showToast('Select adjacent contigs to batch join');
     return;
@@ -81,7 +93,13 @@ export function runBatchJoin(ctx: AppContext): void {
 }
 
 export function runBatchInvert(ctx: AppContext): void {
-  const result = batchInvertSelected();
+  ctx.suppressCurationRefresh = true;
+  let result;
+  try {
+    result = batchInvertSelected();
+  } finally {
+    ctx.suppressCurationRefresh = false;
+  }
   if (result.operationsPerformed === 0) {
     ctx.showToast('Select contigs to batch invert');
     return;
@@ -91,7 +109,13 @@ export function runBatchInvert(ctx: AppContext): void {
 }
 
 export function runSortByLength(ctx: AppContext): void {
-  const result = sortByLength(true);
+  ctx.suppressCurationRefresh = true;
+  let result;
+  try {
+    result = sortByLength(true);
+  } finally {
+    ctx.suppressCurationRefresh = false;
+  }
   ctx.refreshAfterCuration();
   ctx.showToast(result.description);
 }
@@ -119,9 +143,15 @@ export function runAutoSort(ctx: AppContext): void {
   ctx.showToast(hasScaffolds ? 'Sorting within scaffolds...' : 'Auto sorting...');
   setTimeout(() => {
     const sortParams = hardThreshold !== undefined ? { hardThreshold } : undefined;
-    const result = hasScaffolds
-      ? scaffoldAwareAutoSort(ctx.scaffoldManager, sortParams)
-      : autoSortContigs(sortParams);
+    ctx.suppressCurationRefresh = true;
+    let result;
+    try {
+      result = hasScaffolds
+        ? scaffoldAwareAutoSort(ctx.scaffoldManager, sortParams)
+        : autoSortContigs(sortParams);
+    } finally {
+      ctx.suppressCurationRefresh = false;
+    }
     ctx.refreshAfterCuration();
 
     // Build enriched toast message
@@ -152,7 +182,13 @@ export function runAutoCut(ctx: AppContext): void {
   const contigsBefore = s.contigOrder.length;
   ctx.showToast('Auto cutting...');
   setTimeout(() => {
-    const result = autoCutContigs(cutThreshold !== undefined ? { cutThreshold } : undefined);
+    ctx.suppressCurationRefresh = true;
+    let result;
+    try {
+      result = autoCutContigs(cutThreshold !== undefined ? { cutThreshold } : undefined);
+    } finally {
+      ctx.suppressCurationRefresh = false;
+    }
     ctx.refreshAfterCuration();
     const contigsAfter = state.get().contigOrder.length;
     const msg = result.operationsPerformed > 0
@@ -169,7 +205,13 @@ export function undoLastBatch(ctx: AppContext, prefix: string): void {
     ctx.showToast(`No ${prefix} operations to undo`);
     return;
   }
-  const count = undoBatch(lastOp.batchId);
+  ctx.suppressCurationRefresh = true;
+  let count;
+  try {
+    count = undoBatch(lastOp.batchId);
+  } finally {
+    ctx.suppressCurationRefresh = false;
+  }
   ctx.refreshAfterCuration();
   ctx.showToast(`Undid ${count} ${prefix} operation(s)`);
 }

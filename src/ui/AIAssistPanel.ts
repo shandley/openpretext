@@ -90,7 +90,14 @@ function runDSLBlock(ctx: AppContext, dsl: string): void {
     return;
   }
 
-  const results = executeScript(parseResult.commands, scriptCtx);
+  // Suppress per-op UI refresh during the script; refresh once at the end.
+  ctx.suppressCurationRefresh = true;
+  let results;
+  try {
+    results = executeScript(parseResult.commands, scriptCtx);
+  } finally {
+    ctx.suppressCurationRefresh = false;
+  }
   ctx.refreshAfterCuration();
   ctx.updateSidebarScaffoldList();
 
@@ -379,10 +386,8 @@ function saveEditorStrategy(ctx: AppContext): void {
 }
 
 export function setupAIAssist(ctx: AppContext): void {
-  // Toggle button
-  document.getElementById('btn-ai-assist')?.addEventListener('click', () => {
-    toggleAIAssist();
-  });
+  // Note: the #btn-ai-assist toggle is owned by main.ts so the AI subsystem can
+  // be lazy-loaded on first use; setupAIAssist runs once the module is imported.
 
   // Close button
   document.getElementById('btn-close-ai')?.addEventListener('click', () => {

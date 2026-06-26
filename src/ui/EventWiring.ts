@@ -55,10 +55,10 @@ export function setupEventListeners(ctx: AppContext): void {
   events.on('misassembly:updated', () => ctx.updateSidebarContigList());
   events.on('metatag:updated', () => ctx.updateSidebarContigList());
 
-  events.on('curation:cut', (data) => { refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
-  events.on('curation:join', (data) => { refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
-  events.on('curation:invert', (data) => { refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
-  events.on('curation:move', (data) => { refreshAfterCuration(ctx); flashContig(ctx, data?.toIndex ?? data?.fromIndex); });
+  events.on('curation:cut', (data) => { if (ctx.suppressCurationRefresh) return; refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
+  events.on('curation:join', (data) => { if (ctx.suppressCurationRefresh) return; refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
+  events.on('curation:invert', (data) => { if (ctx.suppressCurationRefresh) return; refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
+  events.on('curation:move', (data) => { if (ctx.suppressCurationRefresh) return; refreshAfterCuration(ctx); flashContig(ctx, data?.toIndex ?? data?.fromIndex); });
   events.on('curation:undo', () => refreshAfterCuration(ctx));
   events.on('curation:redo', () => refreshAfterCuration(ctx));
 }

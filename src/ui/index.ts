@@ -61,8 +61,8 @@ export { startRenderLoop, renderCutIndicator, onCameraChange, updateDetailTiles 
 // ScriptConsole
 export { isScriptConsoleVisible, toggleScriptConsole, setupScriptConsole, runScript } from './ScriptConsole';
 
-// AIAssistPanel
-export { isAIPanelVisible, toggleAIAssist, setupAIAssist } from './AIAssistPanel';
+// AIAssistPanel is lazy-loaded (see main.ts) — not re-exported here so it can
+// be split into its own chunk. Import directly from './AIAssistPanel' if needed.
 
 // CommandPalette
 export { isCommandPaletteVisible, toggleCommandPalette, setupCommandPalette } from './CommandPalette';

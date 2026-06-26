@@ -7,20 +7,55 @@ import type { CameraState } from '../renderer/Camera';
 import { state } from '../core/State';
 import { events } from '../core/EventBus';
 import { renderDragIndicator } from '../curation/DragReorder';
-import { decodeTileBatch } from '../renderer/TileDecoder';
 import { renderComparisonOverlay } from './ComparisonMode';
 import type { TileKey } from '../renderer/TileManager';
 import { getContigNames, getContigScaffoldIds } from '../core/DerivedState';
 
+/**
+ * Delay before kicking off detail-tile decoding once camera motion settles.
+ * During an active pan/zoom only the overview is shown (cheap), which avoids
+ * decode churn and keeps interaction smooth.
+ */
+const TILE_DECODE_DEBOUNCE_MS = 100;
+
+/** Detail tiles only stream in once zoomed past the overview. */
+const TILE_DETAIL_MIN_ZOOM = 1.5;
+
 export function startRenderLoop(ctx: AppContext): void {
+  // Wake the render loop whenever something that affects the display changes.
+  // - state.update covers gamma/grid/mode/selection/colormap/curation/etc.
+  // - camera changes call ctx.requestRender() via onCameraChange.
+  // - document input events are a safety net for any non-state visual change
+  //   (track toggles, dropdowns, sliders) so we never show a stale frame.
+  state.subscribe(() => { ctx.renderDirty = true; });
+  const wake = () => { ctx.renderDirty = true; };
+  for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'click', 'input', 'change']) {
+    document.addEventListener(ev, wake, { capture: true, passive: true });
+  }
+  window.addEventListener('resize', wake);
+
+  // Tracks the falling edge of the flash highlight so we render one final frame
+  // to clear it after it expires.
+  let flashWasActive = false;
+
   const renderFrame = () => {
+    const now = performance.now();
+    const flashActive = ctx.flashHighlightUntil > now;
+
+    // Idle skip: nothing changed and no time-based effect is running.
+    if (!ctx.renderDirty && !flashActive && !flashWasActive && !ctx.dragReorder.isActive()) {
+      ctx.animFrameId = requestAnimationFrame(renderFrame);
+      return;
+    }
+    ctx.renderDirty = false;
+    flashWasActive = flashActive;
+
     const cam = ctx.camera.getState();
     const s = state.get();
 
     // Highlight from hover, single selection, or curation flash
     let highlightStart: number | undefined;
     let highlightEnd: number | undefined;
-    const now = performance.now();
 
     if (ctx.flashHighlightUntil > now) {
       // Active curation flash — override hover/selection highlight
@@ -30,7 +65,7 @@ export function startRenderLoop(ctx: AppContext): void {
       highlightStart = ctx.hoveredContigIndex === 0 ? 0 : ctx.contigBoundaries[ctx.hoveredContigIndex - 1];
       highlightEnd = ctx.contigBoundaries[ctx.hoveredContigIndex];
     } else if (s.selectedContigs.size === 1) {
-      const selIdx = Array.from(s.selectedContigs)[0];
+      const selIdx = s.selectedContigs.values().next().value as number;
       if (selIdx >= 0 && selIdx < ctx.contigBoundaries.length) {
         highlightStart = selIdx === 0 ? 0 : ctx.contigBoundaries[selIdx - 1];
         highlightEnd = ctx.contigBoundaries[selIdx];
@@ -46,15 +81,19 @@ export function startRenderLoop(ctx: AppContext): void {
       highlightEnd,
     });
 
-    // Render detail tiles on top of the overview
+    // Render detail tiles on top of the overview. Shared GL state (program,
+    // camera/zoom/gamma uniforms, color map) is set once per frame, not per tile.
     if (ctx.tileManager && s.map?.parsedHeader && cam.zoom > 1.5) {
       const tilesPerDim = s.map.parsedHeader.numberOfTextures1D;
+      let started = false;
       for (const key of ctx.tileManager.visibleKeys) {
         const tile = ctx.tileManager.getTile(key);
         if (tile && tile.state === 'loaded' && tile.texture) {
-          ctx.renderer.renderTile(tile.texture, key.col, key.row, tilesPerDim, cam, s.gamma);
+          if (!started) { ctx.renderer.beginTiles(cam, s.gamma); started = true; }
+          ctx.renderer.drawTile(tile.texture, key.col, key.row, tilesPerDim);
         }
       }
+      if (started) ctx.renderer.endTiles();
     }
 
     const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
@@ -179,24 +218,35 @@ export function renderCutIndicator(ctx: AppContext, canvasCtx: CanvasRenderingCo
 }
 
 export function onCameraChange(ctx: AppContext, cam: CameraState): void {
+  ctx.renderDirty = true;
   events.emit('camera:changed', cam);
   updateDetailTiles(ctx, cam);
 }
 
 export function updateDetailTiles(ctx: AppContext, cam: CameraState): void {
   const s = state.get();
-  if (!s.map || !s.map.rawTiles || !s.map.parsedHeader || !ctx.tileManager) return;
+  if (!s.map || !s.map.parsedHeader || !ctx.tileManager || !ctx.tileDecoder) return;
 
-  // Only load detail tiles when zoomed in past the overview
-  if (cam.zoom <= 1.5) return;
+  // Cancel any scheduled/in-flight decode; we recompute below.
+  if (ctx.tileDecodeDebounce !== null) {
+    clearTimeout(ctx.tileDecodeDebounce);
+    ctx.tileDecodeDebounce = null;
+  }
+
+  // Only stream detail tiles when zoomed in past the overview.
+  if (cam.zoom <= TILE_DETAIL_MIN_ZOOM) {
+    ctx.tileDecoder.cancel();
+    return;
+  }
 
   const canvas = document.getElementById('map-canvas') as HTMLCanvasElement;
   if (!canvas) return;
 
   const header = s.map.parsedHeader;
-  const rawTiles = s.map.rawTiles;
 
-  const visibleKeys = ctx.tileManager.updateVisibleTiles(
+  // Recompute which tiles are visible every call (cheap) so the render loop
+  // draws the right loaded tiles and visible tiles are kept warm in the LRU.
+  ctx.tileManager.updateVisibleTiles(
     cam,
     canvas.clientWidth,
     canvas.clientHeight,
@@ -204,33 +254,32 @@ export function updateDetailTiles(ctx: AppContext, cam: CameraState): void {
     header.mipMapLevels,
   );
 
-  // Find keys that need decoding
+  // Defer the actual (expensive) decode until camera motion settles. The
+  // overview keeps the map visible in the meantime.
+  ctx.tileDecodeDebounce = setTimeout(() => {
+    ctx.tileDecodeDebounce = null;
+    scheduleDetailDecode(ctx);
+  }, TILE_DECODE_DEBOUNCE_MS);
+}
+
+/**
+ * Queue decoding for every currently-visible tile that is not already loaded.
+ *
+ * The guard is state-based (not presence-based): a tile that was requested but
+ * never finished decoding has no `loaded` entry and is re-queued, so tiles can
+ * never get permanently stuck and leave blank/white blocks.
+ */
+function scheduleDetailDecode(ctx: AppContext): void {
+  if (!ctx.tileManager || !ctx.tileDecoder) return;
+
   const needDecode: TileKey[] = [];
-  for (const key of visibleKeys) {
-    if (!ctx.tileManager.hasTile(key)) {
-      ctx.tileManager.markPending(key);
+  for (const key of ctx.tileManager.visibleKeys) {
+    const tile = ctx.tileManager.getTile(key);
+    if (!tile || tile.state !== 'loaded') {
       needDecode.push(key);
     }
   }
 
   if (needDecode.length === 0) return;
-
-  // Cancel any in-flight batch decode
-  if (ctx.cancelTileDecode) {
-    ctx.cancelTileDecode();
-  }
-
-  ctx.cancelTileDecode = decodeTileBatch(
-    needDecode,
-    rawTiles,
-    header,
-    (key, data) => {
-      if (ctx.tileManager) {
-        ctx.tileManager.loadTile(key, data);
-      }
-    },
-    () => {
-      ctx.cancelTileDecode = null;
-    },
-  );
+  ctx.tileDecoder.decode(needDecode);
 }

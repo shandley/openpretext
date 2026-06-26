@@ -14,6 +14,7 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    sourcemap: true,
+    // Disable prod sourcemaps: they added a ~1.5 MB artifact and exposed source.
+    sourcemap: false,
   },
 });

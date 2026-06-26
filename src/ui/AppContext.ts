@@ -16,6 +16,7 @@ import type { ScaffoldManager } from '../curation/ScaffoldManager';
 import type { WaypointManager } from '../curation/WaypointManager';
 import type { MetricsTracker } from '../curation/QualityMetrics';
 import type { TileManager } from '../renderer/TileManager';
+import type { TileDecodeWorkerClient } from '../renderer/TileDecodeWorkerClient';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import type { InteractionMode } from '../core/State';
 import type { TutorialManager } from './TutorialManager';
@@ -39,7 +40,17 @@ export interface AppContext {
 
   // Tile streaming (reassigned during file loading)
   tileManager: TileManager | null;
-  cancelTileDecode: (() => void) | null;
+  /** Background BC4 tile decoder (created once, reused across file loads). */
+  tileDecoder: TileDecodeWorkerClient | null;
+  /** Pending debounce handle for kicking off detail-tile decoding. */
+  tileDecodeDebounce: ReturnType<typeof setTimeout> | null;
+
+  // Render scheduling: the render loop only redraws when this is set (or an
+  // animation/flash is active). Call requestRender() to mark a redraw needed.
+  renderDirty: boolean;
+  requestRender: () => void;
+  /** When true, curation:* events skip per-op UI refresh (used during batch ops). */
+  suppressCurationRefresh: boolean;
 
   // Mutable shared state
   contigBoundaries: number[];
@@ -72,4 +83,6 @@ export interface AppContext {
   readonly updateTrackConfigPanel: () => void;
   readonly updateUndoHistoryPanel: () => void;
   readonly setMode: (mode: InteractionMode) => void;
+  /** Lazily loads the AI assist subsystem on first use, then toggles it. */
+  openAIAssist: () => void;
 }

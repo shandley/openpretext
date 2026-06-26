@@ -123,7 +123,14 @@ export function runScript(ctx: AppContext): void {
 
   // Execute commands
   if (parseResult.commands.length > 0) {
-    const results = executeScript(parseResult.commands, scriptCtx);
+    // Suppress per-op UI refresh during the script; refresh once at the end.
+    ctx.suppressCurationRefresh = true;
+    let results;
+    try {
+      results = executeScript(parseResult.commands, scriptCtx);
+    } finally {
+      ctx.suppressCurationRefresh = false;
+    }
     for (const result of results) {
       const cls = result.success ? 'script-output-success' : 'script-output-error';
       html += `<div class="${cls}">Line ${result.line}: ${result.message}</div>`;

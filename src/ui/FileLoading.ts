@@ -75,7 +75,8 @@ async function loadPretextFromBuffer(
   ctx.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
 
   // Dispose previous tile manager and cancel in-flight decodes
-  if (ctx.cancelTileDecode) { ctx.cancelTileDecode(); ctx.cancelTileDecode = null; }
+  if (ctx.tileDecodeDebounce !== null) { clearTimeout(ctx.tileDecodeDebounce); ctx.tileDecodeDebounce = null; }
+  ctx.tileDecoder?.cancel();
   if (ctx.tileManager) { ctx.tileManager.dispose(); }
   ctx.tileManager = new TileManager(ctx.renderer.getGL());
 
@@ -100,6 +101,8 @@ async function loadPretextFromBuffer(
     },
     contigOrder: parsed.contigs.map((_, i) => i),
   });
+  // Hand the raw BC4 tile bytes to the background decoder (transfers buffers).
+  ctx.tileDecoder?.setSource(parsed.tiles, h);
   statusEl.textContent = filename;
   document.getElementById('status-contigs')!.textContent = `${parsed.contigs.length} contigs`;
   events.emit('file:loaded', { filename, contigs: parsed.contigs.length, textureSize: mapSize });
@@ -207,7 +210,8 @@ export function loadDemoData(ctx: AppContext): void {
   ctx.contigBoundaries = contigs.map(c => c.end / size);
 
   // Clean up tile streaming state for demo data
-  if (ctx.cancelTileDecode) { ctx.cancelTileDecode(); ctx.cancelTileDecode = null; }
+  if (ctx.tileDecodeDebounce !== null) { clearTimeout(ctx.tileDecodeDebounce); ctx.tileDecodeDebounce = null; }
+  ctx.tileDecoder?.cancel();
   if (ctx.tileManager) { ctx.tileManager.dispose(); ctx.tileManager = null; }
 
   state.update({

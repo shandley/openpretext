@@ -6,23 +6,24 @@
  * values that only update when the underlying state changes.
  */
 
-import { state, type AppState } from './State';
+import { state, selectContigOrder } from './State';
 
 let cachedContigNames: string[] | null = null;
 let cachedContigScaffoldIds: (number | null)[] | null = null;
 let cachedContigBoundaries: number[] | null = null;
 
-// Selector that captures both contigOrder and map reference.
-// When either changes, derived caches are invalidated.
-function selectContigDeps(s: AppState): { order: number[]; map: AppState['map'] } {
-  return { order: s.contigOrder, map: s.map };
-}
-
-state.select(selectContigDeps, () => {
+function invalidateDerivedCaches(): void {
   cachedContigNames = null;
   cachedContigScaffoldIds = null;
   cachedContigBoundaries = null;
-});
+}
+
+// Invalidate only when the contig order OR the map reference actually changes.
+// Using two reference-identity selectors (instead of a freshly-allocated
+// composite object) means unrelated updates — camera pan, gamma, selection —
+// no longer null these caches every frame via the always-false Object.is check.
+state.select(selectContigOrder, invalidateDerivedCaches);
+state.select((s) => s.map, invalidateDerivedCaches);
 
 /**
  * Returns contig names in current display order. Cached until
