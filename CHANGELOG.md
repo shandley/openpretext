@@ -23,6 +23,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   exported files. 4 new unit tests.
 
 ### Fixed
+- **White detail-tile blocks that never disappeared** — zoomed-in tiles could get
+  stuck "pending" (cancelled mid-decode and never re-queued), leaving permanent
+  white squares. The decode guard is now state-based (re-queues anything not
+  loaded) and the tile fragment shader discards empty fragments so the overview
+  shows through instead of an opaque white tile (issue #42)
+- **Detail-tile vertical flip / "chevron" at high zoom** — the tile vertex shader
+  was missing the overview quad's V-flip, mirroring the entire detail layer into
+  an anti-diagonal above ~150% zoom (the minimap/overview were always correct).
+  Now matches the overview texcoord flip (issue #42)
+- **Multi-second UI freeze on batch operations** — Auto-Sort/AutoCut/sort/batch
+  cut/join on large assemblies (1000+ contigs) triggered a full UI refresh per
+  sub-operation (≈O(N²)). Refresh is now suspended during batch/script/AI runs
+  and applied once at the end (`suppressCurationRefresh`)
+- **Contig exclusion and meta tags now survive reordering** — they were keyed by
+  display position, so a move/sort mis-attributed them and exports omitted the
+  wrong contigs. They are now keyed by contig identity and follow their contig
+  across reorders (dropping naturally on cut/join). Excluded count is orphan-safe
+- **Misassembly detection no longer runs on a stale compartment eigenvector**
+  after a reorder: auto-recompute refreshes compartments when misassembly flags
+  are in use, otherwise skips detection rather than mixing fresh insulation with
+  a pre-reorder eigenvector
 - Lesson 03 ("Detecting Misassembly Patterns") hardcoded "finch genome" references
   in step text — replaced with "the assembly" so the tutorial reads correctly
   regardless of what dataset is loaded
@@ -33,6 +54,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   requirement for elements in overflow-y:auto containers. Timeout raised to 150s.
 
 ### Changed
+- **Rendering performance pass** (no user-facing API changes):
+  - BC4 tile decode and `.pretext` parsing now run in Web Workers
+    (`TileDecodeWorker`, `ParseWorker`), so panning/zooming and loading
+    30–200 MB files no longer block the UI. Decode is debounced and buffers
+    transfer back zero-copy; both have synchronous fallbacks.
+  - Render loop only redraws when something changed (camera/hover/selection/
+    data/animation) instead of every frame — idle CPU drops to ~0.
+  - DerivedState caches invalidate only on contigOrder/map change, not on every
+    state update (e.g. camera pan no longer recomputes contig boundaries).
+  - Fewer per-frame allocations: cached contig-boundary uniform, batched
+    detail-tile draws (shared GL state hoisted out of the per-tile loop),
+    iterator instead of `Array.from` for single selection.
+  - BC4 decode reuses scratch buffers; `subarray` (view) instead of `slice`
+    (copy) before pako inflate.
+  - AI assist subsystem is lazy-loaded on first use (main bundle 344 → 294 kB,
+    99 → 84 kB gzip); production sourcemaps disabled.
+  - Undo history capped at 200 operations to bound long-session memory.
+  - ICE/KR normalization use a single working-matrix copy; `filterLowCoverageBins`
+    uses a typed-array sort.
 - TypeScript 5.9.3 → 6.0.3; removed unused `baseUrl` and `@/*` path alias from
   tsconfig.json (deprecated in TS 6.0, never referenced in source)
 - vite 8.0.1 → 8.0.16, vitest 4.1.0 → 4.1.8, @vitest/coverage-v8 4.1.0 → 4.1.8,
