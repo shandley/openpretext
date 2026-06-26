@@ -64,7 +64,8 @@ import { openCutReview } from './CutReviewPanel';
 import { autoAssignScaffolds } from './Sidebar';
 import { computeProgress, computeTrend } from '../analysis/CurationProgress';
 import type { DetectedPattern } from '../analysis/PatternDetector';
-import { Evo2HiCClient, getStoredServerUrl, setStoredServerUrl, type EpiTrackPrediction, type HiCPredictionResult } from '../analysis/Evo2HiCClient';
+import { Evo2HiCClient, getStoredServerUrl as getEvoUrl, setStoredServerUrl as setEvoUrl, type EpiTrackPrediction, type HiCPredictionResult } from '../analysis/Evo2HiCClient';
+import { HiCFoundationClient, getStoredServerUrl as getHicfUrl, setStoredServerUrl as setHicfUrl } from '../analysis/HiCFoundationClient';
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
 import type { CheckerboardResult } from '../analysis/CheckerboardScore';
@@ -121,6 +122,64 @@ let checkerboardReference: CheckerboardReference | null = null;
     if (resp.ok) checkerboardReference = await resp.json();
   } catch { /* silent */ }
 })();
+// --- ML backend selection (Evo2HiC vs HiCFoundation) ----------------------
+type MLBackendId = 'evo2hic' | 'hicfoundation';
+const ML_BACKEND_KEY = 'openpretext-ml-backend';
+
+/** Unified interface over the two ML backend clients. */
+interface MLBackend {
+  checkHealth(): Promise<{ status: string; modelLoaded: boolean; device: string; modelVersion: string }>;
+  enhance(map: Float32Array, size: number, fasta?: Map<string, string>, names?: string[]): Promise<{ enhancedMap: Float32Array; enhancedSize: number; upscaleFactor: number; modelVersion: string; elapsedMs: number }>;
+  predictTracks(map: Float32Array, size: number, fasta?: Map<string, string>): Promise<{ tracks: { name: string; values: Float32Array; color: string }[]; modelVersion: string; elapsedMs: number }>;
+  /** HiCFoundation is Hi-C-only; Seq2HiC (predict-hic) is Evo2HiC-only. */
+  supportsSeq2HiC: boolean;
+}
+
+function activeBackend(): MLBackendId {
+  const sel = document.getElementById('ml-backend') as HTMLSelectElement | null;
+  return sel?.value === 'hicfoundation' ? 'hicfoundation' : 'evo2hic';
+}
+
+function storedBackend(): MLBackendId {
+  try {
+    return localStorage.getItem(ML_BACKEND_KEY) === 'hicfoundation' ? 'hicfoundation' : 'evo2hic';
+  } catch {
+    return 'evo2hic';
+  }
+}
+
+function backendDefaultUrl(b: MLBackendId): string {
+  return b === 'hicfoundation' ? 'http://localhost:8001' : 'http://localhost:8000';
+}
+
+function backendStoredUrl(b: MLBackendId): string | null {
+  return b === 'hicfoundation' ? getHicfUrl() : getEvoUrl();
+}
+
+function backendSetUrl(b: MLBackendId, url: string): void {
+  if (b === 'hicfoundation') setHicfUrl(url); else setEvoUrl(url);
+}
+
+/** Build a unified client for the selected backend. */
+function makeBackend(b: MLBackendId, url: string): MLBackend {
+  if (b === 'hicfoundation') {
+    const c = new HiCFoundationClient({ serverUrl: url });
+    return {
+      checkHealth: () => c.checkHealth(),
+      enhance: (m, s) => c.enhance(m, s), // Hi-C-only: ignores FASTA
+      predictTracks: (m, s) => c.predictTracks(m, s),
+      supportsSeq2HiC: false,
+    };
+  }
+  const c = new Evo2HiCClient({ serverUrl: url });
+  return {
+    checkHealth: () => c.checkHealth(),
+    enhance: (m, s, fasta, names) => c.enhance(m, s, fasta, names),
+    predictTracks: (m, s, fasta) => c.predictTracks(m, s, fasta),
+    supportsSeq2HiC: true,
+  };
+}
+
 let cachedEnhancedMap: Float32Array | null = null;
 let cachedEnhancedOverview: Float32Array | null = null;
 let enhancedMapActive = false;
@@ -2054,7 +2113,14 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (KR)</button>
       <div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;">
         <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
-          <input type="text" id="evo2hic-url" placeholder="http://localhost:8000" style="flex:1;min-width:0;" value="${getStoredServerUrl() ?? ''}">
+          <label for="ml-backend" style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">ML backend</label>
+          <select id="ml-backend" style="flex:1;min-width:0;">
+            <option value="evo2hic">Evo2HiC (sequence-aware)</option>
+            <option value="hicfoundation">HiCFoundation (Hi-C-only)</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+          <input type="text" id="evo2hic-url" placeholder="http://localhost:8000" style="flex:1;min-width:0;" value="${getEvoUrl() ?? ''}">
           <button class="analysis-btn" id="btn-evo2hic-check" style="white-space:nowrap;">Check</button>
         </div>
         <div id="evo2hic-status" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
@@ -2206,12 +2272,42 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
   const btnPredictHiC = document.getElementById('btn-evo2hic-predict-hic') as HTMLButtonElement | null;
   const btnTogglePredicted = document.getElementById('btn-evo2hic-toggle-predicted') as HTMLButtonElement | null;
 
-  // Show FASTA hint
-  if (evo2hicFastaHint) {
-    evo2hicFastaHint.textContent = (!ctx.referenceSequences || ctx.referenceSequences.size === 0)
-      ? 'Load FASTA for sequence-aware enhancement'
-      : '';
+  // ML backend selector — repopulate URL/labels/status when the backend changes.
+  const backendSelect = document.getElementById('ml-backend') as HTMLSelectElement | null;
+  const syncBackendUI = (): void => {
+    const b = activeBackend();
+    if (evo2hicUrlInput) {
+      evo2hicUrlInput.value = backendStoredUrl(b) ?? '';
+      evo2hicUrlInput.placeholder = backendDefaultUrl(b);
+    }
+    if (btnEnhance) {
+      btnEnhance.textContent = b === 'hicfoundation' ? 'Enhance (HiCFoundation)' : 'Enhance (Evo2HiC)';
+      btnEnhance.disabled = true; // switching backend requires a re-check
+    }
+    if (btnPredictTracks) btnPredictTracks.disabled = true;
+    if (btnPredictHiC) btnPredictHiC.disabled = true;
+    if (evo2hicStatus) {
+      evo2hicStatus.textContent = b === 'hicfoundation'
+        ? 'HiCFoundation: Hi-C-only (no Seq2HiC). Click Check.'
+        : 'Click Check to connect.';
+      evo2hicStatus.style.color = 'var(--text-secondary)';
+    }
+    if (evo2hicFastaHint) {
+      evo2hicFastaHint.textContent = b === 'hicfoundation'
+        ? 'HiCFoundation ignores FASTA (Hi-C-only)'
+        : ((!ctx.referenceSequences || ctx.referenceSequences.size === 0)
+            ? 'Load FASTA for sequence-aware enhancement'
+            : '');
+    }
+  };
+  if (backendSelect) {
+    backendSelect.value = storedBackend();
+    backendSelect.addEventListener('change', () => {
+      try { localStorage.setItem(ML_BACKEND_KEY, backendSelect.value); } catch { /* ignore */ }
+      syncBackendUI();
+    });
   }
+  syncBackendUI();
 
   // Restore toggle state if enhanced map exists
   if (btnToggle && cachedEnhancedOverview) {
@@ -2226,20 +2322,21 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       if (evo2hicStatus) { evo2hicStatus.textContent = 'Enter a server URL'; evo2hicStatus.style.color = '#e94560'; }
       return;
     }
-    setStoredServerUrl(url);
+    const b = activeBackend();
+    backendSetUrl(b, url);
     if (evo2hicStatus) { evo2hicStatus.textContent = 'Checking...'; evo2hicStatus.style.color = 'var(--text-secondary)'; }
     try {
-      const client = new Evo2HiCClient({ serverUrl: url });
-      const health = await client.checkHealth();
+      const backend = makeBackend(b, url);
+      const health = await backend.checkHealth();
       if (evo2hicStatus) {
         evo2hicStatus.textContent = `OK: ${health.device}, model ${health.modelVersion}`;
         evo2hicStatus.style.color = '#4caf50';
       }
       if (btnEnhance) btnEnhance.disabled = false;
       if (btnPredictTracks) btnPredictTracks.disabled = false;
-      // Predict Hi-C requires FASTA
+      // Predict Hi-C (Seq2HiC) needs FASTA and is Evo2HiC-only.
       const hasFasta = ctx.referenceSequences && ctx.referenceSequences.size > 0;
-      if (btnPredictHiC) btnPredictHiC.disabled = !hasFasta;
+      if (btnPredictHiC) btnPredictHiC.disabled = !hasFasta || !backend.supportsSeq2HiC;
     } catch (err: unknown) {
       if (evo2hicStatus) {
         evo2hicStatus.textContent = `Error: ${(err as Error).message}`;
@@ -2265,8 +2362,8 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       const overviewSz = getOverviewSize();
       const contactMap = cachedNormalizedMap ?? s2.map.contactMap;
       const contigNames = s2.contigOrder.map(id => s2.map!.contigs[id].name);
-      const client = new Evo2HiCClient({ serverUrl: url });
-      const result = await client.enhance(contactMap, overviewSz, ctx.referenceSequences ?? undefined, contigNames);
+      const backend = makeBackend(activeBackend(), url);
+      const result = await backend.enhance(contactMap, overviewSz, ctx.referenceSequences ?? undefined, contigNames);
 
       cachedEnhancedMap = result.enhancedMap;
       cachedEnhancedOverview = downscaleMap(result.enhancedMap, result.enhancedSize, overviewSz);
@@ -2281,7 +2378,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     } finally {
       enhancing = false;
       btnEnhance.disabled = false;
-      btnEnhance.textContent = 'Enhance (Evo2HiC)';
+      btnEnhance.textContent = activeBackend() === 'hicfoundation' ? 'Enhance (HiCFoundation)' : 'Enhance (Evo2HiC)';
     }
   });
 
@@ -2325,8 +2422,8 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       const contactMap = enhancedMapActive && cachedEnhancedOverview
         ? cachedEnhancedOverview
         : (cachedNormalizedMap ?? s2.map.contactMap);
-      const client = new Evo2HiCClient({ serverUrl: url });
-      const result = await client.predictTracks(contactMap, overviewSz, ctx.referenceSequences ?? undefined);
+      const backend = makeBackend(activeBackend(), url);
+      const result = await backend.predictTracks(contactMap, overviewSz, ctx.referenceSequences ?? undefined);
 
       // Clear previously predicted tracks
       if (cachedEpiTracks) {
