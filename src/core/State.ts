@@ -86,6 +86,9 @@ export interface AppState {
   visibleTracks: Set<string>;
   colorMapName: string;
   gamma: number;
+  /** Minimum contact intensity to display (0–1). Contacts at/below this are
+   *  hidden on both the overview and detail layers. 0 = show everything. */
+  signalFloor: number;
   
   // Selection
   selectedContigs: Set<number>;
@@ -113,6 +116,7 @@ function createInitialState(): AppState {
     visibleTracks: new Set(),
     colorMapName: 'red-white',
     gamma: 0.35,
+    signalFloor: 0,
     selectedContigs: new Set(),
     camera: { x: 0, y: 0, zoom: 1 },
     undoStack: [],

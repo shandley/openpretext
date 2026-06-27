@@ -63,6 +63,7 @@ vi.mock('../../src/formats/BedGraphParser', () => ({
 vi.mock('../../src/ui/ColorMapControls', () => ({
   syncColormapDropdown: vi.fn(),
   syncGammaSlider: vi.fn(),
+  syncFloorSlider: vi.fn(),
 }));
 
 vi.mock('../../src/ui/EventWiring', () => ({
@@ -563,6 +564,7 @@ describe('ExportSession', () => {
 
       expect(state.update).toHaveBeenCalledWith({
         gamma: 2.0,
+        signalFloor: 0,
         showGrid: false,
         colorMapName: 'viridis',
       });

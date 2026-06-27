@@ -51,6 +51,7 @@ uniform sampler2D u_contactMap;
 uniform sampler2D u_colorMap;
 uniform vec2 u_resolution;
 uniform float u_gamma;
+uniform float u_floor;   // minimum contact intensity to display
 uniform bool u_showGrid;
 uniform float u_gridOpacity;
 uniform int u_numContigs;
@@ -83,6 +84,9 @@ float gridDistance(vec2 uv, int numContigs) {
 void main() {
   // Sample the contact map (single channel intensity)
   float intensity = texture(u_contactMap, v_texcoord).r;
+
+  // Hide faint contacts at/below the user-set signal floor (renders as background)
+  if (intensity <= u_floor) intensity = 0.0;
 
   // Apply gamma correction
   float mapped = applyGamma(intensity, u_gamma);
@@ -164,14 +168,16 @@ in vec2 v_texcoord;
 uniform sampler2D u_tileTexture;
 uniform sampler2D u_colorMap;
 uniform float u_gamma;
+uniform float u_floor;   // minimum contact intensity to display
 
 out vec4 fragColor;
 
 void main() {
   float intensity = texture(u_tileTexture, v_texcoord).r;
-  // Skip empty/zero-data fragments so the overview shows through instead of
-  // painting an opaque color (e.g. white in the Red-White map) over it.
-  if (intensity <= 0.0039) discard;
+  // Skip empty/zero-data fragments (so the overview shows through instead of an
+  // opaque tile) and any contact at/below the user-set signal floor. The 1/255
+  // minimum preserves the empty-tile discard when the floor is 0.
+  if (intensity <= max(u_floor, 0.0039)) discard;
   float mapped = pow(clamp(intensity, 0.0, 1.0), u_gamma);
   fragColor = texture(u_colorMap, vec2(mapped, 0.5));
 }
@@ -251,7 +257,7 @@ export class WebGLRenderer {
     // Get uniform locations
     const uniformNames = [
       'u_camera', 'u_zoom', 'u_resolution', 'u_contactMap', 'u_colorMap',
-      'u_gamma', 'u_showGrid', 'u_gridOpacity', 'u_numContigs', 'u_contigBoundaries',
+      'u_gamma', 'u_floor', 'u_showGrid', 'u_gridOpacity', 'u_numContigs', 'u_contigBoundaries',
       'u_highlightStart', 'u_highlightEnd', 'u_hasHighlight'
     ];
     for (const name of uniformNames) {
@@ -387,6 +393,7 @@ export class WebGLRenderer {
    */
   render(camera: { x: number; y: number; zoom: number }, options: {
     gamma?: number;
+    floor?: number;
     showGrid?: boolean;
     gridOpacity?: number;
     contigBoundaries?: number[];
@@ -418,6 +425,7 @@ export class WebGLRenderer {
     gl.uniform1f(this.uniforms['u_zoom']!, camera.zoom);
     gl.uniform2f(this.uniforms['u_resolution']!, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.uniform1f(this.uniforms['u_gamma']!, options.gamma ?? 0.5);
+    gl.uniform1f(this.uniforms['u_floor']!, options.floor ?? 0);
     gl.uniform1i(this.uniforms['u_showGrid']!, (options.showGrid ?? false) ? 1 : 0);
     gl.uniform1f(this.uniforms['u_gridOpacity']!, options.gridOpacity ?? 0.5);
     
@@ -516,7 +524,7 @@ export class WebGLRenderer {
     const tileUniformNames = [
       'u_camera', 'u_zoom', 'u_resolution',
       'u_tileOffset', 'u_tileScale',
-      'u_tileTexture', 'u_colorMap', 'u_gamma',
+      'u_tileTexture', 'u_colorMap', 'u_gamma', 'u_floor',
     ];
     for (const name of tileUniformNames) {
       this.tileUniforms[name] = gl.getUniformLocation(this.tileProgram, name);
@@ -600,7 +608,7 @@ export class WebGLRenderer {
    * binds the color map, and binds the tile VAO once. Call drawTile() per tile,
    * then endTiles().
    */
-  beginTiles(camera: { x: number; y: number; zoom: number }, gamma: number): void {
+  beginTiles(camera: { x: number; y: number; zoom: number }, gamma: number, floor: number = 0): void {
     const gl = this.gl;
     if (!this.tileProgram || !this.tileVao) return;
     gl.useProgram(this.tileProgram);
@@ -608,6 +616,7 @@ export class WebGLRenderer {
     gl.uniform1f(this.tileUniforms['u_zoom']!, camera.zoom);
     gl.uniform2f(this.tileUniforms['u_resolution']!, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.uniform1f(this.tileUniforms['u_gamma']!, gamma);
+    gl.uniform1f(this.tileUniforms['u_floor']!, floor);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
     gl.uniform1i(this.tileUniforms['u_colorMap']!, 1);

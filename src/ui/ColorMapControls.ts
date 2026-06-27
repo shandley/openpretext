@@ -23,6 +23,13 @@ export function syncGammaSlider(gamma: number): void {
   if (label) label.textContent = gamma.toFixed(2);
 }
 
+export function syncFloorSlider(floor: number): void {
+  const slider = document.getElementById('floor-slider') as HTMLInputElement;
+  const label = document.getElementById('floor-value');
+  if (slider) slider.value = String(floor);
+  if (label) label.textContent = floor.toFixed(2);
+}
+
 export function syncColormapDropdown(name: ColorMapName): void {
   const select = document.getElementById('colormap-select') as HTMLSelectElement;
   if (select) select.value = name;

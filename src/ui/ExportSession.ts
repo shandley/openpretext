@@ -14,7 +14,7 @@ import { downloadSnapshot } from '../export/SnapshotExporter';
 import { exportSession, importSession, downloadSession } from '../io/SessionManager';
 import type { SessionData } from '../io/SessionManager';
 import type { ColorMapName } from '../renderer/ColorMaps';
-import { syncColormapDropdown, syncGammaSlider } from './ColorMapControls';
+import { syncColormapDropdown, syncGammaSlider, syncFloorSlider } from './ColorMapControls';
 import { rebuildContigBoundaries } from './EventWiring';
 import { exportAnalysisState, restoreAnalysisState } from './AnalysisPanel';
 import { inflate } from 'pako';
@@ -117,6 +117,7 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     // Restore settings
     state.update({
       gamma: session.settings.gamma,
+      signalFloor: session.settings.signalFloor ?? 0,
       showGrid: session.settings.showGrid,
       colorMapName: session.settings.colorMapName,
     });
@@ -124,6 +125,7 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     ctx.renderer.setColorMap(ctx.currentColorMap);
     syncColormapDropdown(ctx.currentColorMap);
     syncGammaSlider(session.settings.gamma);
+    syncFloorSlider(session.settings.signalFloor ?? 0);
 
     // Restore waypoints
     ctx.waypointManager.clearAll();

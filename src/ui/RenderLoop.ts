@@ -74,6 +74,7 @@ export function startRenderLoop(ctx: AppContext): void {
 
     ctx.renderer.render(cam, {
       gamma: s.gamma,
+      floor: s.signalFloor,
       showGrid: s.showGrid,
       gridOpacity: 0.6,
       contigBoundaries: ctx.contigBoundaries,
@@ -89,7 +90,7 @@ export function startRenderLoop(ctx: AppContext): void {
       for (const key of ctx.tileManager.visibleKeys) {
         const tile = ctx.tileManager.getTile(key);
         if (tile && tile.state === 'loaded' && tile.texture) {
-          if (!started) { ctx.renderer.beginTiles(cam, s.gamma); started = true; }
+          if (!started) { ctx.renderer.beginTiles(cam, s.gamma, s.signalFloor); started = true; }
           ctx.renderer.drawTile(tile.texture, key.col, key.row, tilesPerDim);
         }
       }

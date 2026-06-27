@@ -101,6 +101,15 @@ export function setupToolbar(ctx: AppContext): void {
     gammaValue.textContent = gamma.toFixed(2);
   });
 
+  // Signal floor slider — hides contacts at/below the threshold on both layers
+  const floorSlider = document.getElementById('floor-slider') as HTMLInputElement;
+  const floorValue = document.getElementById('floor-value')!;
+  floorSlider?.addEventListener('input', () => {
+    const signalFloor = parseFloat(floorSlider.value);
+    state.update({ signalFloor });
+    floorValue.textContent = signalFloor.toFixed(2);
+  });
+
   document.getElementById('btn-undo')?.addEventListener('click', () => {
     performUndo(ctx);
   });
