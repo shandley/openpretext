@@ -41,3 +41,8 @@ export function syncColormapDropdown(name: ColorMapName): void {
   const select = document.getElementById('colormap-select') as HTMLSelectElement;
   if (select) select.value = name;
 }
+
+export function syncOverviewModeSelect(mode: 'clean' | 'faithful'): void {
+  const select = document.getElementById('overview-mode-select') as HTMLSelectElement;
+  if (select) select.value = mode;
+}

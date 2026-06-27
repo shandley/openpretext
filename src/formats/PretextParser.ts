@@ -627,6 +627,87 @@ export async function parseAndAssemble(
   };
 }
 
+export type OverviewMode = 'clean' | 'faithful';
+
+/** Number of mip levels finer than the coarsest to max-pool from in 'faithful'
+ *  mode. Bounded for memory/speed; each step doubles the per-tile decode work. */
+const FAITHFUL_POOL_LEVELS = 3;
+
+/**
+ * Re-assemble the overview texture from already-inflated raw BC4 tile bytes
+ * (state.map.rawTiles), in the file's original contig order.
+ *
+ * - 'clean': decode the coarsest mip per tile — identical to what
+ *   `parseAndAssemble` produces at load. The file's own averaging has dropped
+ *   sparse off-diagonal contacts here, giving the familiar clean block-diagonal.
+ * - 'faithful': decode a finer mip per tile and **max-pool** it down to the
+ *   coarsest resolution. Max-pooling preserves sparse contacts that mean-
+ *   downsampling discards, so the overview agrees with the detail layer.
+ *
+ * Pure (no DOM/GPU). Returns the overview in original order; callers reorder it
+ * to the current contig order (like `originalContactMap`) before display.
+ */
+export function assembleOverview(
+  rawTiles: Uint8Array[],
+  header: PretextHeader,
+  mode: OverviewMode,
+): { overview: Float32Array; overviewSize: number } {
+  const N = header.numberOfTextures1D;
+  const coarsestMip = header.mipMapLevels - 1;
+  const coarsestRes = header.textureResolution >> coarsestMip;
+  const overviewSize = N * coarsestRes;
+  const overview = new Float32Array(overviewSize * overviewSize);
+
+  const srcMip = mode === 'faithful'
+    ? Math.max(0, coarsestMip - FAITHFUL_POOL_LEVELS)
+    : coarsestMip;
+  const srcRes = header.textureResolution >> srcMip;
+  const factor = srcRes / coarsestRes; // power of two >= 1
+
+  // BC4 byte offset of srcMip within a tile (sum of finer levels' sizes).
+  let srcOffset = 0;
+  for (let lev = 0, r = header.textureResolution; lev < srcMip; lev++) {
+    srcOffset += (r * r) >> 1;
+    r >>= 1;
+  }
+  const srcBytes = (srcRes * srcRes) >> 1;
+
+  for (let tx = 0; tx < N; tx++) {
+    for (let ty = tx; ty < N; ty++) {
+      const tile = rawTiles[tileLinearIndex(tx, ty, N)];
+      if (!tile || srcOffset + srcBytes > tile.length) continue;
+      const src = decodeBC4Level(tile, srcOffset, srcRes);
+
+      for (let py = 0; py < coarsestRes; py++) {
+        for (let px = 0; px < coarsestRes; px++) {
+          let val: number;
+          if (factor === 1) {
+            val = src[py * srcRes + px];
+          } else {
+            let m = 0;
+            const by = py * factor;
+            const bx = px * factor;
+            for (let dy = 0; dy < factor; dy++) {
+              const rowBase = (by + dy) * srcRes + bx;
+              for (let dx = 0; dx < factor; dx++) {
+                const v = src[rowBase + dx];
+                if (v > m) m = v;
+              }
+            }
+            val = m;
+          }
+          const gx = tx * coarsestRes + px;
+          const gy = ty * coarsestRes + py;
+          overview[gy * overviewSize + gx] = val;
+          overview[gx * overviewSize + gy] = val;
+        }
+      }
+    }
+  }
+
+  return { overview, overviewSize };
+}
+
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------

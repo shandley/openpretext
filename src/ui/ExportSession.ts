@@ -14,8 +14,8 @@ import { downloadSnapshot } from '../export/SnapshotExporter';
 import { exportSession, importSession, downloadSession } from '../io/SessionManager';
 import type { SessionData } from '../io/SessionManager';
 import type { ColorMapName } from '../renderer/ColorMaps';
-import { syncColormapDropdown, syncGammaSlider, syncFloorSlider, syncCeilSlider } from './ColorMapControls';
-import { rebuildContigBoundaries } from './EventWiring';
+import { syncColormapDropdown, syncGammaSlider, syncFloorSlider, syncCeilSlider, syncOverviewModeSelect } from './ColorMapControls';
+import { rebuildContigBoundaries, applyOverviewMode } from './EventWiring';
 import { exportAnalysisState, restoreAnalysisState } from './AnalysisPanel';
 import { inflate } from 'pako';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
@@ -115,10 +115,12 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     ctx.camera.animateTo(session.camera, 300);
 
     // Restore settings
+    const overviewMode = session.settings.overviewMode ?? 'clean';
     state.update({
       gamma: session.settings.gamma,
       signalFloor: session.settings.signalFloor ?? 0,
       signalCeil: session.settings.signalCeil ?? 1,
+      overviewMode,
       showGrid: session.settings.showGrid,
       colorMapName: session.settings.colorMapName,
     });
@@ -128,6 +130,8 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     syncGammaSlider(session.settings.gamma);
     syncFloorSlider(session.settings.signalFloor ?? 0);
     syncCeilSlider(session.settings.signalCeil ?? 1);
+    syncOverviewModeSelect(overviewMode);
+    applyOverviewMode(ctx);
 
     // Restore waypoints
     ctx.waypointManager.clearAll();

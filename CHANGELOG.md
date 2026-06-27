@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Overview detail mode (Clean / Faithful)** — a toolbar dropdown controlling
+  how the overview represents sparse off-diagonal contacts, fixing the jarring
+  inconsistency where the coarse overview was clean but zooming "revealed"
+  off-diagonal signal that popped in (and changed with zoom). Root cause: the
+  overview is built from the file's coarsest, most-lossy mip (sparse contacts
+  averaged to ~0), while detail tiles use finer mips that retain them. Both modes
+  are now consistent across zoom: **Clean** (default) gates the detail layer by
+  the overview (`u_gateEnabled`/`u_gateThresh` in the tile shader, sampling a
+  dedicated original-order gate texture) so detail only renders where the overview
+  has signal; **Faithful** rebuilds the overview by max-pooling a finer mip
+  (`assembleOverview()` in PretextParser) so the overview agrees with the detail
+  and the minimap shows the off-diagonal too. Mode persists in sessions. 4 new
+  unit tests (overview-mode.test.ts).
 - **Track name labels on canvas** — each analysis track now shows its name as a
   semi-transparent label on the top-edge (horizontal) and left-edge (rotated 90°)
   overlays, so tracks are identifiable without opening the sidebar config panel

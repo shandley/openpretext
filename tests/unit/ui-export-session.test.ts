@@ -65,10 +65,12 @@ vi.mock('../../src/ui/ColorMapControls', () => ({
   syncGammaSlider: vi.fn(),
   syncFloorSlider: vi.fn(),
   syncCeilSlider: vi.fn(),
+  syncOverviewModeSelect: vi.fn(),
 }));
 
 vi.mock('../../src/ui/EventWiring', () => ({
   rebuildContigBoundaries: vi.fn(),
+  applyOverviewMode: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -567,6 +569,7 @@ describe('ExportSession', () => {
         gamma: 2.0,
         signalFloor: 0,
         signalCeil: 1,
+        overviewMode: 'clean',
         showGrid: false,
         colorMapName: 'viridis',
       });

@@ -121,6 +121,21 @@ export function setupToolbar(ctx: AppContext): void {
     ceilValue.textContent = signalCeil.toFixed(2);
   });
 
+  // Overview mode (clean ⇄ faithful) — changes how the overview is built and
+  // whether the detail layer is gated by it.
+  const overviewModeSelect = document.getElementById('overview-mode-select') as HTMLSelectElement;
+  overviewModeSelect?.addEventListener('change', async () => {
+    const overviewMode = overviewModeSelect.value === 'faithful' ? 'faithful' : 'clean';
+    state.update({ overviewMode });
+    const { applyOverviewMode } = await import('./EventWiring');
+    applyOverviewMode(ctx);
+    ctx.showToast(
+      overviewMode === 'faithful'
+        ? 'Overview: Faithful — off-diagonal contacts shown at every zoom'
+        : 'Overview: Clean — sparse off-diagonal contacts suppressed',
+    );
+  });
+
   document.getElementById('btn-undo')?.addEventListener('click', () => {
     performUndo(ctx);
   });

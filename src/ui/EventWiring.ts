@@ -14,6 +14,7 @@ import { getContigBoundaries } from '../core/DerivedState';
 import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel, clearEnhancedMap } from './AnalysisPanel';
 import { updateComparisonSummary } from './ComparisonMode';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
+import { assembleOverview } from '../formats/PretextParser';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -105,7 +106,7 @@ export function refreshAfterCuration(ctx: AppContext): void {
 function reorderAndUploadContactMap(ctx: AppContext): void {
   const s = state.get();
   if (!s.map) return;
-  const original = s.map.originalContactMap;
+  const original = overviewForMode(ctx, s);
   if (!original) return;
   const mapSize = Math.round(Math.sqrt(original.length));
   if (mapSize === 0) return;
@@ -113,6 +114,33 @@ function reorderAndUploadContactMap(ctx: AppContext): void {
   const reordered = reorderContactMap(original, s.map.contigs, s.contigOrder, mapSize);
   ctx.renderer.uploadContactMap(reordered, mapSize);
   ctx.minimap.updateThumbnail(reordered, mapSize);
+}
+
+/**
+ * Pick the original-order overview for the current mode. In 'faithful' mode the
+ * max-pooled overview is computed once from the raw tiles and cached on ctx.
+ * Falls back to the clean overview if raw tiles aren't available (e.g. demo).
+ */
+function overviewForMode(ctx: AppContext, s: ReturnType<typeof state.get>): Float32Array | null {
+  if (!s.map) return null;
+  const clean = s.map.originalContactMap ?? null;
+  if (s.overviewMode !== 'faithful') return clean;
+  if (!s.map.rawTiles || !s.map.parsedHeader) return clean;
+  if (!ctx.faithfulOverviewOriginal) {
+    ctx.faithfulOverviewOriginal = assembleOverview(
+      s.map.rawTiles, s.map.parsedHeader, 'faithful',
+    ).overview;
+  }
+  return ctx.faithfulOverviewOriginal;
+}
+
+/**
+ * Re-apply the overview for the current `overviewMode` (clean ⇄ faithful),
+ * reordered to the current contig order. Called when the mode toggle changes.
+ */
+export function applyOverviewMode(ctx: AppContext): void {
+  reorderAndUploadContactMap(ctx);
+  ctx.requestRender();
 }
 
 /**

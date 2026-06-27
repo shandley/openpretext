@@ -44,6 +44,10 @@ async function loadPretextFromBuffer(
 
   updateLoading('Uploading to GPU...', 92);
   ctx.renderer.uploadContactMap(contactMap, overviewSize);
+  // Gate overview = the clean overview in original order; the detail-tile gate
+  // (clean mode) samples this so it aligns with original-order tiles.
+  ctx.renderer.uploadGateOverview(contactMap, overviewSize);
+  ctx.faithfulOverviewOriginal = null; // invalidate cache for the new file
   ctx.minimap.updateThumbnail(contactMap, overviewSize);
   ctx.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
 
@@ -79,6 +83,11 @@ async function loadPretextFromBuffer(
   statusEl.textContent = filename;
   document.getElementById('status-contigs')!.textContent = `${parsed.contigs.length} contigs`;
   events.emit('file:loaded', { filename, contigs: parsed.contigs.length, textureSize: mapSize });
+  // If the user left the viewer in faithful mode, re-apply it for the new file.
+  if (state.get().overviewMode === 'faithful') {
+    const { applyOverviewMode } = await import('./EventWiring');
+    applyOverviewMode(ctx);
+  }
   ctx.showToast(`Loaded ${filename} — ${parsed.contigs.length} contigs, ${mapSize}px`);
 }
 

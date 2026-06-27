@@ -91,7 +91,14 @@ export function startRenderLoop(ctx: AppContext): void {
       for (const key of ctx.tileManager.visibleKeys) {
         const tile = ctx.tileManager.getTile(key);
         if (tile && tile.state === 'loaded' && tile.texture) {
-          if (!started) { ctx.renderer.beginTiles(cam, s.gamma, s.signalFloor, s.signalCeil); started = true; }
+          if (!started) {
+            // Clean mode gates the detail layer by the overview so sparse
+            // off-diagonal contacts stay suppressed at every zoom; faithful
+            // mode shows all detail (its overview already carries the signal).
+            const gate = s.overviewMode === 'clean';
+            ctx.renderer.beginTiles(cam, s.gamma, s.signalFloor, s.signalCeil, gate);
+            started = true;
+          }
           ctx.renderer.drawTile(tile.texture, key.col, key.row, tilesPerDim);
         }
       }

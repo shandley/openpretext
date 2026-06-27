@@ -53,6 +53,9 @@ export interface AppContext {
   suppressCurationRefresh: boolean;
 
   // Mutable shared state
+  /** Lazily-computed faithful (max-pooled) overview in original contig order.
+   *  Cached per file; null until 'faithful' mode is first selected. Reset on load. */
+  faithfulOverviewOriginal: Float32Array | null;
   contigBoundaries: number[];
   hoveredContigIndex: number;
   mouseMapPos: { x: number; y: number };

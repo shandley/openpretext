@@ -136,6 +136,7 @@ uniform vec2 u_tileOffset; // tile origin in map space (0-1)
 uniform vec2 u_tileScale;  // tile size in map space (1/tilesPerDim)
 
 out vec2 v_texcoord;
+out vec2 v_overviewcoord; // where to sample the overview texture for gating
 
 void main() {
   // Map unit quad [0,1] to tile's region in map space
@@ -155,6 +156,9 @@ void main() {
   // Flip V to match the overview quad's texcoords (data row 0 = top of map);
   // without this the detail layer renders vertically mirrored (\\ -> /).
   v_texcoord = vec2(a_position.x, 1.0 - a_position.y);
+  // Overview is sampled at (x, 1-y) in map space (matches the overview quad's
+  // texcoord convention), so the gate reads the same cell the overview shows.
+  v_overviewcoord = vec2(mapPos.x, 1.0 - mapPos.y);
 }
 `;
 
@@ -164,16 +168,25 @@ const TILE_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
 in vec2 v_texcoord;
+in vec2 v_overviewcoord;
 
 uniform sampler2D u_tileTexture;
 uniform sampler2D u_colorMap;
+uniform sampler2D u_overview;  // original-order overview, for the gate
 uniform float u_gamma;
 uniform float u_floor;   // contrast range minimum (hidden at/below)
 uniform float u_ceil;    // contrast range maximum (saturated at/above)
+uniform bool u_gateEnabled; // 'clean' mode: hide detail where the overview is empty
+uniform float u_gateThresh; // overview value below which detail is suppressed
 
 out vec4 fragColor;
 
 void main() {
+  // Overview gate (clean mode): only show detail where the coarse overview has
+  // signal. This keeps the detail layer consistent with the overview so sparse
+  // off-diagonal contacts don't "pop in" on zoom. Disabled in faithful mode.
+  if (u_gateEnabled && texture(u_overview, v_overviewcoord).r < u_gateThresh) discard;
+
   float intensity = texture(u_tileTexture, v_texcoord).r;
   // Skip empty/zero-data fragments (so the overview shows through instead of an
   // opaque tile) and any contact at/below the floor. The 1/255 minimum preserves
@@ -194,6 +207,12 @@ export class WebGLRenderer {
   // Textures
   private contactMapTexture: WebGLTexture | null = null;
   private colorMapTexture: WebGLTexture | null = null;
+  // Clean overview in original (file) contig order — sampled by the detail-tile
+  // gate. Kept separate from contactMapTexture because the displayed overview
+  // may be reordered (curation) or max-pooled (faithful mode), while the gate
+  // must align with the original-order detail tiles.
+  private gateOverviewTexture: WebGLTexture | null = null;
+  private gateOverviewSize = 0;
 
   // Geometry
   private vao: WebGLVertexArrayObject | null = null;
@@ -364,6 +383,32 @@ export class WebGLRenderer {
   }
 
   /**
+   * Upload the original-order clean overview used by the detail-tile gate.
+   * Call once per file load (with the original, un-reordered overview). The
+   * gate samples this so detail tiles (always drawn in original order) align
+   * with it regardless of how the displayed overview is reordered or pooled.
+   */
+  uploadGateOverview(data: Float32Array, size: number): void {
+    const gl = this.gl;
+    if (this.gateOverviewTexture) gl.deleteTexture(this.gateOverviewTexture);
+
+    this.gateOverviewTexture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, this.gateOverviewTexture);
+
+    const u8data = new Uint8Array(size * size);
+    for (let i = 0; i < data.length; i++) {
+      u8data[i] = Math.round(Math.min(1.0, Math.max(0.0, data[i])) * 255);
+    }
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, size, size, 0, gl.RED, gl.UNSIGNED_BYTE, u8data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.gateOverviewSize = size;
+    this.needsRender = true;
+  }
+
+  /**
    * Set the color map used for rendering.
    */
   setColorMap(name: ColorMapName): void {
@@ -529,7 +574,8 @@ export class WebGLRenderer {
     const tileUniformNames = [
       'u_camera', 'u_zoom', 'u_resolution',
       'u_tileOffset', 'u_tileScale',
-      'u_tileTexture', 'u_colorMap', 'u_gamma', 'u_floor', 'u_ceil',
+      'u_tileTexture', 'u_colorMap', 'u_overview', 'u_gamma', 'u_floor', 'u_ceil',
+      'u_gateEnabled', 'u_gateThresh',
     ];
     for (const name of tileUniformNames) {
       this.tileUniforms[name] = gl.getUniformLocation(this.tileProgram, name);
@@ -613,7 +659,14 @@ export class WebGLRenderer {
    * binds the color map, and binds the tile VAO once. Call drawTile() per tile,
    * then endTiles().
    */
-  beginTiles(camera: { x: number; y: number; zoom: number }, gamma: number, floor: number = 0, ceil: number = 1): void {
+  beginTiles(
+    camera: { x: number; y: number; zoom: number },
+    gamma: number,
+    floor: number = 0,
+    ceil: number = 1,
+    gateEnabled: boolean = false,
+    gateThresh: number = 0.006,
+  ): void {
     const gl = this.gl;
     if (!this.tileProgram || !this.tileVao) return;
     gl.useProgram(this.tileProgram);
@@ -623,9 +676,16 @@ export class WebGLRenderer {
     gl.uniform1f(this.tileUniforms['u_gamma']!, gamma);
     gl.uniform1f(this.tileUniforms['u_floor']!, floor);
     gl.uniform1f(this.tileUniforms['u_ceil']!, ceil);
+    // Gate can only run if we have an overview texture to sample.
+    const gate = gateEnabled && this.gateOverviewTexture !== null;
+    gl.uniform1i(this.tileUniforms['u_gateEnabled']!, gate ? 1 : 0);
+    gl.uniform1f(this.tileUniforms['u_gateThresh']!, gateThresh);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
     gl.uniform1i(this.tileUniforms['u_colorMap']!, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.gateOverviewTexture);
+    gl.uniform1i(this.tileUniforms['u_overview']!, 2);
     gl.bindVertexArray(this.tileVao);
   }
 
@@ -651,6 +711,7 @@ export class WebGLRenderer {
     const gl = this.gl;
     if (this.contactMapTexture) gl.deleteTexture(this.contactMapTexture);
     if (this.colorMapTexture) gl.deleteTexture(this.colorMapTexture);
+    if (this.gateOverviewTexture) gl.deleteTexture(this.gateOverviewTexture);
     if (this.program) gl.deleteProgram(this.program);
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.tileProgram) gl.deleteProgram(this.tileProgram);

@@ -60,6 +60,8 @@ export interface SessionSettings {
   /** Optional (added later) — contrast range [signalFloor, signalCeil]. */
   signalFloor?: number;
   signalCeil?: number;
+  /** Optional (added later) — overview representation mode. */
+  overviewMode?: 'clean' | 'faithful';
   showGrid: boolean;
 }
 
@@ -499,6 +501,7 @@ export function exportSession(
       gamma: appState.gamma,
       signalFloor: appState.signalFloor,
       signalCeil: appState.signalCeil,
+      overviewMode: appState.overviewMode,
       showGrid: appState.showGrid,
     },
     operationLog,
@@ -622,6 +625,8 @@ export function validateSession(data: unknown): data is SessionData {
   if (!isFiniteNumber(data.settings.gamma)) return false;
   if (data.settings.signalFloor !== undefined && !isFiniteNumber(data.settings.signalFloor)) return false;
   if (data.settings.signalCeil !== undefined && !isFiniteNumber(data.settings.signalCeil)) return false;
+  if (data.settings.overviewMode !== undefined &&
+      data.settings.overviewMode !== 'clean' && data.settings.overviewMode !== 'faithful') return false;
   if (typeof data.settings.showGrid !== 'boolean') return false;
 
   // -- operationLog --

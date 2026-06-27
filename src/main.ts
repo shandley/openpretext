@@ -113,6 +113,7 @@ class OpenPretextApp {
       currentWaypointId: null,
       animFrameId: 0,
       referenceSequences: null,
+      faithfulOverviewOriginal: null,
       comparisonSnapshot: null,
       comparisonInvertedSnapshot: null,
       comparisonVisible: false,

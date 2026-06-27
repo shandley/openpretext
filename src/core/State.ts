@@ -91,7 +91,15 @@ export interface AppState {
    *  layers; values at/above the ceiling saturate. Defaults 0/1 = show everything. */
   signalFloor: number;
   signalCeil: number;
-  
+  /** Overview representation mode.
+   *  'clean'   — coarsest mip overview; sparse off-diagonal contacts are
+   *              suppressed consistently at every zoom (detail is gated by the
+   *              overview so nothing "pops in"). The curation default.
+   *  'faithful'— overview is max-pooled from a finer mip so it agrees with the
+   *              detail layer; sparse inter-contig contacts are shown honestly
+   *              at every zoom and in the minimap (detail gate disabled). */
+  overviewMode: 'clean' | 'faithful';
+
   // Selection
   selectedContigs: Set<number>;
   
@@ -120,6 +128,7 @@ function createInitialState(): AppState {
     gamma: 0.35,
     signalFloor: 0,
     signalCeil: 1,
+    overviewMode: 'clean',
     selectedContigs: new Set(),
     camera: { x: 0, y: 0, zoom: 1 },
     undoStack: [],
