@@ -30,6 +30,13 @@ export function syncFloorSlider(floor: number): void {
   if (label) label.textContent = floor.toFixed(2);
 }
 
+export function syncCeilSlider(ceil: number): void {
+  const slider = document.getElementById('ceil-slider') as HTMLInputElement;
+  const label = document.getElementById('ceil-value');
+  if (slider) slider.value = String(ceil);
+  if (label) label.textContent = ceil.toFixed(2);
+}
+
 export function syncColormapDropdown(name: ColorMapName): void {
   const select = document.getElementById('colormap-select') as HTMLSelectElement;
   if (select) select.value = name;

@@ -57,8 +57,9 @@ export interface SessionCamera {
 export interface SessionSettings {
   colorMapName: string;
   gamma: number;
-  /** Optional (added later) — minimum contact intensity to display. */
+  /** Optional (added later) — contrast range [signalFloor, signalCeil]. */
   signalFloor?: number;
+  signalCeil?: number;
   showGrid: boolean;
 }
 
@@ -497,6 +498,7 @@ export function exportSession(
       colorMapName: appState.colorMapName,
       gamma: appState.gamma,
       signalFloor: appState.signalFloor,
+      signalCeil: appState.signalCeil,
       showGrid: appState.showGrid,
     },
     operationLog,
@@ -619,6 +621,7 @@ export function validateSession(data: unknown): data is SessionData {
   if (typeof data.settings.colorMapName !== 'string') return false;
   if (!isFiniteNumber(data.settings.gamma)) return false;
   if (data.settings.signalFloor !== undefined && !isFiniteNumber(data.settings.signalFloor)) return false;
+  if (data.settings.signalCeil !== undefined && !isFiniteNumber(data.settings.signalCeil)) return false;
   if (typeof data.settings.showGrid !== 'boolean') return false;
 
   // -- operationLog --

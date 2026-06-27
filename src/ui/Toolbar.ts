@@ -101,13 +101,24 @@ export function setupToolbar(ctx: AppContext): void {
     gammaValue.textContent = gamma.toFixed(2);
   });
 
-  // Signal floor slider — hides contacts at/below the threshold on both layers
+  // Contrast range (min/max) — rescales contact intensity on both layers.
   const floorSlider = document.getElementById('floor-slider') as HTMLInputElement;
   const floorValue = document.getElementById('floor-value')!;
+  const ceilSlider = document.getElementById('ceil-slider') as HTMLInputElement;
+  const ceilValue = document.getElementById('ceil-value')!;
   floorSlider?.addEventListener('input', () => {
-    const signalFloor = parseFloat(floorSlider.value);
+    let signalFloor = parseFloat(floorSlider.value);
+    const ceil = state.get().signalCeil;
+    if (signalFloor >= ceil) { signalFloor = Math.max(0, ceil - 0.01); floorSlider.value = String(signalFloor); }
     state.update({ signalFloor });
     floorValue.textContent = signalFloor.toFixed(2);
+  });
+  ceilSlider?.addEventListener('input', () => {
+    let signalCeil = parseFloat(ceilSlider.value);
+    const floor = state.get().signalFloor;
+    if (signalCeil <= floor) { signalCeil = Math.min(1, floor + 0.01); ceilSlider.value = String(signalCeil); }
+    state.update({ signalCeil });
+    ceilValue.textContent = signalCeil.toFixed(2);
   });
 
   document.getElementById('btn-undo')?.addEventListener('click', () => {

@@ -2557,9 +2557,13 @@
           γ <input type="range" class="toolbar-slider" id="gamma-slider" min="0.1" max="2.0" step="0.05" value="0.35">
           <span id="gamma-value">0.35</span>
         </label>
-        <label class="toolbar-slider-label" title="Minimum contact intensity to display (hides faint off-diagonal signal)">
-          Floor <input type="range" class="toolbar-slider" id="floor-slider" min="0" max="0.5" step="0.01" value="0">
+        <label class="toolbar-slider-label" title="Contrast minimum — contacts at/below this are hidden (suppresses faint off-diagonal signal)">
+          Min <input type="range" class="toolbar-slider" id="floor-slider" min="0" max="1" step="0.01" value="0">
           <span id="floor-value">0.00</span>
+        </label>
+        <label class="toolbar-slider-label" title="Contrast maximum — contacts at/above this are fully saturated">
+          Max <input type="range" class="toolbar-slider" id="ceil-slider" min="0" max="1" step="0.01" value="1">
+          <span id="ceil-value">1.00</span>
         </label>
       </div>
       <div style="flex:1"></div>

@@ -86,9 +86,11 @@ export interface AppState {
   visibleTracks: Set<string>;
   colorMapName: string;
   gamma: number;
-  /** Minimum contact intensity to display (0–1). Contacts at/below this are
-   *  hidden on both the overview and detail layers. 0 = show everything. */
+  /** Contrast range: contact intensity is rescaled from [signalFloor, signalCeil]
+   *  to [0,1] before gamma/colormap. Values at/below the floor are hidden on both
+   *  layers; values at/above the ceiling saturate. Defaults 0/1 = show everything. */
   signalFloor: number;
+  signalCeil: number;
   
   // Selection
   selectedContigs: Set<number>;
@@ -117,6 +119,7 @@ function createInitialState(): AppState {
     colorMapName: 'red-white',
     gamma: 0.35,
     signalFloor: 0,
+    signalCeil: 1,
     selectedContigs: new Set(),
     camera: { x: 0, y: 0, zoom: 1 },
     undoStack: [],
