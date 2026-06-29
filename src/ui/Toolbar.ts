@@ -11,8 +11,10 @@ import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession 
 import { loadExampleDataset, loadDemoData } from './FileLoading';
 import { performUndo, performRedo } from './CurationActions';
 import { toggleLessonBrowser } from './LessonBrowser';
+import { setupToolbarPopovers } from './ToolbarPopovers';
 
 export function setupToolbar(ctx: AppContext): void {
+  setupToolbarPopovers();
   document.getElementById('btn-open')?.addEventListener('click', () => {
     document.getElementById('file-input')?.click();
   });

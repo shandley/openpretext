@@ -5,6 +5,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- **Toolbar reorganized to fit without horizontal scroll.** ~21 controls in one
+  strip overflowed on typical laptop widths (the toolbar scrolled with a hidden
+  scrollbar, so the right-hand panel toggles and the Clean/Faithful control sat
+  off-screen). The rarely-used and occasional controls now collapse into
+  click-to-open popovers: **Export ▾** (AGP/BED/FASTA), **File ▾** (Save/Load
+  Session, Load FASTA/Track, Screenshot), and **Display ▾** (colormap, gamma,
+  Min/Max contrast, Clean/Faithful overview). Mode buttons are a segmented
+  control and Undo/Redo are icons. Always-visible controls drop from ~21 to ~12,
+  fitting comfortably at ≥1280px. New lightweight `ToolbarPopovers` component
+  (one open at a time; closes on outside-click/Escape/scroll/resize); all control
+  IDs preserved so existing handlers are unchanged.
+
 ### Added
 - **Overview detail mode (Clean / Faithful)** — a toolbar dropdown controlling
   how the overview represents sparse off-diagonal contacts, fixing the jarring

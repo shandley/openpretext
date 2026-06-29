@@ -168,6 +168,88 @@
       color: var(--text-secondary);
     }
 
+    /* Toolbar popovers (Display controls, Export menu, File menu) */
+    .toolbar-popover {
+      position: fixed;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+      z-index: 200;
+      min-width: 200px;
+    }
+    .toolbar-popover.open { display: flex; }
+    .toolbar-popover.menu { padding: 4px; min-width: 170px; }
+
+    .toolbar-menu-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .toolbar-menu-item:hover { background: var(--bg-surface); }
+    .toolbar-menu-item kbd { font-size: 10px; opacity: 0.55; }
+
+    .popover-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .popover-row > label { min-width: 64px; }
+    .popover-row .toolbar-slider { width: 96px; }
+    .popover-row > span {
+      font-size: 10px;
+      min-width: 30px;
+      text-align: right;
+      color: var(--text-secondary);
+    }
+    .popover-row .toolbar-select { flex: 1; }
+
+    .popover-trigger[aria-expanded="true"] {
+      background: var(--bg-surface);
+      border-color: var(--accent);
+    }
+
+    .toolbar-icon-btn {
+      font-size: 16px;
+      line-height: 1;
+      padding: 3px 9px;
+    }
+
+    /* Segmented mode group */
+    .toolbar-group.segmented { gap: 0; }
+    .toolbar-group.segmented .toolbar-btn {
+      border-radius: 0;
+      border: 1px solid var(--border);
+      border-left-width: 0;
+    }
+    .toolbar-group.segmented .toolbar-btn:first-child {
+      border-left-width: 1px;
+      border-top-left-radius: 4px;
+      border-bottom-left-radius: 4px;
+    }
+    .toolbar-group.segmented .toolbar-btn:last-child {
+      border-top-right-radius: 4px;
+      border-bottom-right-radius: 4px;
+    }
+
     /* Main content area */
     #content {
       flex: 1;
@@ -2522,17 +2604,11 @@
       <span class="toolbar-title">OpenPretext</span>
       <div class="toolbar-group">
         <button class="toolbar-btn" id="btn-open">Open <kbd>⌘O</kbd></button>
-        <button class="toolbar-btn" id="btn-save-agp">Export AGP</button>
-        <button class="toolbar-btn" id="btn-save-bed">Export BED</button>
-        <button class="toolbar-btn" id="btn-save-fasta">Export FASTA</button>
-        <button class="toolbar-btn" id="btn-save-session">Save Session</button>
-        <button class="toolbar-btn" id="btn-load-session">Load Session</button>
-        <button class="toolbar-btn" id="btn-screenshot">Screenshot <kbd>⌘S</kbd></button>
-        <button class="toolbar-btn" id="btn-load-fasta">Load FASTA</button>
-        <button class="toolbar-btn" id="btn-load-track">Load Track</button>
+        <button class="toolbar-btn popover-trigger" id="btn-export-menu" aria-haspopup="true" aria-expanded="false" title="Export AGP / BED / FASTA">Export ▾</button>
+        <button class="toolbar-btn popover-trigger" id="btn-file-menu" aria-haspopup="true" aria-expanded="false" title="Sessions, reference FASTA, tracks, screenshot">File ▾</button>
       </div>
       <div class="toolbar-separator"></div>
-      <div class="toolbar-group">
+      <div class="toolbar-group segmented">
         <button class="toolbar-btn" id="btn-mode-navigate" data-mode="navigate">Navigate</button>
         <button class="toolbar-btn" id="btn-mode-edit" data-mode="edit">Edit <kbd>E</kbd></button>
         <button class="toolbar-btn" id="btn-mode-scaffold" data-mode="scaffold">Scaffold <kbd>S</kbd></button>
@@ -2540,35 +2616,12 @@
       </div>
       <div class="toolbar-separator"></div>
       <div class="toolbar-group">
-        <button class="toolbar-btn" id="btn-undo">Undo <kbd>⌘Z</kbd></button>
-        <button class="toolbar-btn" id="btn-redo">Redo <kbd>⌘⇧Z</kbd></button>
+        <button class="toolbar-btn toolbar-icon-btn" id="btn-undo" title="Undo (⌘Z)" aria-label="Undo">↶</button>
+        <button class="toolbar-btn toolbar-icon-btn" id="btn-redo" title="Redo (⌘⇧Z)" aria-label="Redo">↷</button>
       </div>
       <div class="toolbar-separator"></div>
       <div class="toolbar-group">
-        <select class="toolbar-select" id="colormap-select" title="Color map">
-          <option value="red-white">Red-White</option>
-          <option value="blue-white-red">Blue-White-Red</option>
-          <option value="viridis">Viridis</option>
-          <option value="hot">Hot</option>
-          <option value="cool">Cool</option>
-          <option value="grayscale">Grayscale</option>
-        </select>
-        <label class="toolbar-slider-label" title="Gamma correction">
-          γ <input type="range" class="toolbar-slider" id="gamma-slider" min="0.1" max="2.0" step="0.05" value="0.35">
-          <span id="gamma-value">0.35</span>
-        </label>
-        <label class="toolbar-slider-label" title="Contrast minimum — contacts at/below this are hidden (suppresses faint off-diagonal signal)">
-          Min <input type="range" class="toolbar-slider" id="floor-slider" min="0" max="1" step="0.01" value="0">
-          <span id="floor-value">0.00</span>
-        </label>
-        <label class="toolbar-slider-label" title="Contrast maximum — contacts at/above this are fully saturated">
-          Max <input type="range" class="toolbar-slider" id="ceil-slider" min="0" max="1" step="0.01" value="1">
-          <span id="ceil-value">1.00</span>
-        </label>
-        <select class="toolbar-select" id="overview-mode-select" title="Overview detail: Clean hides sparse off-diagonal contacts consistently at every zoom; Faithful preserves them (overview matches detail)">
-          <option value="clean">Clean</option>
-          <option value="faithful">Faithful</option>
-        </select>
+        <button class="toolbar-btn popover-trigger" id="btn-display-menu" aria-haspopup="true" aria-expanded="false" title="Colormap, contrast, overview detail">Display ▾</button>
       </div>
       <div style="flex:1"></div>
       <div class="toolbar-group">
@@ -2578,6 +2631,55 @@
         <button class="toolbar-btn" id="btn-sidebar">Info <kbd>I</kbd></button>
         <button class="toolbar-btn" id="btn-console">Console <kbd>`</kbd></button>
         <button class="toolbar-btn" id="btn-ai-assist">AI Assist</button>
+      </div>
+
+      <!-- Toolbar popovers (positioned under their trigger on open) -->
+      <div class="toolbar-popover menu" id="popover-export" role="menu" aria-label="Export">
+        <button class="toolbar-menu-item" id="btn-save-agp">Export AGP</button>
+        <button class="toolbar-menu-item" id="btn-save-bed">Export BED</button>
+        <button class="toolbar-menu-item" id="btn-save-fasta">Export FASTA</button>
+      </div>
+      <div class="toolbar-popover menu" id="popover-file" role="menu" aria-label="File">
+        <button class="toolbar-menu-item" id="btn-save-session">Save Session</button>
+        <button class="toolbar-menu-item" id="btn-load-session">Load Session</button>
+        <button class="toolbar-menu-item" id="btn-load-fasta">Load FASTA</button>
+        <button class="toolbar-menu-item" id="btn-load-track">Load Track</button>
+        <button class="toolbar-menu-item" id="btn-screenshot">Screenshot <kbd>⌘S</kbd></button>
+      </div>
+      <div class="toolbar-popover" id="popover-display" aria-label="Display settings">
+        <div class="popover-row">
+          <label for="colormap-select">Colormap</label>
+          <select class="toolbar-select" id="colormap-select" title="Color map">
+            <option value="red-white">Red-White</option>
+            <option value="blue-white-red">Blue-White-Red</option>
+            <option value="viridis">Viridis</option>
+            <option value="hot">Hot</option>
+            <option value="cool">Cool</option>
+            <option value="grayscale">Grayscale</option>
+          </select>
+        </div>
+        <div class="popover-row" title="Gamma correction">
+          <label for="gamma-slider">Gamma</label>
+          <input type="range" class="toolbar-slider" id="gamma-slider" min="0.1" max="2.0" step="0.05" value="0.35">
+          <span id="gamma-value">0.35</span>
+        </div>
+        <div class="popover-row" title="Contrast minimum — contacts at/below this are hidden (suppresses faint off-diagonal signal)">
+          <label for="floor-slider">Min</label>
+          <input type="range" class="toolbar-slider" id="floor-slider" min="0" max="1" step="0.01" value="0">
+          <span id="floor-value">0.00</span>
+        </div>
+        <div class="popover-row" title="Contrast maximum — contacts at/above this are fully saturated">
+          <label for="ceil-slider">Max</label>
+          <input type="range" class="toolbar-slider" id="ceil-slider" min="0" max="1" step="0.01" value="1">
+          <span id="ceil-value">1.00</span>
+        </div>
+        <div class="popover-row" title="Overview detail: Clean hides sparse off-diagonal contacts consistently at every zoom; Faithful preserves them (overview matches detail)">
+          <label for="overview-mode-select">Overview</label>
+          <select class="toolbar-select" id="overview-mode-select">
+            <option value="clean">Clean</option>
+            <option value="faithful">Faithful</option>
+          </select>
+        </div>
       </div>
     </div>
 
