@@ -12,13 +12,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   off-diagonal signal that popped in (and changed with zoom). Root cause: the
   overview is built from the file's coarsest, most-lossy mip (sparse contacts
   averaged to ~0), while detail tiles use finer mips that retain them. Both modes
-  are now consistent across zoom: **Clean** (default) gates the detail layer by
-  the overview (`u_gateEnabled`/`u_gateThresh` in the tile shader, sampling a
-  dedicated original-order gate texture) so detail only renders where the overview
-  has signal; **Faithful** rebuilds the overview by max-pooling a finer mip
-  (`assembleOverview()` in PretextParser) so the overview agrees with the detail
-  and the minimap shows the off-diagonal too. Mode persists in sessions. 4 new
-  unit tests (overview-mode.test.ts).
+  are now consistent across zoom: the detail layer is **gated by its mode's
+  overview** (`u_gateEnabled`/`u_gateThresh` in the tile shader, sampling a
+  dedicated original-order gate texture), so detail only renders where that
+  overview has signal — no pop-in or zoom-dependent shifting. **Clean** (default)
+  uses the coarsest-mip overview (faint off-diagonal suppressed); **Faithful**
+  uses an overview max-pooled from a finer mip (`assembleOverview()` in
+  PretextParser) so structured off-diagonal/haplotype contacts show at every zoom
+  and in the minimap. Because the raw tile bytes are transferred to (and owned
+  by) the tile-decode worker, the Faithful overview is assembled **in that
+  worker** on demand (`TileDecodeWorkerClient.assembleOverview()`); if it can't
+  be produced it falls back to Clean rather than blanking the map. Mode persists
+  in sessions. 4 new unit tests (overview-mode.test.ts).
 - **Track name labels on canvas** — each analysis track now shows its name as a
   semi-transparent label on the top-edge (horizontal) and left-edge (rotated 90°)
   overlays, so tracks are identifiable without opening the sidebar config panel

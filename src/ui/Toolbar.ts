@@ -128,7 +128,7 @@ export function setupToolbar(ctx: AppContext): void {
     const overviewMode = overviewModeSelect.value === 'faithful' ? 'faithful' : 'clean';
     state.update({ overviewMode });
     const { applyOverviewMode } = await import('./EventWiring');
-    applyOverviewMode(ctx);
+    await applyOverviewMode(ctx);
     ctx.showToast(
       overviewMode === 'faithful'
         ? 'Overview: Faithful — off-diagonal contacts shown at every zoom'

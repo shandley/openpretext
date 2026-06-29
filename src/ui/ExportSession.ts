@@ -131,7 +131,7 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     syncFloorSlider(session.settings.signalFloor ?? 0);
     syncCeilSlider(session.settings.signalCeil ?? 1);
     syncOverviewModeSelect(overviewMode);
-    applyOverviewMode(ctx);
+    await applyOverviewMode(ctx);
 
     // Restore waypoints
     ctx.waypointManager.clearAll();

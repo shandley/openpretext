@@ -14,7 +14,6 @@ import { getContigBoundaries } from '../core/DerivedState';
 import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel, clearEnhancedMap } from './AnalysisPanel';
 import { updateComparisonSummary } from './ComparisonMode';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
-import { assembleOverview } from '../formats/PretextParser';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -111,34 +110,63 @@ function reorderAndUploadContactMap(ctx: AppContext): void {
   const mapSize = Math.round(Math.sqrt(original.length));
   if (mapSize === 0) return;
 
+  // Gate texture = the current mode's overview in ORIGINAL order (it must align
+  // with the original-order detail tiles). Both modes gate the detail layer by
+  // their own overview, so detail stays consistent with the overview at every
+  // zoom (clean suppresses faint signal; faithful keeps the max-pooled signal).
+  ctx.renderer.uploadGateOverview(original, mapSize);
+
   const reordered = reorderContactMap(original, s.map.contigs, s.contigOrder, mapSize);
   ctx.renderer.uploadContactMap(reordered, mapSize);
   ctx.minimap.updateThumbnail(reordered, mapSize);
 }
 
 /**
- * Pick the original-order overview for the current mode. In 'faithful' mode the
- * max-pooled overview is computed once from the raw tiles and cached on ctx.
- * Falls back to the clean overview if raw tiles aren't available (e.g. demo).
+ * Pick the original-order overview for the current mode. Faithful uses the
+ * worker-assembled max-pooled overview cached on ctx (see applyOverviewMode);
+ * if it isn't available, falls back to the clean overview so the map is never
+ * blank.
  */
 function overviewForMode(ctx: AppContext, s: ReturnType<typeof state.get>): Float32Array | null {
   if (!s.map) return null;
   const clean = s.map.originalContactMap ?? null;
-  if (s.overviewMode !== 'faithful') return clean;
-  if (!s.map.rawTiles || !s.map.parsedHeader) return clean;
-  if (!ctx.faithfulOverviewOriginal) {
-    ctx.faithfulOverviewOriginal = assembleOverview(
-      s.map.rawTiles, s.map.parsedHeader, 'faithful',
-    ).overview;
+  if (s.overviewMode === 'faithful' && ctx.faithfulOverviewOriginal) {
+    return ctx.faithfulOverviewOriginal;
   }
-  return ctx.faithfulOverviewOriginal;
+  return clean;
+}
+
+/** Cheap check that an assembled overview actually carries signal. */
+function overviewHasSignal(a: Float32Array): boolean {
+  for (let i = 0; i < a.length; i++) if (a[i] > 0.02) return true;
+  return false;
 }
 
 /**
  * Re-apply the overview for the current `overviewMode` (clean ⇄ faithful),
- * reordered to the current contig order. Called when the mode toggle changes.
+ * reordered to the current contig order. For faithful, lazily asks the tile
+ * decode worker (which owns the raw tile bytes) to assemble the max-pooled
+ * overview and caches it. If faithful can't be assembled, reverts to clean
+ * rather than uploading a blank texture.
  */
-export function applyOverviewMode(ctx: AppContext): void {
+export async function applyOverviewMode(ctx: AppContext): Promise<void> {
+  const s = state.get();
+  if (s.overviewMode === 'faithful' && !ctx.faithfulOverviewOriginal && ctx.tileDecoder && s.map?.parsedHeader) {
+    try {
+      const { overview } = await ctx.tileDecoder.assembleOverview('faithful');
+      if (overview.length > 0 && overviewHasSignal(overview)) {
+        ctx.faithfulOverviewOriginal = overview;
+      }
+    } catch {
+      /* fall through to the clean fallback below */
+    }
+    if (!ctx.faithfulOverviewOriginal) {
+      state.update({ overviewMode: 'clean' });
+      const { syncOverviewModeSelect } = await import('./ColorMapControls');
+      syncOverviewModeSelect('clean');
+      ctx.showToast('Faithful overview unavailable — showing Clean');
+    }
+  }
   reorderAndUploadContactMap(ctx);
   ctx.requestRender();
 }

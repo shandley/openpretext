@@ -12,6 +12,7 @@
  */
 
 import { decodeTile } from './TileDecoder';
+import { assembleOverview, type OverviewMode } from '../formats/PretextParser';
 import type { TileKey } from './TileManager';
 import type { PretextHeader } from '../formats/PretextParser';
 
@@ -39,10 +40,22 @@ export interface TileCancelMessage {
   generation: number;
 }
 
+/**
+ * main → worker: assemble an overview from the worker-owned tiles. The worker
+ * holds the only live copy of the raw tile bytes (they were transferred here on
+ * init), so overview re-assembly for 'faithful' mode must happen here.
+ */
+export interface TileAssembleOverviewMessage {
+  type: 'assembleOverview';
+  mode: OverviewMode;
+  requestId: number;
+}
+
 export type TileWorkerRequest =
   | TileInitMessage
   | TileDecodeMessage
-  | TileCancelMessage;
+  | TileCancelMessage
+  | TileAssembleOverviewMessage;
 
 /** worker → main: a single tile finished decoding. `data.buffer` is transferred. */
 export interface TileDecodedMessage {
@@ -58,7 +71,18 @@ export interface TileBatchCompleteMessage {
   generation: number;
 }
 
-export type TileWorkerResponse = TileDecodedMessage | TileBatchCompleteMessage;
+/** worker → main: a requested overview finished assembling. `overview.buffer` is transferred. */
+export interface TileOverviewAssembledMessage {
+  type: 'overviewAssembled';
+  requestId: number;
+  overview: Float32Array;
+  overviewSize: number;
+}
+
+export type TileWorkerResponse =
+  | TileDecodedMessage
+  | TileBatchCompleteMessage
+  | TileOverviewAssembledMessage;
 
 // ---------------------------------------------------------------------------
 // Worker state
@@ -127,5 +151,16 @@ self.onmessage = (event: MessageEvent<TileWorkerRequest>) => {
       currentGeneration = msg.generation;
       runDecode(msg.keys, msg.generation);
       break;
+    case 'assembleOverview': {
+      const w = self as unknown as Worker;
+      if (!rawTiles || !header) {
+        w.postMessage({ type: 'overviewAssembled', requestId: msg.requestId, overview: new Float32Array(0), overviewSize: 0 } as TileOverviewAssembledMessage);
+        break;
+      }
+      const { overview, overviewSize } = assembleOverview(rawTiles, header, msg.mode);
+      const resp: TileOverviewAssembledMessage = { type: 'overviewAssembled', requestId: msg.requestId, overview, overviewSize };
+      w.postMessage(resp, [overview.buffer]);
+      break;
+    }
   }
 };

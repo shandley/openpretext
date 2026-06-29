@@ -92,11 +92,11 @@ export function startRenderLoop(ctx: AppContext): void {
         const tile = ctx.tileManager.getTile(key);
         if (tile && tile.state === 'loaded' && tile.texture) {
           if (!started) {
-            // Clean mode gates the detail layer by the overview so sparse
-            // off-diagonal contacts stay suppressed at every zoom; faithful
-            // mode shows all detail (its overview already carries the signal).
-            const gate = s.overviewMode === 'clean';
-            ctx.renderer.beginTiles(cam, s.gamma, s.signalFloor, s.signalCeil, gate);
+            // Both modes gate the detail layer by their own overview, so detail
+            // stays consistent with the overview at every zoom (no pop-in/shift):
+            // clean suppresses faint off-diagonal; faithful keeps the max-pooled
+            // signal but not the finer-mip noise the overview doesn't carry.
+            ctx.renderer.beginTiles(cam, s.gamma, s.signalFloor, s.signalCeil, true);
             started = true;
           }
           ctx.renderer.drawTile(tile.texture, key.col, key.row, tilesPerDim);

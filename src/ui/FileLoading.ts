@@ -86,7 +86,7 @@ async function loadPretextFromBuffer(
   // If the user left the viewer in faithful mode, re-apply it for the new file.
   if (state.get().overviewMode === 'faithful') {
     const { applyOverviewMode } = await import('./EventWiring');
-    applyOverviewMode(ctx);
+    await applyOverviewMode(ctx);
   }
   ctx.showToast(`Loaded ${filename} — ${parsed.contigs.length} contigs, ${mapSize}px`);
 }
