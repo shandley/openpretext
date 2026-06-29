@@ -629,23 +629,25 @@ export async function parseAndAssemble(
 
 export type OverviewMode = 'clean' | 'faithful';
 
-/** Number of mip levels finer than the coarsest to max-pool from in 'faithful'
- *  mode. Bounded for memory/speed; each step doubles the per-tile decode work. */
-const FAITHFUL_POOL_LEVELS = 3;
+/** Largest dimension (px) allowed for the faithful overview, bounding memory and
+ *  compute. The finest mip whose full overview fits this cap is used. */
+const FAITHFUL_MAX_SIZE = 2048;
 
 /**
- * Re-assemble the overview texture from already-inflated raw BC4 tile bytes
- * (state.map.rawTiles), in the file's original contig order.
+ * Re-assemble the overview texture from already-inflated raw BC4 tile bytes,
+ * in the file's original contig order.
  *
  * - 'clean': decode the coarsest mip per tile — identical to what
  *   `parseAndAssemble` produces at load. The file's own averaging has dropped
  *   sparse off-diagonal contacts here, giving the familiar clean block-diagonal.
- * - 'faithful': decode a finer mip per tile and **max-pool** it down to the
- *   coarsest resolution. Max-pooling preserves sparse contacts that mean-
- *   downsampling discards, so the overview agrees with the detail layer.
+ * - 'faithful': decode a *finer* mip per tile and assemble it at that mip's
+ *   native resolution (a larger overview). This is the file's own finer mean
+ *   downsample, so it preserves structured off-diagonal/haplotype contacts the
+ *   coarsest mip averages away — without the flooding that max-pooling to the
+ *   coarse grid produces (a single contact would light a whole coarse cell).
  *
- * Pure (no DOM/GPU). Returns the overview in original order; callers reorder it
- * to the current contig order (like `originalContactMap`) before display.
+ * The faithful overview is therefore larger than the clean one; callers derive
+ * the dimension from `overviewSize` / array length. Pure (no DOM/GPU).
  */
 export function assembleOverview(
   rawTiles: Uint8Array[],
@@ -654,15 +656,18 @@ export function assembleOverview(
 ): { overview: Float32Array; overviewSize: number } {
   const N = header.numberOfTextures1D;
   const coarsestMip = header.mipMapLevels - 1;
-  const coarsestRes = header.textureResolution >> coarsestMip;
-  const overviewSize = N * coarsestRes;
-  const overview = new Float32Array(overviewSize * overviewSize);
 
-  const srcMip = mode === 'faithful'
-    ? Math.max(0, coarsestMip - FAITHFUL_POOL_LEVELS)
-    : coarsestMip;
+  // Clean uses the coarsest mip; faithful steps to the finest mip whose full
+  // overview still fits FAITHFUL_MAX_SIZE.
+  let srcMip = coarsestMip;
+  if (mode === 'faithful') {
+    while (srcMip > 0 && N * (header.textureResolution >> (srcMip - 1)) <= FAITHFUL_MAX_SIZE) {
+      srcMip--;
+    }
+  }
   const srcRes = header.textureResolution >> srcMip;
-  const factor = srcRes / coarsestRes; // power of two >= 1
+  const overviewSize = N * srcRes;
+  const overview = new Float32Array(overviewSize * overviewSize);
 
   // BC4 byte offset of srcMip within a tile (sum of finer levels' sizes).
   let srcOffset = 0;
@@ -678,26 +683,11 @@ export function assembleOverview(
       if (!tile || srcOffset + srcBytes > tile.length) continue;
       const src = decodeBC4Level(tile, srcOffset, srcRes);
 
-      for (let py = 0; py < coarsestRes; py++) {
-        for (let px = 0; px < coarsestRes; px++) {
-          let val: number;
-          if (factor === 1) {
-            val = src[py * srcRes + px];
-          } else {
-            let m = 0;
-            const by = py * factor;
-            const bx = px * factor;
-            for (let dy = 0; dy < factor; dy++) {
-              const rowBase = (by + dy) * srcRes + bx;
-              for (let dx = 0; dx < factor; dx++) {
-                const v = src[rowBase + dx];
-                if (v > m) m = v;
-              }
-            }
-            val = m;
-          }
-          const gx = tx * coarsestRes + px;
-          const gy = ty * coarsestRes + py;
+      for (let py = 0; py < srcRes; py++) {
+        for (let px = 0; px < srcRes; px++) {
+          const val = src[py * srcRes + px];
+          const gx = tx * srcRes + px;
+          const gy = ty * srcRes + py;
           overview[gy * overviewSize + gx] = val;
           overview[gx * overviewSize + gy] = val;
         }

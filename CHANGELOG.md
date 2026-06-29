@@ -17,9 +17,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   dedicated original-order gate texture), so detail only renders where that
   overview has signal — no pop-in or zoom-dependent shifting. **Clean** (default)
   uses the coarsest-mip overview (faint off-diagonal suppressed); **Faithful**
-  uses an overview max-pooled from a finer mip (`assembleOverview()` in
-  PretextParser) so structured off-diagonal/haplotype contacts show at every zoom
-  and in the minimap. Because the raw tile bytes are transferred to (and owned
+  assembles a *finer* mip at its native resolution (`assembleOverview()` in
+  PretextParser, larger overview bounded by a size cap) so structured
+  off-diagonal/haplotype contacts show at every zoom and in the minimap. (Native
+  resolution, not max-pooling — max-pooling let a single contact light a whole
+  coarse cell and flooded fragmented assemblies to solid red.) Because the raw tile bytes are transferred to (and owned
   by) the tile-decode worker, the Faithful overview is assembled **in that
   worker** on demand (`TileDecodeWorkerClient.assembleOverview()`); if it can't
   be produced it falls back to Clean rather than blanking the map. Mode persists

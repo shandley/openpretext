@@ -1,9 +1,10 @@
 /**
  * overview-mode.test.ts — assembleOverview clean vs faithful.
  *
- * Verifies the core fix: sparse contacts that the file's coarse mip averages to
- * zero (so the 'clean' overview is empty) are preserved by 'faithful' mode's
- * max-pool from a finer mip — making the overview agree with the detail layer.
+ * Verifies the core behaviour: 'clean' decodes the coarsest mip (so contacts the
+ * file averaged away are absent), while 'faithful' assembles a *finer* mip at its
+ * native resolution (a larger overview) that preserves those contacts — without
+ * the flooding that max-pooling to the coarse grid would cause.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -51,24 +52,25 @@ describe('assembleOverview', () => {
     expect(overview.every((v) => v === 0)).toBe(true);
   });
 
-  it('faithful mode max-pools a finer mip (sparse contact preserved)', () => {
+  it('faithful mode assembles a finer mip at native resolution (contact preserved)', () => {
     const { overview, overviewSize } = assembleOverview([makeTile()], HEADER, 'faithful');
-    expect(overviewSize).toBe(4);
-    // The hot top-left 4x4 of the 8x8 level-0, max-pooled 2x → a 2x2 hot corner.
+    // Finer mip (level 0, 8x8) fits the size cap, so the overview is larger.
+    expect(overviewSize).toBe(8);
+    // Level-0 has the top-left 4x4 hot; values are shown at native res (no pool).
     const at = (x: number, y: number) => overview[y * overviewSize + x];
     expect(at(0, 0)).toBeCloseTo(1, 5);
-    expect(at(1, 1)).toBeCloseTo(1, 5);
-    expect(at(2, 2)).toBe(0); // outside the hot region
-    // Faithful shows signal exactly where clean is empty.
-    expect(overview.some((v) => v > 0)).toBe(true);
+    expect(at(3, 3)).toBeCloseTo(1, 5);
+    expect(at(4, 4)).toBe(0); // outside the hot 4x4 region
+    expect(at(7, 7)).toBe(0);
   });
 
-  it('faithful overview dominates clean everywhere (max-pool never loses signal)', () => {
-    const clean = assembleOverview([makeTile()], HEADER, 'clean').overview;
-    const faithful = assembleOverview([makeTile()], HEADER, 'faithful').overview;
-    for (let i = 0; i < clean.length; i++) {
-      expect(faithful[i]).toBeGreaterThanOrEqual(clean[i]);
-    }
+  it('faithful carries signal that clean (coarsest mip) drops entirely', () => {
+    const cleanSum = assembleOverview([makeTile()], HEADER, 'clean').overview
+      .reduce((s, v) => s + v, 0);
+    const faithfulSum = assembleOverview([makeTile()], HEADER, 'faithful').overview
+      .reduce((s, v) => s + v, 0);
+    expect(cleanSum).toBe(0);
+    expect(faithfulSum).toBeGreaterThan(0);
   });
 
   it('produces a symmetric overview', () => {
