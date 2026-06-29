@@ -130,7 +130,9 @@ test.describe('Session persistence of analysis results', () => {
       await expect(trackList).toContainText(name);
     }
 
-    // Phase D: Save session (intercept download)
+    // Phase D: Save session (intercept download). Save Session now lives in the
+    // File ▾ toolbar popover, so open it first.
+    await page.click('#btn-file-menu');
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.click('#btn-save-session'),

@@ -127,6 +127,8 @@ test.describe('BED export', () => {
   test('Export BED button exists and is clickable', async ({ page }) => {
     await loadDemo(page);
 
+    // Export controls now live in the Export ▾ toolbar popover.
+    await page.click('#btn-export-menu');
     const bedButton = page.locator('#btn-save-bed');
     await expect(bedButton).toBeVisible();
     await expect(bedButton).toBeEnabled();
