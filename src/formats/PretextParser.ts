@@ -208,28 +208,43 @@ function decodeBC4Level(
  * in parallel); falls back to pako.inflateRaw when unavailable. Null entries
  * (truncated tiles) yield a zeroed buffer.
  */
+/** Tiles inflated concurrently per batch. Large enough to keep DecompressionStream
+ *  near-fully parallel, small enough that progress spreads across the inflate on
+ *  large files instead of arriving in one burst when a single Promise.all settles. */
+const INFLATE_BATCH = 128;
+
 async function inflateRawTiles(
   comps: (Uint8Array | null)[],
   fallbackLen: number,
+  onTileDone?: () => void,
 ): Promise<Uint8Array[]> {
   const hasDS =
     typeof DecompressionStream !== 'undefined' &&
     typeof Blob !== 'undefined' &&
     typeof Response !== 'undefined';
   if (hasDS) {
-    return Promise.all(
-      comps.map(async (c) => {
-        if (!c) return new Uint8Array(fallbackLen);
-        try {
-          const stream = new Blob([c as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-          return new Uint8Array(await new Response(stream).arrayBuffer());
-        } catch {
-          try { return pako.inflateRaw(c); } catch { return new Uint8Array(fallbackLen); }
-        }
-      }),
-    );
+    const out: Uint8Array[] = new Array(comps.length);
+    for (let start = 0; start < comps.length; start += INFLATE_BATCH) {
+      const end = Math.min(start + INFLATE_BATCH, comps.length);
+      await Promise.all(
+        comps.slice(start, end).map(async (c, k) => {
+          const i = start + k;
+          if (!c) { out[i] = new Uint8Array(fallbackLen); onTileDone?.(); return; }
+          try {
+            const stream = new Blob([c as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+            out[i] = new Uint8Array(await new Response(stream).arrayBuffer());
+          } catch {
+            try { out[i] = pako.inflateRaw(c); } catch { out[i] = new Uint8Array(fallbackLen); }
+          } finally {
+            onTileDone?.();
+          }
+        }),
+      );
+    }
+    return out;
   }
   return comps.map((c) => {
+    onTileDone?.();
     if (!c) return new Uint8Array(fallbackLen);
     try { return pako.inflateRaw(c); } catch { return new Uint8Array(fallbackLen); }
   });
@@ -264,6 +279,12 @@ export interface ParseOptions {
    * require knowing the number of levels ahead of time.
    */
   coarsestOnly?: boolean;
+  /**
+   * Optional progress callback for the slow tile inflate + decode phases,
+   * reported on this function's own 0–100 scale. Large files spend seconds
+   * here, so callers surface it to a progress bar.
+   */
+  onProgress?: (message: string, percent: number) => void;
 }
 
 export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptions): Promise<PretextFile> {
@@ -439,12 +460,33 @@ export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptio
   }
 
   // Phase 2: inflate all tiles in parallel (native DecompressionStream when
-  // available, ~1.8x faster than pako; falls back to pako otherwise).
-  const decompressedTiles = await inflateRawTiles(compTiles, bytesPerTexture);
+  // available, ~1.8x faster than pako; falls back to pako otherwise). This is
+  // the bulk of parse time on large files, so report incremental progress
+  // (0–80% of this function's scale) as each tile finishes.
+  const onProgress = options?.onProgress;
+  let inflated = 0;
+  const inflateStep = Math.max(1, Math.floor(numberOfTextureBlocks / 25));
+  const decompressedTiles = await inflateRawTiles(
+    compTiles,
+    bytesPerTexture,
+    onProgress
+      ? () => {
+          inflated++;
+          if (inflated % inflateStep === 0 || inflated === numberOfTextureBlocks) {
+            onProgress('Decompressing tiles…', Math.round((inflated / numberOfTextureBlocks) * 80));
+          }
+        }
+      : undefined,
+  );
 
-  // Phase 3: store raw bytes and decode the requested mip levels per tile.
+  // Phase 3: store raw bytes and decode the requested mip levels per tile
+  // (80–100% of this function's scale).
   const decodeLevels = options?.decodeLevels;
+  const decodeStep = Math.max(1, Math.floor(lastBlock / 15));
   for (let i = 0; i < lastBlock; i++) {
+    if (onProgress && (i % decodeStep === 0)) {
+      onProgress('Decoding tiles…', 80 + Math.round((i / lastBlock) * 20));
+    }
     const decompressed = decompressedTiles[i];
     tiles[i] = decompressed;
 
@@ -574,12 +616,19 @@ export async function parseAndAssemble(
   buffer: ArrayBuffer,
   onProgress?: (message: string, percent: number) => void,
 ): Promise<AssembledPretext> {
-  onProgress?.('Parsing header and metadata...', 20);
-  const parsed = await parsePretextFile(buffer, { coarsestOnly: true });
+  onProgress?.('Parsing header and metadata...', 10);
+  // Map the parser's own 0–100 progress (the slow inflate + decode phase, which
+  // dominates load time on large files) into the 10–65% band of the overall bar.
+  const parsed = await parsePretextFile(buffer, {
+    coarsestOnly: true,
+    onProgress: onProgress
+      ? (msg, pct) => onProgress(msg, 10 + Math.round(pct * 0.55))
+      : undefined,
+  });
   const h = parsed.header;
   const mapSize = h.numberOfPixels1D;
 
-  onProgress?.('Assembling contact map...', 50);
+  onProgress?.('Assembling contact map...', 65);
   const N = h.numberOfTextures1D;
   const coarsestMip = h.mipMapLevels - 1;
   const coarsestRes = h.textureResolution >> coarsestMip;
@@ -610,7 +659,7 @@ export async function parseAndAssemble(
       if (tilesDone % Math.max(1, Math.floor(totalTiles / 20)) === 0) {
         onProgress?.(
           `Assembling tiles... (${tilesDone}/${totalTiles})`,
-          50 + Math.round((tilesDone / totalTiles) * 40),
+          65 + Math.round((tilesDone / totalTiles) * 25),
         );
       }
     }
