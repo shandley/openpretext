@@ -21,6 +21,10 @@ import { reorderContactMap } from '../renderer/ContactMapReorder';
  */
 export function setupEventListeners(ctx: AppContext): void {
   events.on('file:loaded', () => {
+    // Reset the view to fit so a newly loaded genome isn't shown at the
+    // previous file's zoom/pan (which can leave the fresh map off-screen).
+    ctx.camera?.resetViewImmediate();
+
     ctx.updateSidebarContigList();
     ctx.updateSidebarScaffoldList();
     // Take initial metrics snapshot

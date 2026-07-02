@@ -311,6 +311,19 @@ export class Camera {
   }
 
   /**
+   * Snap instantly to the full-map fit view (center 0.5,0.5, zoom 1.0) with no
+   * animation. Used when a new file is loaded so the view doesn't carry over
+   * the previous genome's zoom/pan (which could leave a fresh map off-screen).
+   */
+  resetViewImmediate(): void {
+    this.animating = false;
+    this.x = 0.5;
+    this.y = 0.5;
+    this.zoom = 1.0;
+    this.emitChange();
+  }
+
+  /**
    * Zoom to fit a specific region (in map coordinates 0-1).
    */
   zoomToRegion(x1: number, y1: number, x2: number, y2: number): void {

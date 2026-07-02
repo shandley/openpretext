@@ -162,6 +162,22 @@ export class TrackRenderer {
     return (screenY + 0.5) * h;
   }
 
+  /**
+   * Outer offset (CSS px from the canvas top/left) where the track gutter
+   * should begin so its inner edge sits flush against the map's on-screen
+   * edge. When the map edge is off the near side (the map fills or overflows
+   * the viewport), the gutter pins to the canvas edge (offset 0), keeping the
+   * tracks visible. This is what keeps the gutters attached to the map when it
+   * is letterboxed (zoomed below fill) or panned.
+   *
+   * @param mapEdge - the map's top (or left) edge, in screen CSS px
+   * @param totalTrackHeight - stacked thickness of all visible tracks
+   * @param canvasExtent - canvas height (for top tracks) or width (for left)
+   */
+  static gutterOffset(mapEdge: number, totalTrackHeight: number, canvasExtent: number): number {
+    return Math.max(0, Math.min(mapEdge, canvasExtent) - totalTrackHeight);
+  }
+
   // ─── Rendering ──────────────────────────────────────────────
 
   render(opts: TrackRenderOptions): void {
@@ -188,10 +204,16 @@ export class TrackRenderer {
       return;
     }
 
-    // Compute the stacking offsets. Tracks stack outward from the map edge.
-    // The first visible track is closest to the map (offset = 0 from edge).
-    let topOffset = 0;
-    let leftOffset = 0;
+    // Anchor the gutters to the map's on-screen edges so tracks stay attached
+    // to the map when it is letterboxed (zoomed below fill) or panned, instead
+    // of floating at the fixed canvas corner. mapToScreenX/Y give the true map
+    // edge because the map is not offset for the tracks — the gutters overlay
+    // the map's edge. Tracks then stack inward, ending flush at the map edge.
+    const trackH = this.getVisibleTrackHeight();
+    const mapTop = this.mapToScreenY(0, camera, canvasWidth, canvasHeight);
+    const mapLeft = this.mapToScreenX(0, camera, canvasWidth, canvasHeight);
+    let topOffset = TrackRenderer.gutterOffset(mapTop, trackH, canvasHeight);
+    let leftOffset = TrackRenderer.gutterOffset(mapLeft, trackH, canvasWidth);
 
     for (const track of visibleTracks) {
       this.renderTopTrack(ctx, track, topOffset, camera, canvasWidth, canvasHeight, textureSize);

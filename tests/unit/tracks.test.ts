@@ -284,6 +284,41 @@ describe('TrackRenderer — track management', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Track gutter anchoring — keeps tracks attached to the map edge when the map
+// is letterboxed (zoomed below fill) or panned, instead of floating at the
+// fixed canvas corner.
+// ---------------------------------------------------------------------------
+
+describe('TrackRenderer.gutterOffset', () => {
+  const H = 90;          // total stacked track thickness
+  const CANVAS = 828;    // canvas extent along the perpendicular axis
+
+  it('pins to the canvas edge when the map fills that axis (edge at 0)', () => {
+    expect(TrackRenderer.gutterOffset(0, H, CANVAS)).toBe(0);
+  });
+
+  it('pins to the canvas edge when the map overflows (edge off-screen, negative)', () => {
+    expect(TrackRenderer.gutterOffset(-200, H, CANVAS)).toBe(0);
+  });
+
+  it('pins to the canvas edge when the map edge is closer than the track height', () => {
+    expect(TrackRenderer.gutterOffset(50, H, CANVAS)).toBe(0);
+  });
+
+  it('hugs the map edge when letterboxed (gutter inner edge = map edge)', () => {
+    const mapEdge = 350;
+    const offset = TrackRenderer.gutterOffset(mapEdge, H, CANVAS);
+    expect(offset).toBe(260);
+    // Invariant: the gutter's inner edge sits exactly on the map edge.
+    expect(offset + H).toBe(mapEdge);
+  });
+
+  it('clamps to the canvas extent when the map edge is past it', () => {
+    expect(TrackRenderer.gutterOffset(1000, H, CANVAS)).toBe(CANVAS - H);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Coordinate mapping accuracy
 // ---------------------------------------------------------------------------
 

@@ -233,6 +233,9 @@ export class WebGLRenderer {
   // boundaries array reference changes, not every frame).
   private boundaryUniformData: Float32Array = new Float32Array(0);
   private lastBoundariesRef: number[] | null = null;
+  /** Max contig boundaries the shader's u_contigBoundaries[] uniform holds. */
+  private static readonly MAX_BOUNDARIES = 512;
+  private warnedBoundaryRef: number[] | null = null;
 
   private floatLinearSupported: boolean = false;
 
@@ -479,12 +482,25 @@ export class WebGLRenderer {
     gl.uniform1i(this.uniforms['u_showGrid']!, (options.showGrid ?? false) ? 1 : 0);
     gl.uniform1f(this.uniforms['u_gridOpacity']!, options.gridOpacity ?? 0.5);
     
-    // Contig boundaries
+    // Contig boundaries. The shader's u_contigBoundaries[] uniform holds at
+    // most MAX_BOUNDARIES; uploading a longer array is a GL INVALID_OPERATION
+    // that drops the whole upload. Clamp so the grid still draws (for the first
+    // MAX_BOUNDARIES contigs) and warn once per over-limit boundary set.
     const boundaries = options.contigBoundaries ?? [];
-    gl.uniform1i(this.uniforms['u_numContigs']!, boundaries.length);
-    if (boundaries.length > 0) {
-      if (boundaries !== this.lastBoundariesRef || this.boundaryUniformData.length !== boundaries.length) {
-        this.boundaryUniformData = new Float32Array(boundaries);
+    const MAX = WebGLRenderer.MAX_BOUNDARIES;
+    const count = Math.min(boundaries.length, MAX);
+    if (boundaries.length > MAX && boundaries !== this.warnedBoundaryRef) {
+      this.warnedBoundaryRef = boundaries;
+      console.warn(
+        `Grid overlay: ${boundaries.length} contigs exceeds the ${MAX}-boundary ` +
+        `shader limit; drawing grid lines for the first ${MAX} contigs only.`
+      );
+    }
+    gl.uniform1i(this.uniforms['u_numContigs']!, count);
+    if (count > 0) {
+      if (boundaries !== this.lastBoundariesRef || this.boundaryUniformData.length !== count) {
+        this.boundaryUniformData = new Float32Array(count);
+        for (let i = 0; i < count; i++) this.boundaryUniformData[i] = boundaries[i];
         this.lastBoundariesRef = boundaries;
       }
       gl.uniform1fv(this.uniforms['u_contigBoundaries']!, this.boundaryUniformData);

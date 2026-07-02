@@ -111,7 +111,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     scaffoldOverlay: {} as any,
     waypointOverlay: {} as any,
     minimap: {} as any,
-    camera: {} as any,
+    camera: { resetViewImmediate: vi.fn() } as any,
     dragReorder: {} as any,
     scaffoldManager: {} as any,
     waypointManager: {} as any,
@@ -243,6 +243,24 @@ describe('EventWiring', () => {
       handler();
 
       expect(ctx.updateSidebarContigList).toHaveBeenCalled();
+    });
+
+    it('file:loaded handler should reset the camera view to fit', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: null,
+        contigOrder: [],
+        undoStack: [],
+      });
+      const ctx = createMockCtx();
+      setupEventListeners(ctx);
+
+      const fileLoadedCall = mockEventsOn.mock.calls.find(
+        (call: any[]) => call[0] === 'file:loaded'
+      );
+      const handler = fileLoadedCall![1];
+      handler();
+
+      expect(ctx.camera.resetViewImmediate).toHaveBeenCalled();
     });
 
     it('file:loaded handler should call updateStatsPanel', () => {
