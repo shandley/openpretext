@@ -416,6 +416,42 @@ describe('ExportSession', () => {
       expect(state.update).toHaveBeenCalledWith({ contigOrder: [1, 0] });
     });
 
+    it('shows, updates, and hides the loading overlay during restore', async () => {
+      const session = makeSessionData();
+      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: {
+          filename: 'test.pretext',
+          contigs: [
+            { inverted: false, scaffoldId: null },
+            { inverted: false, scaffoldId: null },
+          ],
+        },
+        contigOrder: [0, 1],
+      });
+      const ctx = createMockCtx();
+      const file = fakeFile('session.json', JSON.stringify(session));
+
+      await loadSession(ctx, file);
+
+      expect(showLoading).toHaveBeenCalled();
+      expect(updateLoading).toHaveBeenCalled();
+      expect(hideLoading).toHaveBeenCalled();
+    });
+
+    it('hides the loading overlay even when restore fails', async () => {
+      (importSession as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+        throw new Error('bad json');
+      });
+      const ctx = createMockCtx();
+      const file = fakeFile('session.json', '{bad');
+
+      await loadSession(ctx, file);
+
+      expect(hideLoading).toHaveBeenCalled();
+      expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Load failed'));
+    });
+
     it('should not update contig order when session has empty contigOrder', async () => {
       const session = makeSessionData({ contigOrder: [] });
       (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);

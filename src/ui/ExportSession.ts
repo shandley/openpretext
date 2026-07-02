@@ -68,8 +68,11 @@ export function saveSession(ctx: AppContext): void {
 }
 
 export async function loadSession(ctx: AppContext, file: File): Promise<void> {
+  showLoading('Restoring session', 'Reading session file...');
   try {
+    updateLoading('Reading session file...', 5);
     const text = await file.text();
+    updateLoading('Parsing session...', 20);
     const session = importSession(text);
 
     // Apply session state to the app
@@ -83,6 +86,8 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     if (session.filename !== s.map.filename && session.filename !== 'demo') {
       ctx.showToast(`Warning: session was for "${session.filename}", current file is "${s.map.filename}"`);
     }
+
+    updateLoading('Applying assembly state...', 40);
 
     // Apply contig order
     if (session.contigOrder.length > 0) {
@@ -110,6 +115,8 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
         ctx.scaffoldManager.createScaffold(sc.name);
       }
     }
+
+    updateLoading('Restoring view and settings...', 65);
 
     // Restore camera
     ctx.camera.animateTo(session.camera, 300);
@@ -145,13 +152,17 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
 
     // Restore persisted analysis results if present
     if (session.analysis) {
+      updateLoading('Restoring analysis results...', 85);
       restoreAnalysisState(ctx, session.analysis);
     }
 
+    updateLoading('Finalizing...', 98);
     ctx.showToast(`Session restored (${session.operationLog.length} operations)`);
   } catch (err) {
     console.error('Session load error:', err);
     ctx.showToast(`Load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  } finally {
+    hideLoading();
   }
 }
 
@@ -276,9 +287,13 @@ export async function loadBedGraphTrack(ctx: AppContext, file: File): Promise<vo
     ctx.showToast('Load a map file first');
     return;
   }
+  showLoading('Loading track', 'Reading track file...');
   try {
+    updateLoading('Reading track file...', 15);
     const text = await file.text();
+    updateLoading('Parsing track...', 55);
     const result = parseBedGraph(text);
+    updateLoading('Building track...', 85);
     const track = bedGraphToTrack(
       result,
       s.map.contigs,
@@ -293,6 +308,8 @@ export async function loadBedGraphTrack(ctx: AppContext, file: File): Promise<vo
   } catch (err) {
     console.error('BedGraph parse error:', err);
     ctx.showToast(`Track load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  } finally {
+    hideLoading();
   }
 }
 
