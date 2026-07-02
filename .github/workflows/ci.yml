@@ -51,14 +51,34 @@ jobs:
             " >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Install Playwright Chromium
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright Chromium (browser + deps)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: E2E tests
         run: npx playwright test
 
       - name: Build
         run: npm run build
+
+      - name: Smoke test production build
+        # Serves the built dist/ via `vite preview` at the real deploy base
+        # (/openpretext/) and checks it boots with no asset/console errors — the
+        # dev-server E2E suite above never exercises the shipped artifact.
+        run: npx playwright test --config playwright.smoke.config.ts
 
       - name: Download example datasets into dist
         if: github.ref == 'refs/heads/master' && github.event_name == 'push'

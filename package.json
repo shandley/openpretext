@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:visual": "playwright test",
+    "test:smoke": "DEPLOY_BASE=/openpretext/ vite build && playwright test --config playwright.smoke.config.ts",
     "test:coverage": "vitest run --coverage",
     "bench:acquire": "npx tsx bench/acquire/cli.ts",
     "bench:run": "npx tsx bench/cli.ts run",
