@@ -60,8 +60,9 @@ uniform float u_highlightStart;
 uniform float u_highlightEnd;
 uniform bool u_hasHighlight;
 
-// Contig boundaries as pixel positions (normalized 0-1)
-uniform float u_contigBoundaries[512]; // max 512 contigs
+// Contig boundaries (normalized 0-1, sorted ascending) in an R32F texture,
+// width = u_numContigs, height = 1. Sampled via texelFetch + binary search.
+uniform highp sampler2D u_boundaryTex;
 
 out vec4 fragColor;
 
@@ -69,17 +70,33 @@ float applyGamma(float value, float gamma) {
   return pow(clamp(value, 0.0, 1.0), gamma);
 }
 
+float boundaryAt(int i) {
+  return texelFetch(u_boundaryTex, ivec2(i, 0), 0).r;
+}
+
+// Distance from coordinate c to the nearest contig boundary, via binary search
+// over the sorted boundary texture (~log2(numContigs) fetches, independent of
+// contig count). Boundaries are guaranteed ascending (accumulated pixel spans).
+float nearestBoundaryDist(float c, int n) {
+  int lo = 0;
+  int hi = n; // exclusive upper bound
+  for (int iter = 0; iter < 24; iter++) { // 2^24 >> any real contig count
+    if (lo >= hi) break;
+    int mid = (lo + hi) / 2;
+    if (boundaryAt(mid) < c) lo = mid + 1;
+    else hi = mid;
+  }
+  // lo = first index with boundary >= c (or n). Nearest is lo or lo-1.
+  float d = 1.0;
+  if (lo < n)      d = min(d, abs(boundaryAt(lo) - c));
+  if (lo - 1 >= 0) d = min(d, abs(c - boundaryAt(lo - 1)));
+  return d;
+}
+
 float gridDistance(vec2 uv, int numContigs) {
   if (numContigs <= 0) return 1.0;
-  float minDist = 1.0;
-  for (int i = 0; i < 512; i++) {
-    if (i >= numContigs) break;
-    float boundary = u_contigBoundaries[i];
-    float dx = abs(uv.x - boundary);
-    float dy = abs(uv.y - boundary);
-    minDist = min(minDist, min(dx, dy));
-  }
-  return minDist;
+  return min(nearestBoundaryDist(uv.x, numContigs),
+             nearestBoundaryDist(uv.y, numContigs));
 }
 
 void main() {
@@ -229,13 +246,13 @@ export class WebGLRenderer {
   private textureSize: number = 0;
   private needsRender: boolean = true;
 
-  // Cached uniform upload for contig boundaries (rebuilt only when the
-  // boundaries array reference changes, not every frame).
-  private boundaryUniformData: Float32Array = new Float32Array(0);
+  // Contig boundaries live in an R32F texture (width = numContigs, height = 1),
+  // sampled in the shader via binary search. Re-uploaded only when the
+  // boundaries array reference changes (DerivedState memoizes it). This lifts
+  // the old fixed 512-boundary uniform cap — any contig count is supported.
+  private boundaryTexture: WebGLTexture | null = null;
+  private boundaryTexCount = 0;
   private lastBoundariesRef: number[] | null = null;
-  /** Max contig boundaries the shader's u_contigBoundaries[] uniform holds. */
-  private static readonly MAX_BOUNDARIES = 512;
-  private warnedBoundaryRef: number[] | null = null;
 
   private floatLinearSupported: boolean = false;
 
@@ -282,7 +299,7 @@ export class WebGLRenderer {
     // Get uniform locations
     const uniformNames = [
       'u_camera', 'u_zoom', 'u_resolution', 'u_contactMap', 'u_colorMap',
-      'u_gamma', 'u_floor', 'u_ceil', 'u_showGrid', 'u_gridOpacity', 'u_numContigs', 'u_contigBoundaries',
+      'u_gamma', 'u_floor', 'u_ceil', 'u_showGrid', 'u_gridOpacity', 'u_numContigs', 'u_boundaryTex',
       'u_highlightStart', 'u_highlightEnd', 'u_hasHighlight'
     ];
     for (const name of uniformNames) {
@@ -440,6 +457,37 @@ export class WebGLRenderer {
   }
 
   /**
+   * Upload the sorted-ascending contig boundaries (normalized [0,1]) into an
+   * R32F width×1 texture that the grid shader binary-searches. Replaces the
+   * previous texture; a count of 0 leaves no texture (grid draws nothing).
+   */
+  private uploadBoundaryTexture(boundaries: number[]): void {
+    const gl = this.gl;
+    if (this.boundaryTexture) {
+      gl.deleteTexture(this.boundaryTexture);
+      this.boundaryTexture = null;
+    }
+    this.boundaryTexCount = boundaries.length;
+    if (boundaries.length === 0) return;
+
+    const data = new Float32Array(boundaries);
+    this.boundaryTexture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, this.boundaryTexture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(
+      gl.TEXTURE_2D, 0, gl.R32F,
+      boundaries.length, 1, 0,
+      gl.RED, gl.FLOAT, data,
+    );
+    // NEAREST: R32F is not guaranteed linearly filterable, and texelFetch
+    // ignores filtering regardless.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+
+  /**
    * Render the contact map with current camera and settings.
    */
   render(camera: { x: number; y: number; zoom: number }, options: {
@@ -482,29 +530,15 @@ export class WebGLRenderer {
     gl.uniform1i(this.uniforms['u_showGrid']!, (options.showGrid ?? false) ? 1 : 0);
     gl.uniform1f(this.uniforms['u_gridOpacity']!, options.gridOpacity ?? 0.5);
     
-    // Contig boundaries. The shader's u_contigBoundaries[] uniform holds at
-    // most MAX_BOUNDARIES; uploading a longer array is a GL INVALID_OPERATION
-    // that drops the whole upload. Clamp so the grid still draws (for the first
-    // MAX_BOUNDARIES contigs) and warn once per over-limit boundary set.
+    // Contig boundaries: upload to an R32F texture only when the array
+    // reference changes (DerivedState memoizes it per order/map change). The
+    // shader binary-searches it, so any contig count is supported.
     const boundaries = options.contigBoundaries ?? [];
-    const MAX = WebGLRenderer.MAX_BOUNDARIES;
-    const count = Math.min(boundaries.length, MAX);
-    if (boundaries.length > MAX && boundaries !== this.warnedBoundaryRef) {
-      this.warnedBoundaryRef = boundaries;
-      console.warn(
-        `Grid overlay: ${boundaries.length} contigs exceeds the ${MAX}-boundary ` +
-        `shader limit; drawing grid lines for the first ${MAX} contigs only.`
-      );
+    if (boundaries !== this.lastBoundariesRef) {
+      this.uploadBoundaryTexture(boundaries);
+      this.lastBoundariesRef = boundaries;
     }
-    gl.uniform1i(this.uniforms['u_numContigs']!, count);
-    if (count > 0) {
-      if (boundaries !== this.lastBoundariesRef || this.boundaryUniformData.length !== count) {
-        this.boundaryUniformData = new Float32Array(count);
-        for (let i = 0; i < count; i++) this.boundaryUniformData[i] = boundaries[i];
-        this.lastBoundariesRef = boundaries;
-      }
-      gl.uniform1fv(this.uniforms['u_contigBoundaries']!, this.boundaryUniformData);
-    }
+    gl.uniform1i(this.uniforms['u_numContigs']!, this.boundaryTexCount);
 
     // Highlight
     const hasHighlight = options.highlightStart !== undefined && options.highlightEnd !== undefined;
@@ -522,7 +556,13 @@ export class WebGLRenderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
     gl.uniform1i(this.uniforms['u_colorMap']!, 1);
-    
+
+    if (this.boundaryTexture) {
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, this.boundaryTexture);
+      gl.uniform1i(this.uniforms['u_boundaryTex']!, 2);
+    }
+
     // Draw
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -728,6 +768,7 @@ export class WebGLRenderer {
     if (this.contactMapTexture) gl.deleteTexture(this.contactMapTexture);
     if (this.colorMapTexture) gl.deleteTexture(this.colorMapTexture);
     if (this.gateOverviewTexture) gl.deleteTexture(this.gateOverviewTexture);
+    if (this.boundaryTexture) gl.deleteTexture(this.boundaryTexture);
     if (this.program) gl.deleteProgram(this.program);
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.tileProgram) gl.deleteProgram(this.tileProgram);
