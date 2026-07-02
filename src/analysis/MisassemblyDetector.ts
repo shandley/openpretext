@@ -61,11 +61,23 @@ export interface MisassemblyParams {
   edgeMargin: number;
   /** Max pixel distance to merge a TAD boundary and compartment switch. Default: 3. */
   mergeRadius: number;
+  /** Contigs spanning fewer than this many overview pixels are flagged only when
+   *  a TAD boundary and a compartment switch agree (merged 'both'). Guards
+   *  microchromosome / fragmented assemblies from single-signal false positives.
+   *  Default: 10. */
+  smallContigSpan: number;
+  /** Minimum eigenvector delta at a sign change, as a fraction of the largest
+   *  |eigenvector| value, for a compartment switch to count. Suppresses the
+   *  noisy near-zero sign oscillations that dominate weak/fragmented genomes.
+   *  Default: 0.25. */
+  compartmentDeltaFrac: number;
 }
 
 const DEFAULT_PARAMS: MisassemblyParams = {
   edgeMargin: 2,
   mergeRadius: 3,
+  smallContigSpan: 10,
+  compartmentDeltaFrac: 0.25,
 };
 
 // ---------------------------------------------------------------------------
@@ -129,13 +141,23 @@ export function detectMisassemblies(
     }
   }
 
-  // Internal compartment sign-changes
+  // Internal compartment sign-changes. Gate on delta magnitude relative to the
+  // eigenvector's own scale: on fragmented / low-coverage genomes the eigenvector
+  // barely departs from its alternating power-iteration seed and flips sign at
+  // nearly every pixel with vanishing deltas — noise, not real A/B transitions.
   const ev = compartments.eigenvector;
+  let maxAbsEV = 0;
+  for (let i = 0; i < ev.length; i++) {
+    const a = Math.abs(ev[i]);
+    if (a > maxAbsEV) maxAbsEV = a;
+  }
+  const minDelta = maxAbsEV * p.compartmentDeltaFrac;
   for (let i = 1; i < ev.length; i++) {
     if (ev[i] * ev[i - 1] < 0) {
+      const delta = Math.abs(ev[i] - ev[i - 1]);
+      if (delta < minDelta) continue; // skip weak/noisy sign flips
       const range = findOwningContig(i, validRanges);
       if (range && isInternal(i, range, p.edgeMargin)) {
-        const delta = Math.abs(ev[i] - ev[i - 1]);
         signals.push({
           pixel: i,
           orderIndex: range.orderIndex,
@@ -189,10 +211,20 @@ export function detectMisassemblies(
     }
   }
 
+  // Small contigs cannot reliably localize an internal break from a single
+  // signal; require corroborating TAD + compartment agreement ('both') before
+  // flagging them. Large contigs still flag on either signal alone, so genuine
+  // chimeras survive.
+  const spanByOrder = new Map<number, number>();
+  for (const r of validRanges) spanByOrder.set(r.orderIndex, r.end - r.start);
+  const keptFlags = flags.filter(
+    f => f.reason === 'both' || (spanByOrder.get(f.orderIndex) ?? 0) >= p.smallContigSpan,
+  );
+
   // Build summary
   const flaggedContigs = new Set<number>();
   let tadOnly = 0, compartmentOnly = 0, both = 0;
-  for (const f of flags) {
+  for (const f of keptFlags) {
     flaggedContigs.add(f.orderIndex);
     if (f.reason === 'tad_boundary') tadOnly++;
     else if (f.reason === 'compartment_switch') compartmentOnly++;
@@ -200,9 +232,9 @@ export function detectMisassemblies(
   }
 
   return {
-    flags,
+    flags: keptFlags,
     flaggedContigs,
-    summary: { tadOnly, compartmentOnly, both, total: flags.length },
+    summary: { tadOnly, compartmentOnly, both, total: keptFlags.length },
   };
 }
 

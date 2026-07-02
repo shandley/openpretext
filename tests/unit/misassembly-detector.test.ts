@@ -40,6 +40,56 @@ function makeRanges(specs: [number, number][]): ContigRange[] {
 }
 
 // ---------------------------------------------------------------------------
+// Over-flag guards for fragmented / microchromosome genomes:
+//  - small contigs need corroborating TAD + compartment agreement
+//  - weak (noisy) eigenvector sign flips are ignored
+// ---------------------------------------------------------------------------
+
+describe('detectMisassemblies — over-flag guards', () => {
+  it('does not flag a small contig on a single TAD signal alone', () => {
+    // Contig 0 spans 8 px (< smallContigSpan 10). Lone internal TAD → no flag.
+    const insulation = makeInsulation([4], [0.5], 20);
+    const compartments = makeCompartments(new Array(20).fill(0.5));
+    const ranges = makeRanges([[0, 8], [8, 20]]);
+    const result = detectMisassemblies(insulation, compartments, ranges);
+    expect(result.flags).toHaveLength(0);
+  });
+
+  it('still flags a large contig on a single strong signal', () => {
+    // Contig 0 spans 30 px (>= smallContigSpan). Genuine chimera preserved.
+    const insulation = makeInsulation([15], [0.6], 40);
+    const compartments = makeCompartments(new Array(40).fill(0.5));
+    const ranges = makeRanges([[0, 30], [30, 40]]);
+    const result = detectMisassemblies(insulation, compartments, ranges);
+    expect(result.flags).toHaveLength(1);
+    expect(result.flags[0].orderIndex).toBe(0);
+  });
+
+  it('flags a small contig when TAD and compartment agree', () => {
+    const ev = new Array(20).fill(0.5);
+    ev[4] = -0.5; ev[5] = -0.5; // sign change at pixel 4
+    const insulation = makeInsulation([4], [0.4], 20);
+    const compartments = makeCompartments(ev);
+    const ranges = makeRanges([[0, 8], [8, 20]]);
+    const result = detectMisassemblies(insulation, compartments, ranges);
+    const both = result.flags.filter(f => f.reason === 'both');
+    expect(both).toHaveLength(1);
+  });
+
+  it('ignores weak eigenvector sign flips (noise)', () => {
+    // Large contig, but the only sign flips are tiny oscillations near zero.
+    const ev = new Array(40).fill(0.1);
+    ev[20] = 0.01; ev[21] = -0.01; ev[22] = 0.01; // deltas ~0.02
+    const insulation = makeInsulation([], [], 40);
+    const compartments = makeCompartments(ev);
+    const ranges = makeRanges([[0, 40]]);
+    const result = detectMisassemblies(insulation, compartments, ranges);
+    // maxAbs 0.1, minDelta = 0.025; deltas 0.02 < 0.025 → filtered
+    expect(result.flags).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // detectMisassemblies
 // ---------------------------------------------------------------------------
 
