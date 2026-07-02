@@ -7,6 +7,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('../../src/core/State', () => ({
   state: { get: vi.fn(() => ({})), update: vi.fn() },
 }));
+// FileLoading now statically imports EventWiring for applyOverviewMode; mock it
+// so its large transitive graph isn't pulled into this test.
+vi.mock('../../src/ui/EventWiring', () => ({
+  applyOverviewMode: vi.fn(),
+}));
 vi.mock('../../src/core/EventBus', () => ({
   events: { emit: vi.fn(), on: vi.fn() },
 }));

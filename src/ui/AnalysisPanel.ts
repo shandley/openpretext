@@ -47,7 +47,7 @@ import {
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { cut } from '../curation/CurationEngine';
 import { computeHealthScore, type HealthScoreResult } from '../analysis/HealthScore';
-import { qualityToTrack, type HiCQualityResult } from '../analysis/HiCQualityMetrics';
+import { qualityToTrack, computeHiCQuality, type HiCQualityResult } from '../analysis/HiCQualityMetrics';
 import { computeSaddlePlot, renderSaddleSVG, type SaddleResult } from '../analysis/SaddlePlot';
 import { computeVirtual4C, virtual4CToTrack, type Virtual4CResult } from '../analysis/Virtual4C';
 import type {
@@ -519,8 +519,6 @@ async function runQualityMetrics(ctx: AppContext): Promise<void> {
     scaffoldNames.set(scaffold.id, scaffold.name);
   }
 
-  // Import computeHiCQuality dynamically to keep the worker clean
-  const { computeHiCQuality } = await import('../analysis/HiCQualityMetrics');
   cachedQuality = computeHiCQuality(
     s.map.contactMap, overviewSize, ranges, scaffoldIds, scaffoldNames,
   );

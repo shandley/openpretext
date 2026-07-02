@@ -13,6 +13,7 @@ import { generateDemoTracks } from '../formats/SyntheticTracks';
 import { TileManager } from '../renderer/TileManager';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 import { loadSession, loadReferenceFasta, loadBedGraphTrack } from './ExportSession';
+import { applyOverviewMode } from './EventWiring';
 
 // Reused across loads; created lazily so the worker only spins up when needed.
 let parseClient: ParseWorkerClient | null = null;
@@ -85,7 +86,6 @@ async function loadPretextFromBuffer(
   events.emit('file:loaded', { filename, contigs: parsed.contigs.length, textureSize: mapSize });
   // If the user left the viewer in faithful mode, re-apply it for the new file.
   if (state.get().overviewMode === 'faithful') {
-    const { applyOverviewMode } = await import('./EventWiring');
     await applyOverviewMode(ctx);
   }
   ctx.showToast(`Loaded ${filename} — ${parsed.contigs.length} contigs, ${mapSize}px`);

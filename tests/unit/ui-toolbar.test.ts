@@ -11,6 +11,12 @@ vi.mock('../../src/core/State', () => ({
   },
 }));
 
+// Toolbar now statically imports EventWiring for applyOverviewMode; mock it so
+// its large transitive graph (DerivedState, AnalysisPanel, …) isn't pulled in.
+vi.mock('../../src/ui/EventWiring', () => ({
+  applyOverviewMode: vi.fn(),
+}));
+
 vi.mock('../../src/core/EventBus', () => ({
   events: {
     emit: vi.fn(),

@@ -16,7 +16,7 @@ import type { SessionData } from '../io/SessionManager';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import { syncColormapDropdown, syncGammaSlider, syncFloorSlider, syncCeilSlider, syncOverviewModeSelect } from './ColorMapControls';
 import { rebuildContigBoundaries, applyOverviewMode } from './EventWiring';
-import { exportAnalysisState, restoreAnalysisState } from './AnalysisPanel';
+import { exportAnalysisState, restoreAnalysisState, updateFastaHint } from './AnalysisPanel';
 import { inflate } from 'pako';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 
@@ -250,7 +250,6 @@ export async function loadReferenceFasta(ctx: AppContext, file: File): Promise<v
     } else {
       ctx.referenceSequences = new Map(records.map(r => [r.name, r.sequence]));
       ctx.showToast(`Loaded ${records.length} reference sequences`);
-      const { updateFastaHint } = await import('./AnalysisPanel');
       updateFastaHint(ctx);
     }
   } catch (err) {

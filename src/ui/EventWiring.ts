@@ -14,6 +14,7 @@ import { getContigBoundaries } from '../core/DerivedState';
 import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel, clearEnhancedMap } from './AnalysisPanel';
 import { updateComparisonSummary } from './ComparisonMode';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
+import { syncOverviewModeSelect } from './ColorMapControls';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -166,7 +167,6 @@ export async function applyOverviewMode(ctx: AppContext): Promise<void> {
     }
     if (!ctx.faithfulOverviewOriginal) {
       state.update({ overviewMode: 'clean' });
-      const { syncOverviewModeSelect } = await import('./ColorMapControls');
       syncOverviewModeSelect('clean');
       ctx.showToast('Faithful overview unavailable — showing Clean');
     }

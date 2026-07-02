@@ -8,6 +8,7 @@ import { state } from '../core/State';
 import { events } from '../core/EventBus';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession } from './ExportSession';
+import { applyOverviewMode } from './EventWiring';
 import { loadExampleDataset, loadDemoData } from './FileLoading';
 import { performUndo, performRedo } from './CurationActions';
 import { toggleLessonBrowser } from './LessonBrowser';
@@ -129,7 +130,6 @@ export function setupToolbar(ctx: AppContext): void {
   overviewModeSelect?.addEventListener('change', async () => {
     const overviewMode = overviewModeSelect.value === 'faithful' ? 'faithful' : 'clean';
     state.update({ overviewMode });
-    const { applyOverviewMode } = await import('./EventWiring');
     await applyOverviewMode(ctx);
     ctx.showToast(
       overviewMode === 'faithful'
