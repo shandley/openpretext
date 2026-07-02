@@ -346,70 +346,41 @@ export function unionFindSort(
     const chainJ = chains[nodeJ.chainId];
     if (!chainI || !chainJ || chainI.length === 0 || chainJ.length === 0) continue;
 
-    // Determine how to connect based on orientation
-    // HH: tail of I → head of J (I's tail connects to J's head)
-    // HT: tail of I → tail of J (I's tail connects to J's tail, so reverse J)
-    // TH: head of I → head of J (I's head connects to J's head, so reverse I)
-    // TT: head of I → tail of J (I's head connects to J's tail)
+    // Merge as [...chainA, ...chainB], so I must end at chainA's tail and J
+    // at chainB's head to make them adjacent at the junction. The junction is
+    // then chainA-tail's RIGHT end against chainB-head's LEFT end. The link's
+    // orientation dictates which physical end of each contig meets:
+    //   HH: I.tail–J.head   HT: I.tail–J.tail
+    //   TH: I.head–J.head   TT: I.head–J.tail
+    // An entry's junction-facing end is its tail when inverted=false and its
+    // head when inverted=true, so we require, at the junction:
+    //   I inverted = (head faces junction) = TH || TT
+    //   J inverted = (tail faces junction) = HT || TT
     //
-    // But we need to check which ends of the chains our contigs are at,
-    // and flip chains accordingly.
+    // Reversing a chain reverses its order AND flips every inverted flag.
+    // Positioning already fixes the flag of a multi-element endpoint, so its
+    // orientation cannot be flipped independently (a further reverse would
+    // move the contig off the junction). A single-element chain can still be
+    // flipped freely. This replaces the previous logic, which reversed a chain
+    // for positioning and then reversed the SAME chain again for orientation —
+    // the two cancelled, silently dropping the reverse-complement a TH/TT/HT
+    // link required.
+    const reverseChain = (c: ChainEntry[]): ChainEntry[] =>
+      c.slice().reverse().map(e => ({ orderIndex: e.orderIndex, inverted: !e.inverted }));
 
-    let chainA = chainI;
-    let chainB = chainJ;
-    let needsReverseA = false;
-    let needsReverseB = false;
+    const wantIInverted = link.orientation === 'TH' || link.orientation === 'TT';
+    const wantJInverted = link.orientation === 'HT' || link.orientation === 'TT';
 
-    // We want contig I at the connection end of chain A,
-    // and contig J at the connection end of chain B.
-    //
-    // For HH/HT: I should be at the TAIL of chainA
-    // For TH/TT: I should be at the HEAD of chainA
-    //
-    // For HH/TH: J should be at the HEAD of chainB
-    // For HT/TT: J should be at the TAIL of chainB
-
-    const iShouldBeTail = link.orientation === 'HH' || link.orientation === 'HT';
-    const jShouldBeHead = link.orientation === 'HH' || link.orientation === 'TH';
-
-    // If I is at the head but should be at the tail, reverse chain A
-    if (iShouldBeTail && nodeI.isHead && !nodeI.isTail) {
-      needsReverseA = true;
-    } else if (!iShouldBeTail && nodeI.isTail && !nodeI.isHead) {
-      needsReverseA = true;
+    // Position I at chainA's tail (last), then orient it if still free to.
+    let chainA = nodeI.isHead && !nodeI.isTail ? reverseChain(chainI) : chainI;
+    if (chainA[chainA.length - 1].inverted !== wantIInverted && chainA.length === 1) {
+      chainA = reverseChain(chainA);
     }
 
-    // If J is at the tail but should be at the head, reverse chain B
-    if (jShouldBeHead && nodeJ.isTail && !nodeJ.isHead) {
-      needsReverseB = true;
-    } else if (!jShouldBeHead && nodeJ.isHead && !nodeJ.isTail) {
-      needsReverseB = true;
-    }
-
-    if (needsReverseA) {
-      chainA.reverse();
-      chainA.forEach(e => e.inverted = !e.inverted);
-    }
-    if (needsReverseB) {
-      chainB.reverse();
-      chainB.forEach(e => e.inverted = !e.inverted);
-    }
-
-    // Handle inversion based on orientation
-    // HT: J needs to be inverted (tail connects to tail)
-    // TH: I needs to be inverted (head connects to head)
-    if (link.orientation === 'HT') {
-      // Reverse chain B and flip inversions
-      chainB.reverse();
-      chainB.forEach(e => e.inverted = !e.inverted);
-    } else if (link.orientation === 'TH') {
-      // Reverse chain A and flip inversions
-      chainA.reverse();
-      chainA.forEach(e => e.inverted = !e.inverted);
-    } else if (link.orientation === 'TT') {
-      // Both ends: reverse chain A
-      chainA.reverse();
-      chainA.forEach(e => e.inverted = !e.inverted);
+    // Position J at chainB's head (first), then orient it if still free to.
+    let chainB = nodeJ.isTail && !nodeJ.isHead ? reverseChain(chainJ) : chainJ;
+    if (chainB[0].inverted !== wantJInverted && chainB.length === 1) {
+      chainB = reverseChain(chainB);
     }
 
     // Merge: append chainB to chainA
@@ -717,42 +688,35 @@ export function hierarchicalChainMerge(
     const jAtEndpoint = jIsHead || jIsTail;
 
     if (iAtEndpoint && jAtEndpoint) {
-      // Orientation-aware merge: arrange chains so the connecting ends meet
+      // Orientation-aware merge: arrange chains so the connecting ends meet.
+      // Merged as [...iChain, ...jChain], so i must end at iChain's tail and j
+      // at jChain's head. Required junction orientations (see unionFindSort):
+      //   i inverted = TH || TT ;  j inverted = HT || TT
+      // A single reverse per chain both positions and orients a single-element
+      // chain; a multi-element endpoint's orientation is already committed and
+      // is left as-is (a second reverse would move it off the junction). The
+      // previous Step-1/Step-3 pair reversed the same chain twice for TH/TT/HT,
+      // cancelling the required reverse-complement.
+      const reverseChain = (c: ChainEntry[]): ChainEntry[] =>
+        c.slice().reverse().map(e => ({ orderIndex: e.orderIndex, inverted: !e.inverted }));
 
-      // Step 1: Position i at the correct end of iChain
-      const iShouldBeTail = orientation === 'HH' || orientation === 'HT';
-      if (iShouldBeTail && iIsHead && !iIsTail) {
-        iChain.reverse();
-        iChain.forEach(e => e.inverted = !e.inverted);
-      } else if (!iShouldBeTail && iIsTail && !iIsHead) {
-        iChain.reverse();
-        iChain.forEach(e => e.inverted = !e.inverted);
+      const wantIInverted = orientation === 'TH' || orientation === 'TT';
+      const wantJInverted = orientation === 'HT' || orientation === 'TT';
+
+      let orientedI =
+        iIsHead && !iIsTail ? reverseChain(iChain) : iChain.map(e => ({ ...e }));
+      if (orientedI[orientedI.length - 1].inverted !== wantIInverted && orientedI.length === 1) {
+        orientedI = reverseChain(orientedI);
       }
 
-      // Step 2: Position j at the correct end of jChain
-      const jShouldBeHead = orientation === 'HH' || orientation === 'TH';
-      if (jShouldBeHead && jIsTail && !jIsHead) {
-        jChain.reverse();
-        jChain.forEach(e => e.inverted = !e.inverted);
-      } else if (!jShouldBeHead && jIsHead && !jIsTail) {
-        jChain.reverse();
-        jChain.forEach(e => e.inverted = !e.inverted);
+      let orientedJ =
+        jIsTail && !jIsHead ? reverseChain(jChain) : jChain.map(e => ({ ...e }));
+      if (orientedJ[0].inverted !== wantJInverted && orientedJ.length === 1) {
+        orientedJ = reverseChain(orientedJ);
       }
 
-      // Step 3: Handle inversion for non-HH orientations
-      if (orientation === 'HT') {
-        jChain.reverse();
-        jChain.forEach(e => e.inverted = !e.inverted);
-      } else if (orientation === 'TH') {
-        iChain.reverse();
-        iChain.forEach(e => e.inverted = !e.inverted);
-      } else if (orientation === 'TT') {
-        iChain.reverse();
-        iChain.forEach(e => e.inverted = !e.inverted);
-      }
-
-      // Step 4: Concatenate iChain + jChain
-      const merged = [...iChain, ...jChain];
+      // Concatenate iChain + jChain
+      const merged = [...orientedI, ...orientedJ];
       chains[keepIdx] = merged;
       chains[mergeIdx] = [];
     } else {

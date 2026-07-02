@@ -8,7 +8,7 @@
  * All operations are reversible through the undo/redo system.
  */
 
-import { state, ContigInfo, CurationOperation } from '../core/State';
+import { state, ContigInfo, CurationOperation, SequenceSegment } from '../core/State';
 import { events } from '../core/EventBus';
 import type { ScaffoldManager } from './ScaffoldManager';
 
@@ -50,6 +50,81 @@ function requireValidIndex(index: number, label = 'contigIndex'): void {
 }
 
 // ---------------------------------------------------------------------------
+// Sequence provenance helpers
+//
+// Cut/join produce contigs with synthesized names that are not keys in the
+// reference-sequence map. To keep FASTA export correct, each derived contig
+// records `sequenceSegments` — self-contained, display-order slices of the
+// originally-loaded contigs (see FASTAWriter.resolveContigSequence).
+// ---------------------------------------------------------------------------
+
+/**
+ * Return a contig's sequence as display-order segments. A contig already
+ * carrying segments returns a shallow copy; a source contig is represented as
+ * a single full-length segment whose reverse-complement flag mirrors its
+ * `inverted` orientation.
+ */
+function getDisplaySegments(contig: ContigInfo): SequenceSegment[] {
+  if (contig.sequenceSegments && contig.sequenceSegments.length > 0) {
+    return contig.sequenceSegments.map((s) => ({ ...s }));
+  }
+  return [
+    { sourceName: contig.name, start: 0, end: contig.length, revComp: contig.inverted },
+  ];
+}
+
+/**
+ * Split a display-ordered segment list at `offset` base pairs (measured in
+ * display order), returning [left, right]. The segment straddling the split is
+ * divided; for a reverse-complemented segment the display-forward direction
+ * reads the source backward, so the cut maps to the opposite end of its range.
+ */
+function splitDisplaySegments(
+  segments: SequenceSegment[],
+  offset: number
+): [SequenceSegment[], SequenceSegment[]] {
+  const left: SequenceSegment[] = [];
+  const right: SequenceSegment[] = [];
+  let acc = 0;
+
+  for (const seg of segments) {
+    const segLen = seg.end - seg.start;
+    if (acc >= offset) {
+      right.push({ ...seg });
+    } else if (acc + segLen <= offset) {
+      left.push({ ...seg });
+    } else {
+      const d = offset - acc; // display bases of this segment on the left side
+      if (!seg.revComp) {
+        left.push({ ...seg, end: seg.start + d });
+        right.push({ ...seg, start: seg.start + d });
+      } else {
+        // First d display bases correspond to the last d source bases.
+        left.push({ sourceName: seg.sourceName, start: seg.end - d, end: seg.end, revComp: true });
+        right.push({ sourceName: seg.sourceName, start: seg.start, end: seg.end - d, revComp: true });
+      }
+    }
+    acc += segLen;
+  }
+
+  return [left, right];
+}
+
+/**
+ * Reverse-complement a display-order segment list: reverse the order and flip
+ * each segment's revComp flag. `undefined` (a source contig with no segments)
+ * stays undefined — its orientation is carried by the `inverted` flag instead.
+ */
+function flipSegments(
+  segments: SequenceSegment[] | undefined
+): SequenceSegment[] | undefined {
+  if (!segments) return undefined;
+  return segments
+    .map((s) => ({ ...s, revComp: !s.revComp }))
+    .reverse();
+}
+
+// ---------------------------------------------------------------------------
 // CUT
 // ---------------------------------------------------------------------------
 
@@ -87,6 +162,13 @@ export function cut(contigOrderIndex: number, pixelOffset: number): void {
   const leftBpLength = Math.round(contig.length * fraction);
   const rightBpLength = contig.length - leftBpLength;
 
+  // Partition the source-sequence provenance at the same display offset so
+  // FASTA export can reconstruct each half's sequence.
+  const [leftSegments, rightSegments] = splitDisplaySegments(
+    getDisplaySegments(contig),
+    leftBpLength
+  );
+
   // Create two new contigs
   const leftContig: ContigInfo = {
     name: `${contig.name}_L`,
@@ -96,6 +178,7 @@ export function cut(contigOrderIndex: number, pixelOffset: number): void {
     pixelEnd: contig.pixelStart + pixelOffset,
     inverted: contig.inverted,
     scaffoldId: contig.scaffoldId,
+    sequenceSegments: leftSegments,
   };
 
   const rightContig: ContigInfo = {
@@ -106,6 +189,7 @@ export function cut(contigOrderIndex: number, pixelOffset: number): void {
     pixelEnd: contig.pixelEnd,
     inverted: contig.inverted,
     scaffoldId: contig.scaffoldId,
+    sequenceSegments: rightSegments,
   };
 
   // If the original contig was inverted, the left/right halves in display
@@ -188,6 +272,17 @@ export function join(contigOrderIndex: number): void {
   const first = map.contigs[firstId];
   const second = map.contigs[secondId];
 
+  // Concatenate both contigs' sequence provenance so FASTA export can rebuild
+  // the merged sequence. The single `inverted` strand flag can only represent
+  // a uniform orientation, so it is preserved when both inputs agree and
+  // defaults to false otherwise (the segments still export correctly).
+  const mergedSegments = [
+    ...getDisplaySegments(first),
+    ...getDisplaySegments(second),
+  ];
+  const mergedInverted =
+    first.inverted === second.inverted ? first.inverted : false;
+
   // Create merged contig
   const merged: ContigInfo = {
     name: `${first.name}+${second.name}`,
@@ -195,8 +290,9 @@ export function join(contigOrderIndex: number): void {
     length: first.length + second.length,
     pixelStart: Math.min(first.pixelStart, second.pixelStart),
     pixelEnd: Math.max(first.pixelEnd, second.pixelEnd),
-    inverted: false,
+    inverted: mergedInverted,
     scaffoldId: first.scaffoldId,
+    sequenceSegments: mergedSegments,
   };
 
   const mergedId = map.contigs.length;
@@ -254,8 +350,14 @@ export function invert(contigOrderIndex: number): void {
   const contig = map.contigs[contigId];
 
   const previousInverted = contig.inverted;
+  const previousSegments = contig.sequenceSegments;
   const newInverted = !contig.inverted;
-  state.updateContig(contigId, { inverted: newInverted });
+  // Reverse-complement the sequence provenance too, so a derived (cut/join)
+  // contig's exported sequence flips along with its strand.
+  state.updateContig(contigId, {
+    inverted: newInverted,
+    sequenceSegments: flipSegments(previousSegments),
+  });
 
   const op: CurationOperation = {
     type: 'invert',
@@ -265,6 +367,7 @@ export function invert(contigOrderIndex: number): void {
       contigOrderIndex,
       contigId,
       previousInverted,
+      previousSegments,
     },
   };
 
@@ -281,7 +384,10 @@ export function undoInvert(op: CurationOperation): void {
   if (!map) return;
 
   const contigId = op.data.contigId as number;
-  state.updateContig(contigId, { inverted: op.data.previousInverted as boolean });
+  state.updateContig(contigId, {
+    inverted: op.data.previousInverted as boolean,
+    sequenceSegments: op.data.previousSegments as SequenceSegment[] | undefined,
+  });
   events.emit('render:request', {});
 }
 
@@ -515,7 +621,10 @@ function reapplyInvert(op: CurationOperation): void {
   const contig = map.contigs[contigId];
 
   // Toggle again (undone = back to previous, redo = toggle again)
-  state.updateContig(contigId, { inverted: !contig.inverted });
+  state.updateContig(contigId, {
+    inverted: !contig.inverted,
+    sequenceSegments: flipSegments(contig.sequenceSegments),
+  });
 
   const newOp: CurationOperation = {
     ...op,

@@ -481,6 +481,82 @@ describe('AutoSort', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Multi-element merge orientation — double-reverse bug
+  //
+  // KNOWN-FAILING: unionFindSort has two chain-reversal blocks that both
+  // operate on the same chain array. For a TH/TT link whose linking contig
+  // is at a multi-element-chain endpoint, block 1 ("position the linking
+  // contig at the correct end") reverses chainA, and block 2 ("handle
+  // inversion based on orientation") reverses chainA AGAIN — the two
+  // reverses + double inverted-flip cancel, silently dropping the
+  // reverse-complement the TT/TH link demanded. No existing test asserts
+  // the `inverted` flags for a multi-element merge, so this slips through
+  // green. This drives AutoSort's orientation-accuracy claim.
+  // -----------------------------------------------------------------------
+  describe('unionFindSort — multi-element merge orientation (double-reverse bug)', () => {
+    /**
+     * Canonicalize a chain to a single global orientation so the assertion
+     * is invariant to whole-chain reversal (a chain and its global reverse
+     * describe the same physical assembly). Rule: if the first entry is
+     * inverted, globally reverse the chain (reverse order + flip every flag).
+     */
+    function canonicalize(chain: ChainEntry[]): Array<[number, boolean]> {
+      const c = chain[0].inverted
+        ? [...chain].reverse().map(e => ({ orderIndex: e.orderIndex, inverted: !e.inverted }))
+        : chain;
+      return c.map(e => [e.orderIndex, e.inverted] as [number, boolean]);
+    }
+
+    it('preserves the reverse-complement demanded by a TT link into a 2-element chain', () => {
+      // Link 1 (HH): contig 0's tail joins contig 1's head → chain [0,1],
+      //   both non-inverted; free ends are 0.head (left) and 1.tail (right).
+      // Link 2 (TT): contig 0's head joins contig 2's tail. 0.head is the
+      //   chain's left free end, so contig 2 must sit to the LEFT of 0 with
+      //   its tail facing 0 — i.e. contig 2 NON-inverted, giving [2,0,1].
+      //
+      // Physically correct result (canonical form): [2:+, 0:+, 1:+].
+      // The double-reverse bug instead emits contig 2 as INVERTED, i.e.
+      // 2's head (not tail) faces contig 0 — violating the TT link.
+      const links: ContigLink[] = [
+        { i: 0, j: 1, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+        { i: 0, j: 2, score: 0.8, orientation: 'TT', allScores: [0.1, 0.1, 0.1, 0.8] },
+      ];
+
+      const result = unionFindSort(links, 3, 0.5);
+
+      // Topology must be a single 3-contig chain (that part already works).
+      expect(result.chains.length).toBe(1);
+      expect(result.chains[0].length).toBe(3);
+
+      // Orientation is the actual assertion under test.
+      expect(canonicalize(result.chains[0])).toEqual([
+        [2, false],
+        [0, false],
+        [1, false],
+      ]);
+    });
+
+    it('inverts the single contig joined by an HT link onto a multi-element chain', () => {
+      // Chain [0,1] via HH, then contig 2 joins contig 1 with an HT link
+      // (1.tail — 2.tail). Contig 2 (single) must be inverted so its tail
+      // faces contig 1; contigs 0 and 1 stay forward.
+      const links: ContigLink[] = [
+        { i: 0, j: 1, score: 0.9, orientation: 'HH', allScores: [0.9, 0.1, 0.1, 0.1] },
+        { i: 1, j: 2, score: 0.8, orientation: 'HT', allScores: [0.1, 0.8, 0.1, 0.1] },
+      ];
+
+      const result = unionFindSort(links, 3, 0.5);
+
+      expect(result.chains.length).toBe(1);
+      expect(canonicalize(result.chains[0])).toEqual([
+        [0, false],
+        [1, false],
+        [2, true],
+      ]);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // mergeSmallChains
   // -----------------------------------------------------------------------
   describe('mergeSmallChains', () => {

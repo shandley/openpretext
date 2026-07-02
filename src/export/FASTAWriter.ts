@@ -12,7 +12,7 @@
  * - Skips contigs whose sequence is not in the provided map
  */
 
-import type { AppState } from '../core/State';
+import type { AppState, ContigInfo } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
 
 /** Configuration for FASTA export. */
@@ -84,6 +84,40 @@ export function wrapSequence(sequence: string, lineWidth: number): string {
 }
 
 /**
+ * Resolve the exported nucleotide sequence for a single contig.
+ *
+ * Contigs produced by cut/join carry `sequenceSegments` describing how to
+ * rebuild their sequence from the originally-loaded (source) contigs; those
+ * segments are self-contained (each encodes its own orientation), so the
+ * contig-level `inverted` flag is not re-applied on top of them. Contigs
+ * loaded directly from a .pretext file have no segments and are looked up by
+ * name, then reverse-complemented if `inverted`.
+ *
+ * @returns the sequence string, or `undefined` if any required source
+ *   sequence is missing from the map.
+ */
+export function resolveContigSequence(
+  contig: ContigInfo,
+  sequences: Map<string, string>
+): string | undefined {
+  const segments = contig.sequenceSegments;
+  if (segments && segments.length > 0) {
+    const parts: string[] = [];
+    for (const seg of segments) {
+      const src = sequences.get(seg.sourceName);
+      if (src === undefined) return undefined;
+      const slice = src.substring(seg.start, seg.end);
+      parts.push(seg.revComp ? reverseComplement(slice) : slice);
+    }
+    return parts.join('');
+  }
+
+  const raw = sequences.get(contig.name);
+  if (raw === undefined) return undefined;
+  return contig.inverted ? reverseComplement(raw) : raw;
+}
+
+/**
  * Export the curated assembly as a FASTA format string.
  *
  * @param appState  - The current application state
@@ -115,18 +149,14 @@ export function exportFASTA(
     const contig = contigs[idx];
     if (!contig) continue;
 
-    const rawSequence = sequences.get(contig.name);
-    if (rawSequence === undefined) {
+    const sequence = resolveContigSequence(contig, sequences);
+    if (sequence === undefined) {
       // Emit a comment-style header indicating the missing sequence
       parts.push(`>${contig.name} WARNING:sequence_not_found`);
       continue;
     }
 
     const orientation = contig.inverted ? '-' : '+';
-    const sequence = contig.inverted
-      ? reverseComplement(rawSequence)
-      : rawSequence;
-
     parts.push(`>${contig.name} orientation=${orientation}`);
     parts.push(wrapSequence(sequence, opts.lineWidth));
   }

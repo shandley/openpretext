@@ -20,6 +20,24 @@ import type { PretextHeader } from '../formats/PretextParser';
  */
 const MAX_UNDO_DEPTH = 200;
 
+/**
+ * A slice of a source (originally-loaded) contig's sequence, used to
+ * reconstruct the nucleotide sequence of a derived contig produced by cut
+ * or join operations. Segments are stored in display (5'→3') reading order;
+ * each carries its own reverse-complement flag, so the list is self-contained
+ * and does not depend on the owning contig's `inverted` flag.
+ */
+export interface SequenceSegment {
+  /** Name of the source contig — a key into the reference sequences map. */
+  sourceName: string;
+  /** Base-pair start offset within the source sequence (inclusive). */
+  start: number;
+  /** Base-pair end offset within the source sequence (exclusive). */
+  end: number;
+  /** Whether this segment is reverse-complemented in the derived contig. */
+  revComp: boolean;
+}
+
 export interface ContigInfo {
   name: string;
   originalIndex: number;
@@ -28,6 +46,13 @@ export interface ContigInfo {
   pixelEnd: number;     // end pixel in the texture
   inverted: boolean;
   scaffoldId: number | null;
+  /**
+   * Sequence provenance for contigs derived from cut/join. Absent on contigs
+   * loaded directly from a .pretext file, whose sequence is looked up by name
+   * and oriented by `inverted`. When present, it fully determines the exported
+   * sequence (see FASTAWriter.resolveContigSequence).
+   */
+  sequenceSegments?: SequenceSegment[];
 }
 
 export interface CurationOperation {

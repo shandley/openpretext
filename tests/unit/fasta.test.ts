@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AppState, ContigInfo, MapData } from '../../src/core/State';
+import { state } from '../../src/core/State';
+import { CurationEngine } from '../../src/curation/CurationEngine';
 import { parseFASTA, parseFASTAStream } from '../../src/formats/FASTAParser';
 import type { FASTARecord } from '../../src/formats/FASTAParser';
 import {
@@ -531,6 +533,158 @@ describe('FASTAWriter', () => {
 
       // Reverse complement again should give back original
       expect(reverseComplement(exportedSeq)).toBe(originalSeq);
+    });
+  });
+
+  // KNOWN-FAILING: cut() names its children `${name}_L`/`_R` and join() names
+  // the merge `${a}+${b}`, but exportFASTA looks sequences up by contig.name.
+  // These synthesized names are never in the sequences map, so every cut or
+  // joined contig hits the `sequence_not_found` path and is emitted as a
+  // header-only warning with NO sequence — silently dropped from the FASTA.
+  // The two most common curation operations therefore break FASTA output.
+  describe('exportFASTA — cut/join products (known bug)', () => {
+    beforeEach(() => {
+      state.reset();
+    });
+
+    function fullSpanContig(
+      name: string,
+      index: number,
+      pixelStart: number,
+      pixelEnd: number,
+      length: number
+    ): ContigInfo {
+      return {
+        name,
+        originalIndex: index,
+        length,
+        pixelStart,
+        pixelEnd,
+        inverted: false,
+        scaffoldId: null,
+      };
+    }
+
+    it('exports both halves of a cut contig, not a sequence_not_found warning', () => {
+      const original = 'A'.repeat(40) + 'C'.repeat(60); // 100 bases
+      const contigs = [fullSpanContig('chr1', 0, 0, 100, 100)];
+      state.update({ map: makeMapData(contigs), contigOrder: [0] });
+
+      CurationEngine.cut(0, 40); // → chr1_L (40 bp) + chr1_R (60 bp)
+
+      const sequences = new Map([['chr1', original]]);
+      const fasta = exportFASTA(state.get(), sequences);
+
+      expect(fasta).not.toContain('sequence_not_found');
+
+      const byName = new Map(parseFASTA(fasta).map((r) => [r.name, r.sequence]));
+      const left = byName.get('chr1_L') ?? '';
+      const right = byName.get('chr1_R') ?? '';
+      expect(left.length).toBe(40);
+      expect(right.length).toBe(60);
+      expect(left + right).toBe(original);
+    });
+
+    it('exports the concatenated sequence of a joined contig', () => {
+      const contigs = [
+        fullSpanContig('chrA', 0, 0, 100, 4),
+        fullSpanContig('chrB', 1, 100, 200, 4),
+      ];
+      state.update({ map: makeMapData(contigs), contigOrder: [0, 1] });
+
+      CurationEngine.join(0); // → chrA+chrB
+
+      const sequences = new Map([
+        ['chrA', 'AAAA'],
+        ['chrB', 'TTTT'],
+      ]);
+      const fasta = exportFASTA(state.get(), sequences);
+
+      expect(fasta).not.toContain('sequence_not_found');
+
+      const byName = new Map(parseFASTA(fasta).map((r) => [r.name, r.sequence]));
+      expect(byName.get('chrA+chrB')).toBe('AAAATTTT');
+    });
+  });
+
+  // Composition guards: cut/join provenance must stay correct through inverted
+  // inputs and subsequent inversion (exercises segment slicing + flipping).
+  describe('exportFASTA — cut/join sequence composition (orientation)', () => {
+    beforeEach(() => {
+      state.reset();
+    });
+
+    function fullSpanContig(
+      name: string,
+      index: number,
+      pixelStart: number,
+      pixelEnd: number,
+      length: number,
+      inverted = false
+    ): ContigInfo {
+      return {
+        name,
+        originalIndex: index,
+        length,
+        pixelStart,
+        pixelEnd,
+        inverted,
+        scaffoldId: null,
+      };
+    }
+
+    /** Sequences emitted in display (contig-order) order. */
+    function orderedSequences(fasta: string): string[] {
+      return parseFASTA(fasta).map((r) => r.sequence);
+    }
+
+    it('cuts an inverted contig into correctly reverse-complemented halves', () => {
+      // chr1 stored as ATCGATCG but displayed inverted → CGATCGAT.
+      const contigs = [fullSpanContig('chr1', 0, 0, 8, 8, true)];
+      state.update({ map: makeMapData(contigs), contigOrder: [0] });
+
+      CurationEngine.cut(0, 3); // display halves: CGA | TCGAT
+
+      const fasta = exportFASTA(state.get(), new Map([['chr1', 'ATCGATCG']]));
+      expect(fasta).not.toContain('sequence_not_found');
+      // Halves, in display order, must reconstruct the inverted display sequence.
+      expect(orderedSequences(fasta).join('')).toBe(reverseComplement('ATCGATCG'));
+    });
+
+    it('reverse-complements a cut half when it is subsequently inverted', () => {
+      const contigs = [fullSpanContig('chr1', 0, 0, 8, 8)];
+      state.update({ map: makeMapData(contigs), contigOrder: [0] });
+
+      CurationEngine.cut(0, 4); // chr1_L = AAAA, chr1_R = CCCC
+      CurationEngine.invert(0); // invert chr1_L → TTTT
+
+      const fasta = exportFASTA(state.get(), new Map([['chr1', 'AAAACCCC']]));
+      const byName = new Map(parseFASTA(fasta).map((r) => [r.name, r.sequence]));
+      expect(byName.get('chr1_L')).toBe('TTTT');
+      expect(byName.get('chr1_R')).toBe('CCCC');
+      expect(fasta).toContain('>chr1_L orientation=-');
+    });
+
+    it('joins two inverted contigs into the correct concatenated sequence', () => {
+      const contigs = [
+        fullSpanContig('chrA', 0, 0, 4, 4, true),
+        fullSpanContig('chrB', 1, 4, 8, 4, true),
+      ];
+      state.update({ map: makeMapData(contigs), contigOrder: [0, 1] });
+
+      CurationEngine.join(0);
+
+      const fasta = exportFASTA(
+        state.get(),
+        new Map([
+          ['chrA', 'AAAA'],
+          ['chrB', 'GGGG'],
+        ])
+      );
+      const byName = new Map(parseFASTA(fasta).map((r) => [r.name, r.sequence]));
+      // display(A)+display(B) = revComp(AAAA)+revComp(GGGG) = TTTT + CCCC
+      expect(byName.get('chrA+chrB')).toBe('TTTTCCCC');
+      expect(fasta).toContain('>chrA+chrB orientation=-');
     });
   });
 

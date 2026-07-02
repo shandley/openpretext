@@ -284,6 +284,28 @@ describe('CurationEngine', () => {
       expect(merged.name).toBe('chr1+chr2');
       expect(merged.length).toBe(10000 + 8000);
     });
+
+    // KNOWN-FAILING: join() hardcodes `inverted: false` on the merged contig,
+    // discarding the orientation of its inputs. Joining two contigs that are
+    // both reverse-complemented (inverted) must yield an inverted merged
+    // contig — otherwise the joined region is exported on the wrong strand
+    // (AGP col 9 / BED col 6 / FASTA reverse-complement).
+    it('should preserve inverted orientation when joining two inverted contigs', () => {
+      const contigs = [
+        makeContig('chrA', 0, 0, 100, 5000),
+        makeContig('chrB', 1, 100, 200, 5000),
+      ];
+      contigs[0].inverted = true;
+      contigs[1].inverted = true;
+      const map = makeTestMap(contigs);
+      state.update({ map, contigOrder: [0, 1] });
+
+      CurationEngine.join(0);
+
+      const s = state.get();
+      const merged = s.map!.contigs[s.contigOrder[0]];
+      expect(merged.inverted).toBe(true);
+    });
   });
 
   // -----------------------------------------------------------------------
