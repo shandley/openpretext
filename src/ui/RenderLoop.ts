@@ -111,6 +111,9 @@ export function startRenderLoop(ctx: AppContext): void {
 
     if (ctx.labelRenderer && s.map) {
       const contigNames = getContigNames();
+      const trackGutterPx = (ctx.trackRenderer && ctx.tracksVisible)
+        ? ctx.trackRenderer.getVisibleTrackHeight()
+        : 0;
       ctx.labelRenderer.render({
         contigBoundaries: ctx.contigBoundaries,
         contigNames,
@@ -118,6 +121,7 @@ export function startRenderLoop(ctx: AppContext): void {
         hoveredIndex: ctx.hoveredContigIndex,
         canvasWidth: w,
         canvasHeight: h,
+        trackGutterPx,
       });
 
       // Draw drag indicator on the label canvas if dragging

@@ -269,12 +269,14 @@ export class TrackRenderer {
         break;
     }
 
-    // Track name label — top-left corner, semi-transparent
-    ctx.font = '9px -apple-system, system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.textBaseline = 'top';
+    // Track name label — the single, horizontal label for this track (the
+    // matching left-edge column is intentionally left unlabelled; it mirrors
+    // these by order). Vertically centred in the band, left-aligned.
+    ctx.font = '11px -apple-system, system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.82)';
+    ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.fillText(track.name, 4, trackTop + 2);
+    ctx.fillText(track.name, 5, trackTop + track.height / 2);
 
     ctx.restore();
   }
@@ -316,16 +318,9 @@ export class TrackRenderer {
         break;
     }
 
-    // Track name label — rotated 90° to read bottom-to-top along the left edge
-    ctx.save();
-    ctx.translate(trackLeft + track.height - 2, h * 0.15);
-    ctx.rotate(-Math.PI / 2);
-    ctx.font = '9px -apple-system, system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.textBaseline = 'bottom';
-    ctx.textAlign = 'left';
-    ctx.fillText(track.name, 0, 0);
-    ctx.restore();
+    // No rotated name here: the left column mirrors the top track of the same
+    // index, which carries the single horizontal label. This removes the
+    // cramped, truncated, overlapping rotated labels from the corner.
 
     ctx.restore();
   }

@@ -13,6 +13,9 @@ export interface LabelRenderOptions {
   hoveredIndex: number;        // -1 if none
   canvasWidth: number;
   canvasHeight: number;
+  /** Total thickness (CSS px) of the visible track gutters, so contig labels
+   *  sit just outside them rather than overlapping the tracks. Default 0. */
+  trackGutterPx?: number;
 }
 
 export class LabelRenderer {
@@ -74,10 +77,29 @@ export class LabelRenderer {
     }
 
     const labelMargin = 4;
-    const fontSize = Math.min(12, Math.max(8, 11 / (contigBoundaries.length / 12)));
+    const fontSize = Math.min(14, Math.max(11, 132 / contigBoundaries.length));
 
     ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
     ctx.textBaseline = 'middle';
+    // A dark halo so labels stay legible over both the white contact map and
+    // the dark gutters (the top edge often sits directly on the white map).
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+    ctx.shadowBlur = 3;
+
+    // Anchor the label band just outside the track gutter, hugging the map's
+    // top/left edge so labels move with pan/zoom instead of floating at the
+    // fixed canvas corner. Clamp to stay on-screen when the map fills/overflows.
+    const gutter = opts.trackGutterPx ?? 0;
+    const mapTop = this.mapToScreenY(0, camera, canvasWidth, canvasHeight);
+    const mapLeft = this.mapToScreenX(0, camera, canvasWidth, canvasHeight);
+    const topLabelY = Math.min(
+      canvasHeight - fontSize / 2,
+      Math.max(fontSize / 2 + labelMargin, mapTop - gutter - labelMargin - fontSize / 2),
+    );
+    const leftLabelX = Math.min(
+      canvasWidth - fontSize / 2,
+      Math.max(fontSize / 2 + labelMargin, mapLeft - gutter - labelMargin - fontSize / 2),
+    );
 
     // Draw labels for each contig along the top edge
     for (let i = 0; i < contigNames.length && i < contigBoundaries.length; i++) {
@@ -101,13 +123,13 @@ export class LabelRenderer {
 
       // Top label
       ctx.save();
-      ctx.translate(screenX, labelMargin + fontSize / 2);
+      ctx.translate(screenX, topLabelY);
 
       if (isHovered) {
         ctx.fillStyle = '#ffcc00';
         ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
       } else {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
       }
 
       ctx.textAlign = 'center';
@@ -137,14 +159,14 @@ export class LabelRenderer {
       if (screenEndY < 0 || screenStartY > canvasHeight) continue;
 
       ctx.save();
-      ctx.translate(labelMargin + fontSize / 2, screenY);
+      ctx.translate(leftLabelX, screenY);
       ctx.rotate(-Math.PI / 2);
 
       if (isHovered) {
         ctx.fillStyle = '#ffcc00';
         ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
       } else {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
       }
 
       ctx.textAlign = 'center';
