@@ -147,6 +147,7 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
       case 'x':
         ctx.tracksVisible = !ctx.tracksVisible;
         ctx.showToast(`Tracks: ${ctx.tracksVisible ? 'visible' : 'hidden'}`);
+        ctx.requestRender();
         break;
 
       case 'n':

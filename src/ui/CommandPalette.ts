@@ -85,7 +85,7 @@ function getCommands(ctx: AppContext) {
     { name: 'Screenshot', shortcut: '\u2318S', action: () => takeScreenshot(ctx) },
     { name: 'Select all contigs', shortcut: '\u2318A', action: () => { SelectionManager.selectAll(); ctx.updateSidebarContigList(); } },
     { name: 'Clear selection', shortcut: 'Esc', action: () => { SelectionManager.clearSelection(); ctx.updateSidebarContigList(); } },
-    { name: 'Toggle tracks', shortcut: 'X', action: () => { ctx.tracksVisible = !ctx.tracksVisible; ctx.showToast(`Tracks: ${ctx.tracksVisible ? 'visible' : 'hidden'}`); } },
+    { name: 'Toggle tracks', shortcut: 'X', action: () => { ctx.tracksVisible = !ctx.tracksVisible; ctx.showToast(`Tracks: ${ctx.tracksVisible ? 'visible' : 'hidden'}`); ctx.requestRender(); } },
     { name: 'New scaffold', shortcut: 'N', action: () => { const id = ctx.scaffoldManager.createScaffold(); ctx.scaffoldManager.setActiveScaffoldId(id); ctx.updateSidebarScaffoldList(); } },
     { name: 'Next waypoint', shortcut: '] or .', action: () => { const cam = ctx.camera.getState(); const wp = ctx.waypointManager.getNextWaypoint(cam.x, cam.y); if (wp) { ctx.currentWaypointId = wp.id; ctx.camera.animateTo({ x: wp.mapX, y: wp.mapY }, 250); } } },
     { name: 'Previous waypoint', shortcut: '[ or ,', action: () => { const cam = ctx.camera.getState(); const wp = ctx.waypointManager.getPrevWaypoint(cam.x, cam.y); if (wp) { ctx.currentWaypointId = wp.id; ctx.camera.animateTo({ x: wp.mapX, y: wp.mapY }, 250); } } },

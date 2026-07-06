@@ -281,6 +281,32 @@ describe('TrackRenderer — track management', () => {
     renderer.clearTracks();
     expect(renderer.getTracks().length).toBe(0);
   });
+
+  // The render loop is dirty-gated, so a track mutation that doesn't request a
+  // repaint goes unseen until an unrelated redraw (the bug where analysis-added
+  // tracks didn't appear on a quiet load). Every mutation must notify onChange.
+  it('notifies onChange on every track mutation', () => {
+    let calls = 0;
+    const renderer = new TrackRenderer(createMockCanvas(), () => { calls++; });
+    renderer.addTrack(makeTrack('a'));       expect(calls).toBe(1);
+    renderer.setTrackVisibility('a', false); expect(calls).toBe(2);
+    renderer.toggleTrackVisibility('a');     expect(calls).toBe(3);
+    renderer.setAllVisible(true);            expect(calls).toBe(4);
+    renderer.removeTrack('a');               expect(calls).toBe(5);
+    renderer.clearTracks();                  expect(calls).toBe(6);
+  });
+
+  it('does not notify onChange for a no-op removeTrack', () => {
+    let calls = 0;
+    const renderer = new TrackRenderer(createMockCanvas(), () => { calls++; });
+    expect(renderer.removeTrack('missing')).toBe(false);
+    expect(calls).toBe(0);
+  });
+
+  it('tolerates an omitted onChange callback', () => {
+    const renderer = new TrackRenderer(createMockCanvas());
+    expect(() => renderer.addTrack(makeTrack('a'))).not.toThrow();
+  });
 });
 
 // ---------------------------------------------------------------------------

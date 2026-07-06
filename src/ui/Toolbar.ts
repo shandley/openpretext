@@ -78,6 +78,7 @@ export function setupToolbar(ctx: AppContext): void {
     ctx.tracksVisible = !ctx.tracksVisible;
     ctx.showToast(`Tracks: ${ctx.tracksVisible ? 'visible' : 'hidden'}`);
     ctx.updateTrackConfigPanel();
+    ctx.requestRender();
   });
   document.getElementById('btn-sidebar')?.addEventListener('click', () => {
     document.getElementById('sidebar')?.classList.toggle('visible');

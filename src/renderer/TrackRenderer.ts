@@ -50,12 +50,18 @@ export class TrackRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private tracks: TrackConfig[] = [];
+  /** Notified after any track mutation so the render loop can repaint — the
+   *  loop is dirty-gated, so a mutation that doesn't request a render would go
+   *  unseen until the next unrelated redraw (e.g. analysis-added tracks not
+   *  appearing on a quiet load). */
+  private onChange: () => void;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, onChange: () => void = () => {}) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Failed to get 2D context for track canvas');
     this.ctx = ctx;
+    this.onChange = onChange;
   }
 
   // ─── Track Management ──────────────────────────────────────
@@ -68,12 +74,14 @@ export class TrackRenderer {
     } else {
       this.tracks.push(config);
     }
+    this.onChange();
   }
 
   removeTrack(name: string): boolean {
     const idx = this.tracks.findIndex(t => t.name === name);
     if (idx >= 0) {
       this.tracks.splice(idx, 1);
+      this.onChange();
       return true;
     }
     return false;
@@ -81,18 +89,19 @@ export class TrackRenderer {
 
   setTrackVisibility(name: string, visible: boolean): void {
     const track = this.tracks.find(t => t.name === name);
-    if (track) track.visible = visible;
+    if (track) { track.visible = visible; this.onChange(); }
   }
 
   toggleTrackVisibility(name: string): void {
     const track = this.tracks.find(t => t.name === name);
-    if (track) track.visible = !track.visible;
+    if (track) { track.visible = !track.visible; this.onChange(); }
   }
 
   setAllVisible(visible: boolean): void {
     for (const track of this.tracks) {
       track.visible = visible;
     }
+    this.onChange();
   }
 
   getTracks(): ReadonlyArray<TrackConfig> {
@@ -122,6 +131,7 @@ export class TrackRenderer {
 
   clearTracks(): void {
     this.tracks = [];
+    this.onChange();
   }
 
   // ─── Coordinate Transforms ─────────────────────────────────

@@ -73,7 +73,11 @@ class OpenPretextApp {
     const labelRenderer = labelCanvas ? new LabelRenderer(labelCanvas) : null!;
 
     const trackCanvas = document.getElementById('track-canvas') as HTMLCanvasElement;
-    const trackRenderer = trackCanvas ? new TrackRenderer(trackCanvas) : null!;
+    // Repaint whenever tracks change (the render loop is dirty-gated). ctx is
+    // populated below; requestRender is defined by the time any track mutates.
+    const trackRenderer = trackCanvas
+      ? new TrackRenderer(trackCanvas, () => ctx.requestRender?.())
+      : null!;
 
     const scaffoldCanvas = document.getElementById('scaffold-canvas') as HTMLCanvasElement;
     const scaffoldOverlay = scaffoldCanvas ? new ScaffoldOverlay(scaffoldCanvas) : null!;

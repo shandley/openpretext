@@ -106,6 +106,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     mouseMapPos: { x: 0, y: 0 },
     currentColorMap: 'red-white',
     tracksVisible: false,
+    requestRender: vi.fn(),
     currentWaypointId: null,
     animFrameId: 0,
     referenceSequences: null,
