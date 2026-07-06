@@ -42,6 +42,13 @@
       height: 100vh;
     }
 
+    /* On-brand keyboard focus ring. Low specificity so elements with their
+       own focus treatment (inputs, tutorial highlight) keep overriding it. */
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
     /* Toolbar */
     #toolbar {
       height: var(--toolbar-height);
@@ -2273,7 +2280,7 @@
       display: inline-block;
       padding: 1px 5px;
       border-radius: 3px;
-      color: #fff;
+      background: rgba(0, 0, 0, 0.28);
       font-size: 9px;
       font-weight: 600;
       vertical-align: middle;
@@ -2573,7 +2580,7 @@
       }
 
       .contig-item {
-        min-height: 40px;
+        min-height: 44px;
         padding: 8px 10px;
       }
 
@@ -2582,7 +2589,7 @@
       }
 
       .track-config-toggle {
-        min-height: 36px;
+        min-height: 44px;
       }
 
       #tooltip {

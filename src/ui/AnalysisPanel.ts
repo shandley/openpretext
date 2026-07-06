@@ -651,8 +651,8 @@ function renderSuggestionCards(ctx: AppContext): void {
       s.reason === 'both' ? 'TAD + compartment' :
       s.reason === 'tad_boundary' ? 'TAD boundary' : 'Compartment switch';
     const conf = s.confidence;
-    const badgeColor = conf?.level === 'high' ? '#4caf50' :
-      conf?.level === 'medium' ? '#f39c12' : 'var(--danger)';
+    const badgeColor = conf?.level === 'high' ? '#4ade80' :
+      conf?.level === 'medium' ? '#fbbf24' : '#ff6b6b';
     const badgeLabel = conf ? `${Math.round(conf.score * 100)}%` : '';
     const badgeTitle = conf
       ? `Confidence: ${Math.round(conf.score * 100)}% (TAD: ${Math.round(conf.components.tad * 100)}%, Comp: ${Math.round(conf.components.compartment * 100)}%, Decay: ${Math.round(conf.components.decay * 100)}%)`
@@ -660,7 +660,7 @@ function renderSuggestionCards(ctx: AppContext): void {
     html += `<div class="cut-suggestion-card" data-idx="${i}">
       <div class="cut-suggestion-info">
         <span class="cut-suggestion-name">${s.contigName}</span>
-        <span class="cut-suggestion-detail">${reasonLabel} \u00b7 offset ${s.pixelOffset}px${conf ? ` \u00b7 <span class="confidence-badge" style="background:${badgeColor}" title="${badgeTitle}">${badgeLabel}</span>` : ''}</span>
+        <span class="cut-suggestion-detail">${reasonLabel} \u00b7 offset ${s.pixelOffset}px${conf ? ` \u00b7 <span class="confidence-badge" style="color:${badgeColor}" title="${badgeTitle}">${badgeLabel}</span>` : ''}</span>
       </div>
       <div class="cut-suggestion-actions">
         <button class="cut-accept-btn" data-idx="${i}" title="Accept cut">\u2713</button>
