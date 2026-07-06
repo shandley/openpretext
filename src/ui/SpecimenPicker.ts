@@ -45,7 +45,8 @@ function createSpecimenCard(specimen: SpecimenEntry, ctx: AppContext): HTMLEleme
     `<div class="specimen-meta">` +
       `<span class="specimen-size">${specimen.sizeMB} MB</span>` +
       `<span class="specimen-difficulty ${esc(specimen.difficulty)}">${esc(specimen.difficulty)}</span>` +
-    `</div>`;
+    `</div>` +
+    `<span class="specimen-load" aria-hidden="true">Load &rarr;</span>`;
   card.addEventListener('click', () => loadSpecimen(ctx, specimen));
   return card;
 }
