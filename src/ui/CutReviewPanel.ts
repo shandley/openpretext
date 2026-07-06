@@ -116,7 +116,7 @@ function renderReviewPanel(ctx: AppContext): void {
 
   const strengthPct = Math.round(suggestion.strength * 100);
   const strengthColor =
-    suggestion.strength >= 0.7 ? '#e94560' :
+    suggestion.strength >= 0.7 ? '#ff6b6b' :
     suggestion.strength >= 0.4 ? '#f39c12' : '#888';
 
   panel.innerHTML = `

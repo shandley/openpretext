@@ -652,7 +652,7 @@ function renderSuggestionCards(ctx: AppContext): void {
       s.reason === 'tad_boundary' ? 'TAD boundary' : 'Compartment switch';
     const conf = s.confidence;
     const badgeColor = conf?.level === 'high' ? '#4caf50' :
-      conf?.level === 'medium' ? '#f39c12' : '#e94560';
+      conf?.level === 'medium' ? '#f39c12' : 'var(--danger)';
     const badgeLabel = conf ? `${Math.round(conf.score * 100)}%` : '';
     const badgeTitle = conf
       ? `Confidence: ${Math.round(conf.score * 100)}% (TAD: ${Math.round(conf.components.tad * 100)}%, Comp: ${Math.round(conf.components.compartment * 100)}%, Decay: ${Math.round(conf.components.decay * 100)}%)`
@@ -900,7 +900,7 @@ function renderDecayChart(
 
   // Current data points (red)
   for (let i = 0; i < n; i++) {
-    svg += `<circle cx="${sx(xData[i])}" cy="${sy(yData[i])}" r="1.5" fill="#e94560" opacity="0.6"/>`;
+    svg += `<circle cx="${sx(xData[i])}" cy="${sy(yData[i])}" r="1.5" fill="#f4741e" opacity="0.6"/>`;
   }
 
   svg += '</svg>';
@@ -911,7 +911,7 @@ function renderDecayChart(
     if (hasBaseline) {
       svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#888" opacity="0.5"/></svg> Initial</span>';
     }
-    svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#e94560"/></svg> Genome</span>';
+    svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#f4741e"/></svg> Genome</span>';
     if (hasScaffolds) {
       for (const sr of scaffolds) {
         svg += `<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="${sr.color}"/></svg> ${sr.scaffoldName}</span>`;
@@ -986,7 +986,7 @@ function renderSparkline(values: number[]): string {
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ');
   const last = values[values.length - 1];
-  const color = last >= 70 ? '#4caf50' : last >= 40 ? '#f39c12' : '#e94560';
+  const color = last >= 70 ? '#4caf50' : last >= 40 ? '#f39c12' : '#ff6b6b';
   return `<svg class="health-sparkline" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/>
   </svg>`;
@@ -996,7 +996,7 @@ function renderHealthScoreCard(score: HealthScoreResult): string {
   // Track score in history
   healthScoreHistory.push(score.overall);
   const color = score.overall >= 70 ? '#4caf50' :
-    score.overall >= 40 ? '#f39c12' : '#e94560';
+    score.overall >= 40 ? '#f39c12' : '#ff6b6b';
   const c = score.components;
   const sparkline = renderSparkline(healthScoreHistory);
   return `<div class="health-score-card">
@@ -1575,7 +1575,7 @@ function renderPatternCards(ctx: AppContext): void {
     const p = cachedPatterns[i];
     const icon = p.type === 'inversion' ? '\u{1F504}' : '\u2197\uFE0F';
     const strengthPct = Math.round(p.strength * 100);
-    const strengthColor = strengthPct >= 70 ? '#4caf50' : strengthPct >= 40 ? '#f39c12' : '#e94560';
+    const strengthColor = strengthPct >= 70 ? '#4caf50' : strengthPct >= 40 ? '#f39c12' : '#ff6b6b';
     html += `<div class="pattern-card" data-pattern-idx="${i}">
       <span class="pattern-icon">${icon}</span>
       <div class="pattern-info">
@@ -1631,7 +1631,7 @@ export function updateProgressPanel(ctx: AppContext): void {
 
   // Map tau from [-1,1] to [0,100]%
   const tauPct = Math.round(((score.kendallTau + 1) / 2) * 100);
-  const tauColor = tauPct >= 70 ? '#4caf50' : tauPct >= 40 ? '#f39c12' : '#e94560';
+  const tauColor = tauPct >= 70 ? '#4caf50' : tauPct >= 40 ? '#f39c12' : '#ff6b6b';
 
   // Trend arrow
   let trendIcon: string;
@@ -1639,7 +1639,7 @@ export function updateProgressPanel(ctx: AppContext): void {
   if (trend.tauDelta > 0.001) {
     trendIcon = '\u25B2'; trendColor = '#4caf50';
   } else if (trend.tauDelta < -0.001) {
-    trendIcon = '\u25BC'; trendColor = '#e94560';
+    trendIcon = '\u25BC'; trendColor = '#ff6b6b';
   } else {
     trendIcon = '\u2014'; trendColor = 'var(--text-secondary)';
   }
@@ -2317,7 +2317,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
   document.getElementById('btn-evo2hic-check')?.addEventListener('click', async () => {
     const url = evo2hicUrlInput?.value?.trim();
     if (!url) {
-      if (evo2hicStatus) { evo2hicStatus.textContent = 'Enter a server URL'; evo2hicStatus.style.color = '#e94560'; }
+      if (evo2hicStatus) { evo2hicStatus.textContent = 'Enter a server URL'; evo2hicStatus.style.color = '#ff6b6b'; }
       return;
     }
     const b = activeBackend();
@@ -2338,7 +2338,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     } catch (err: unknown) {
       if (evo2hicStatus) {
         evo2hicStatus.textContent = `Error: ${(err as Error).message}`;
-        evo2hicStatus.style.color = '#e94560';
+        evo2hicStatus.style.color = '#ff6b6b';
       }
       if (btnEnhance) btnEnhance.disabled = true;
       if (btnPredictTracks) btnPredictTracks.disabled = true;

@@ -90,7 +90,15 @@ class OpenPretextApp {
     CurationEngine.setScaffoldManager(scaffoldManager);
 
     const container = document.getElementById('canvas-container')!;
-    const minimap = new Minimap(container, { size: 160, margin: 12, position: 'bottom-right' });
+    // Shrink the minimap on phone-width screens so it doesn't obscure a large
+    // corner of an already-small map.
+    const compactViewport =
+      typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 600px)').matches;
+    const minimap = new Minimap(container, {
+      size: compactViewport ? 104 : 160,
+      margin: compactViewport ? 8 : 12,
+      position: 'bottom-right',
+    });
 
     // Build AppContext — mutable shared state object passed to all UI modules
     const ctx: AppContext = {

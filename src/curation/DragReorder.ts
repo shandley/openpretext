@@ -220,7 +220,7 @@ export function renderDragIndicator(
   ctx.scale(dpr, dpr);
 
   // Vertical drop indicator line
-  ctx.strokeStyle = '#e94560';
+  ctx.strokeStyle = '#f4741e';
   ctx.lineWidth = 3;
   ctx.setLineDash([6, 4]);
 
@@ -237,7 +237,7 @@ export function renderDragIndicator(
 
   // Draw arrow indicators at the drop position
   ctx.setLineDash([]);
-  ctx.fillStyle = '#e94560';
+  ctx.fillStyle = '#f4741e';
 
   // Top arrow
   ctx.beginPath();

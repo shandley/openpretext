@@ -157,6 +157,12 @@ export function setupToolbar(ctx: AppContext): void {
     };
     toolbar.addEventListener('scroll', updateFade);
     window.addEventListener('resize', updateFade);
+    // The toolbar is display:none on the welcome screen (body.no-file), so it
+    // has zero width at init and the scroll-fade would never appear once it's
+    // revealed on file load. Recompute whenever its size changes.
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(updateFade).observe(toolbar);
+    }
     updateFade();
   }
 

@@ -108,6 +108,7 @@ export async function loadPretextFile(ctx: AppContext, file: File): Promise<void
 
   hideLoading();
   document.getElementById('welcome')!.style.display = 'none';
+  document.body?.classList.remove('no-file');
 }
 
 /**
@@ -163,6 +164,7 @@ export async function loadSpecimen(ctx: AppContext, specimen: SpecimenEntry): Pr
 
   hideLoading();
   document.getElementById('welcome')!.style.display = 'none';
+  document.body?.classList.remove('no-file');
 }
 
 /** Backwards-compatible wrapper that loads the koala specimen. */
@@ -233,6 +235,7 @@ export function loadDemoData(ctx: AppContext): void {
   document.getElementById('status-file')!.textContent = 'Demo data';
   document.getElementById('status-contigs')!.textContent = `${contigs.length} contigs`;
   document.getElementById('welcome')!.style.display = 'none';
+  document.body?.classList.remove('no-file');
 
   events.emit('file:loaded', { filename: 'demo', contigs: contigs.length, textureSize: size });
 }

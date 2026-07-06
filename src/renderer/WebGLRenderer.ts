@@ -513,7 +513,7 @@ export class WebGLRenderer {
     }
     
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    gl.clearColor(0.1, 0.1, 0.15, 1.0);
+    gl.clearColor(0.125, 0.114, 0.102, 1.0); // warm charcoal, matches --bg-primary
     gl.clear(gl.COLOR_BUFFER_BIT);
     
     if (!this.contactMapTexture || !this.program) return;

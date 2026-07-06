@@ -31,7 +31,7 @@ export function updateStatsPanel(ctx: AppContext): void {
   const delta = (val: number) => {
     if (val === 0) return '';
     const sign = val > 0 ? '+' : '';
-    return ` <span style="color:${val > 0 ? '#4caf50' : '#e94560'};font-size:10px;">(${sign}${val})</span>`;
+    return ` <span style="color:${val > 0 ? '#4caf50' : '#ff6b6b'};font-size:10px;">(${sign}${val})</span>`;
   };
 
   let html = '';
@@ -40,7 +40,7 @@ export function updateStatsPanel(ctx: AppContext): void {
   const healthScore = getHealthScore(ctx);
   if (healthScore) {
     const color = healthScore.overall >= 70 ? '#4caf50' :
-      healthScore.overall >= 40 ? '#f39c12' : '#e94560';
+      healthScore.overall >= 40 ? '#f39c12' : '#ff6b6b';
     html += `<div class="stats-row"><span>Health Score</span><span style="color:${color};font-weight:600;">${healthScore.overall}</span></div>`;
   }
 

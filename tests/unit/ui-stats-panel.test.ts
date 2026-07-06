@@ -250,7 +250,7 @@ describe('StatsPanel', () => {
       updateStatsPanel(ctx);
 
       expect(statsEl.innerHTML).toContain('-2');
-      expect(statsEl.innerHTML).toContain('#e94560'); // red
+      expect(statsEl.innerHTML).toContain('#ff6b6b'); // red
     });
 
     it('should not show delta when delta is 0', () => {
