@@ -28,9 +28,6 @@ export function setupToolbar(ctx: AppContext): void {
   document.getElementById('btn-demo')?.addEventListener('click', () => {
     loadDemoData(ctx);
   });
-  document.getElementById('btn-start-tutorial')?.addEventListener('click', () => {
-    toggleLessonBrowser(ctx);
-  });
   document.getElementById('btn-welcome-tutorial')?.addEventListener('click', () => {
     toggleLessonBrowser(ctx);
   });

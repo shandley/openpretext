@@ -505,15 +505,16 @@
     }
 
     #welcome .open-btn {
-      margin-top: 12px;
-      padding: 10px 24px;
+      margin-top: 0;
+      padding: 10px 22px;
       background: var(--accent);
       color: var(--on-accent);
       border: none;
       border-radius: 6px;
-      font-size: 15px;
+      font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.15s;
+      transition: background 0.15s, filter 0.15s;
     }
 
     #welcome .open-btn:hover {
@@ -527,43 +528,35 @@
       margin: -8px 0 4px;
     }
 
-    .getting-started {
+    .welcome-actions {
       display: flex;
-      gap: 16px;
-      max-width: 520px;
-      width: 100%;
-      margin: 8px 0;
+      gap: 40px;
+      margin: 14px 0 6px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
 
-    .getting-started-path {
-      flex: 1;
+    .welcome-action {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
-      padding: 14px 10px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      gap: 10px;
     }
 
-    .getting-started-label {
+    .welcome-action-label {
       font-size: 13px;
-      color: var(--text-primary);
-      font-weight: 600;
-      text-align: center;
-    }
-
-    .getting-started-hint {
-      font-size: 12px;
       color: var(--text-secondary);
       text-align: center;
     }
 
-    .getting-started-path .open-btn {
-      margin-top: 0;
-      padding: 8px 16px;
-      font-size: 13px;
+    #welcome .open-btn-secondary {
+      background: var(--bg-surface);
+      color: var(--text-primary);
+    }
+
+    #welcome .open-btn-secondary:hover {
+      background: var(--bg-surface);
+      filter: brightness(1.18);
     }
 
     #welcome .specimen-section-title {
@@ -2796,25 +2789,20 @@
       <div id="welcome">
         <h1>OpenPretext</h1>
         <p class="welcome-tagline">Browser-based Hi-C contact map viewer and genome assembly curation tool</p>
-        <div class="getting-started">
-          <div class="getting-started-path">
-            <span class="getting-started-label">New to Hi-C curation?</span>
-            <button class="open-btn" id="btn-welcome-tutorial">Start Tutorial</button>
-          </div>
-          <div class="getting-started-path">
-            <span class="getting-started-label">Have a .pretext file?</span>
+        <div class="welcome-actions">
+          <div class="welcome-action">
+            <span class="welcome-action-label">Have a .pretext file?</span>
             <button class="open-btn" id="btn-welcome-open">Open File</button>
           </div>
-          <div class="getting-started-path">
-            <span class="getting-started-label">Explore examples</span>
-            <span class="getting-started-hint">Browse the specimen grid below</span>
+          <div class="welcome-action">
+            <span class="welcome-action-label">New to Hi-C curation?</span>
+            <button class="open-btn open-btn-secondary" id="btn-welcome-tutorial">Start Tutorial</button>
           </div>
         </div>
-        <div class="specimen-section-title">Example Datasets</div>
+        <div class="specimen-section-title">Or explore an example</div>
         <div id="specimen-grid">
           <!-- Populated dynamically from specimen catalog -->
         </div>
-        <button class="open-btn" id="btn-start-tutorial" style="background: var(--bg-surface); margin-top: 8px;">Browse Tutorials</button>
         <!-- Hidden buttons for backwards compatibility and E2E tests -->
         <button id="btn-example" style="display:none;"></button>
         <button id="btn-demo" style="display:none;"></button>
