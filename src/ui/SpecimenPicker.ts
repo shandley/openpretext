@@ -26,10 +26,19 @@ function buildTooltip(specimen: SpecimenEntry): string {
 }
 
 function createSpecimenCard(specimen: SpecimenEntry, ctx: AppContext): HTMLElement {
-  const card = document.createElement('div');
+  // A real <button> so the card is keyboard-focusable and Enter/Space
+  // activates it (free from native button semantics), and screen readers
+  // announce it as a button with the aria-label below.
+  const card = document.createElement('button');
+  card.type = 'button';
   card.className = 'specimen-card';
   card.dataset.specimenId = specimen.id;
   card.title = buildTooltip(specimen);
+  const species = specimen.species.replace(/_/g, ' ');
+  card.setAttribute(
+    'aria-label',
+    `Load ${specimen.commonName} example — ${species}, ${specimen.sizeMB} MB, ${specimen.difficulty}`,
+  );
   card.innerHTML =
     `<span class="specimen-name">${esc(specimen.commonName)}</span>` +
     `<span class="specimen-species">${esc(specimen.species.replace(/_/g, ' '))}</span>` +
