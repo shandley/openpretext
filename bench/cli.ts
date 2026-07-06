@@ -162,14 +162,23 @@ async function regressionCommand(args: string[]) {
   console.log('OpenPretext Regression Benchmark');
   console.log(`Data directory: ${dataDir}\n`);
 
-  const passed = await runRegression(dataDir);
+  const outcome = await runRegression(dataDir);
 
-  if (passed) {
-    console.log('\nAll regression checks passed.');
-  } else {
-    console.error('\nRegression checks FAILED.');
+  if (outcome === 'regression') {
+    console.error('\nRegression checks FAILED — a metric dropped below baseline.');
     process.exit(1);
   }
+
+  if (outcome === 'skipped') {
+    const msg = 'Regression benchmark skipped — no specimen data available to verify against.';
+    console.warn(`\n${msg}`);
+    // Surface as a GitHub Actions warning annotation (visible, non-blocking) so
+    // a persistently broken download is noticed without failing the deploy.
+    if (process.env.GITHUB_ACTIONS === 'true') console.log(`::warning::${msg}`);
+    return;
+  }
+
+  console.log('\nAll regression checks passed.');
 }
 
 async function main() {

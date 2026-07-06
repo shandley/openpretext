@@ -112,21 +112,54 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Cache the specimens keyed on the immutable release tag: once a run has
+      # populated the cache, later runs skip the ~584 MB download entirely,
+      # which also removes it as a flake source.
+      - name: Restore cached regression specimens
+        id: specimens-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: bench/data/regression
+          key: regression-specimens-v0.2.0-data
+
       - name: Download regression specimens
+        id: download-specimens
+        if: steps.specimens-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p bench/data/regression
-          gh release download v0.2.0-data \
-            --pattern '*.pretext' \
-            --dir bench/data/regression
+          for attempt in 1 2 3; do
+            if gh release download v0.2.0-data \
+                 --pattern '*.pretext' \
+                 --dir bench/data/regression --clobber; then
+              break
+            fi
+            echo "download attempt $attempt failed; retrying in $((attempt * 10))s..."
+            sleep $((attempt * 10))
+          done
+          count=$(ls bench/data/regression/*.pretext 2>/dev/null | wc -l | tr -d ' ')
+          echo "downloaded $count specimen file(s)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Save regression specimens cache
+        if: steps.specimens-cache.outputs.cache-hit != 'true' && steps.download-specimens.outputs.count != '0'
+        uses: actions/cache/save@v4
+        with:
+          path: bench/data/regression
+          key: regression-specimens-v0.2.0-data
+
+      # Fails the job (and, via the deploy gate below, blocks the deploy) only on
+      # a genuine metric regression. A missing/flaky download makes it skip with
+      # a warning, so infra hiccups never block a deploy.
       - name: Run regression benchmarks
         run: npx tsx bench/cli.ts regression --data-dir bench/data/regression
 
   deploy:
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    needs: ci
+    # Gate the deploy on the regression benchmark: a genuine AutoSort/AutoCut
+    # accuracy drop blocks the deploy; an infra skip (see above) does not.
+    needs: [ci, bench-regression]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
