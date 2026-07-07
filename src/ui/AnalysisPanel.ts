@@ -652,7 +652,7 @@ function renderSuggestionCards(ctx: AppContext): void {
       s.reason === 'tad_boundary' ? 'TAD boundary' : 'Compartment switch';
     const conf = s.confidence;
     const badgeColor = conf?.level === 'high' ? '#4ade80' :
-      conf?.level === 'medium' ? '#fbbf24' : '#ff6b6b';
+      conf?.level === 'medium' ? '#ffd633' : '#ff6b6b';
     const badgeLabel = conf ? `${Math.round(conf.score * 100)}%` : '';
     const badgeTitle = conf
       ? `Confidence: ${Math.round(conf.score * 100)}% (TAD: ${Math.round(conf.components.tad * 100)}%, Comp: ${Math.round(conf.components.compartment * 100)}%, Decay: ${Math.round(conf.components.decay * 100)}%)`

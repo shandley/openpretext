@@ -668,7 +668,7 @@
 
     .specimen-difficulty.intermediate {
       background: #4a3a1a;
-      color: #fbbf24;
+      color: #ffd633;
     }
 
     .specimen-difficulty.advanced {
@@ -2597,6 +2597,11 @@
 
     /* Mobile / tablet touch optimization */
     @media (max-width: 600px), (pointer: coarse) {
+      /* Welcome primary/secondary actions to the 44px touch minimum. */
+      #welcome .open-btn {
+        min-height: 44px;
+      }
+
       .toolbar-btn {
         min-height: 36px;
         min-width: 36px;
