@@ -42,7 +42,7 @@ export interface DetectedPattern {
  * @param contactMap Row-major symmetric contact matrix.
  * @param mapSize Dimension of the square matrix.
  * @param contigRanges Bin ranges for each contig.
- * @param threshold Min anti/diagonal ratio to flag (default 0.6).
+ * @param threshold Min anti/diagonal ratio to flag (default 2.0).
  */
 export function detectInversions(
   contactMap: Float32Array,
@@ -135,7 +135,10 @@ export function detectTranslocations(
   const patterns: DetectedPattern[] = [];
   if (contigRanges.length < 3) return patterns;
 
-  // Compute genome-wide background contact rate at various distances
+  // Genome-wide mean contact over occupied pixels, used as a single flat
+  // background. NOTE: this is NOT distance-corrected, so the ratio computed
+  // against it below is relative to one flat baseline, not a true
+  // observed/expected — distal (naturally low-contact) pairs are under-flagged.
   let totalContact = 0;
   let totalPixels = 0;
   for (let i = 0; i < mapSize; i++) {

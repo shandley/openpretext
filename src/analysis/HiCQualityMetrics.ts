@@ -20,7 +20,10 @@ import type { TrackConfig } from '../renderer/TrackRenderer';
 // ---------------------------------------------------------------------------
 
 export interface HiCQualityParams {
-  /** Distance threshold (in bins) separating short from long range. Default: 20. */
+  /** Distance threshold (in bins) separating short from long range. Default: 20.
+   *  This is a fixed bin count applied to the overview regardless of its size,
+   *  so it maps to different genomic distances across files — a caveat when
+   *  comparing longShortRatio between genomes. */
   shortRangeThreshold: number;
 }
 
@@ -32,11 +35,13 @@ export interface ScaffoldCisResult {
 }
 
 export interface HiCQualityResult {
-  /** Cis contacts / total contacts. */
+  /** Cis fraction: cis contacts / total contacts, in [0, 1]. Despite the name,
+   *  this is NOT a cis:trans ratio; the name is kept for session compatibility. */
   cisTransRatio: number;
   /** Cis percentage (0-100). */
   cisPercentage: number;
-  /** Long-range / short-range contact ratio. */
+  /** Long-range / short-range contact ratio. 0 when there are no short-range
+   *  contacts (rare; reads as the opposite of the truth in that edge case). */
   longShortRatio: number;
   /** Mean contact over occupied (non-zero) upper-triangle pixels. Not a fill
    *  density: it does not reflect map sparsity. Field name kept for session

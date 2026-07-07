@@ -16,6 +16,11 @@
  * @returns Kendall's tau in [-1, 1].
  */
 export function kendallTau(predicted: number[], groundTruth: number[]): number {
+  // Convention: an ordering of 0 or 1 comparable elements is trivially correct
+  // (there is no pair that can be discordant), so tau is 1. Callers that treat
+  // this as "100% ordered" for an empty/single-contig assembly should special-
+  // case that themselves; downstream displays map tau via (tau + 1) / 2 and rely
+  // on a finite value here.
   if (predicted.length <= 1) return 1;
 
   const rankMap = new Map<number, number>();
