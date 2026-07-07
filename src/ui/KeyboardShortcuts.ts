@@ -20,11 +20,18 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
 
     const cmd = e.metaKey || e.ctrlKey;
 
+    // Alt-modified action shortcuts, matched on the physical key (e.code)
+    // rather than e.key: on macOS Option+S / Option+C emit accented characters
+    // (ß, ç), so e.key would never equal 's' / 'c'. Both require Edit mode.
+    if (e.altKey && !cmd && ctx.currentMode === 'edit') {
+      if (e.code === 'KeyS') { e.preventDefault(); runAutoSort(ctx); return; }
+      if (e.code === 'KeyC') { e.preventDefault(); runAutoCut(ctx); return; }
+    }
+
     switch (e.key.toLowerCase()) {
       case 'e': ctx.setMode('edit'); break;
       case 's':
         if (cmd) { e.preventDefault(); takeScreenshot(ctx); }
-        else if (e.altKey && ctx.currentMode === 'edit') { e.preventDefault(); runAutoSort(ctx); }
         else ctx.setMode('scaffold');
         break;
       case 'w': ctx.setMode('waypoint'); break;
@@ -84,10 +91,7 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
         break;
 
       case 'c':
-        if (e.altKey && ctx.currentMode === 'edit') {
-          e.preventDefault();
-          runAutoCut(ctx);
-        } else if (ctx.currentMode === 'edit') {
+        if (ctx.currentMode === 'edit') {
           cutAtCursorPosition(ctx);
         } else if (!cmd) {
           ctx.showToast('Cut requires Edit mode (press E)');

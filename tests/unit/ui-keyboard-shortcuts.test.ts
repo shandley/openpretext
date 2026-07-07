@@ -155,10 +155,15 @@ function dispatchKey(key: string, opts: {
   ctrlKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
+  code?: string;
   target?: any;
 } = {}) {
   const event = {
     key,
+    // Real keyboard events always carry a layout-independent physical `code`
+    // (e.g. 'KeyS'), which alt-modified shortcuts match on. Derive it from a
+    // single letter unless the caller overrides it.
+    code: opts.code ?? (/^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : ''),
     metaKey: opts.metaKey ?? false,
     ctrlKey: opts.ctrlKey ?? false,
     shiftKey: opts.shiftKey ?? false,
@@ -537,6 +542,20 @@ describe('KeyboardShortcuts', () => {
     it('should call runAutoCut when Alt+C is pressed in edit mode', () => {
       const event = dispatchKey('c', { altKey: true });
       expect(event.preventDefault).toHaveBeenCalled();
+      expect(runAutoCut).toHaveBeenCalledWith(editCtx);
+      expect(cutAtCursorPosition).not.toHaveBeenCalled();
+    });
+
+    // macOS emits accented characters for Option+letter (Option+S -> 'ß',
+    // Option+C -> 'ç'), so matching must use the physical code, not e.key.
+    it('should call runAutoSort for Option+S on macOS (key "ß", code "KeyS")', () => {
+      dispatchKey('ß', { altKey: true, code: 'KeyS' });
+      expect(runAutoSort).toHaveBeenCalledWith(editCtx);
+      expect(editCtx.setMode).not.toHaveBeenCalled();
+    });
+
+    it('should call runAutoCut for Option+C on macOS (key "ç", code "KeyC")', () => {
+      dispatchKey('ç', { altKey: true, code: 'KeyC' });
       expect(runAutoCut).toHaveBeenCalledWith(editCtx);
       expect(cutAtCursorPosition).not.toHaveBeenCalled();
     });
