@@ -23,6 +23,11 @@ export interface SaddleParams {
   qRange: [number, number];
   /** Minimum diagonal distance to include. Default: 3. */
   minDiag: number;
+  /** Minimum populated cells each corner (AA, BB, AB) needs for `strength` to
+   *  be meaningful. A bimodal eigenvector populates only the extreme quantile
+   *  bins, collapsing corners to a single cell; below this the result is marked
+   *  `underpopulated`. Default: 2. */
+  minCornerCells: number;
 }
 
 export interface SaddleResult {
@@ -36,12 +41,17 @@ export interface SaddleResult {
   strengthProfile: Float32Array;
   /** Quantile bin edges. Length = nBins + 1. */
   binEdges: Float32Array;
+  /** True when a corner had too few populated cells for `strength` to be
+   *  reliable (e.g. a bimodal eigenvector). `strength` is then not meaningful
+   *  and should be shown as indeterminate, not as a real 0. */
+  underpopulated: boolean;
 }
 
 const DEFAULT_PARAMS: SaddleParams = {
   nBins: 20,
   qRange: [0.025, 0.975],
   minDiag: 3,
+  minCornerCells: 2,
 };
 
 // ---------------------------------------------------------------------------
@@ -121,6 +131,7 @@ export function computeSaddlePlot(
       strength: 0,
       strengthProfile: new Float32Array(0),
       binEdges: new Float32Array(0),
+      underpopulated: true,
     };
   }
 
@@ -201,6 +212,12 @@ export function computeSaddlePlot(
   const abMean = abCount > 0 ? abSum / abCount : 0;
   const strength = abMean > 0 ? (aaMean + bbMean) / (2 * abMean) : 0;
 
+  // If any corner rests on too few cells, `strength` is not a meaningful ratio
+  // (a bimodal eigenvector collapses corners to a single cell). Mark it so the
+  // UI shows "indeterminate" rather than a 0 that reads as "no compartments".
+  const underpopulated =
+    aaCount < p.minCornerCells || bbCount < p.minCornerCells || abCount < p.minCornerCells;
+
   // Per-bin strength profile: diagonal value / off-diagonal mean for each quantile
   const strengthProfile = new Float32Array(nBins);
   for (let i = 0; i < nBins; i++) {
@@ -223,6 +240,7 @@ export function computeSaddlePlot(
     strength,
     strengthProfile,
     binEdges,
+    underpopulated,
   };
 }
 

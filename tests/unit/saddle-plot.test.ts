@@ -249,3 +249,24 @@ describe('renderSaddleSVG', () => {
     expect(svg).toContain('>A<');
   });
 });
+
+describe('computeSaddlePlot — underpopulated corner regression', () => {
+  it('marks a bimodal eigenvector underpopulated instead of a silent 0 strength', () => {
+    // Only two eigenvector values → only the extreme quantile bins populate, so
+    // corners collapse to a single cell and strength is not a meaningful ratio.
+    const size = 40;
+    const map = buildCheckerboard(size);
+    const eig = buildCompartmentEigenvector(size);
+    const result = computeSaddlePlot(map, size, eig);
+    expect(result.underpopulated).toBe(true);
+  });
+
+  it('does not mark a well-spread eigenvector underpopulated', () => {
+    const size = 40;
+    const map = buildCheckerboard(size);
+    const eig = new Float32Array(size);
+    for (let i = 0; i < size; i++) eig[i] = (i / (size - 1)) * 2 - 1; // spread across [-1,1]
+    const result = computeSaddlePlot(map, size, eig);
+    expect(result.underpopulated).toBe(false);
+  });
+});

@@ -498,7 +498,11 @@ function runSaddlePlot(ctx: AppContext): void {
   const overviewSize = getOverviewSize();
   const contactMap = cachedNormalizedMap ?? s.map.contactMap;
   cachedSaddle = computeSaddlePlot(contactMap, overviewSize, cachedCompartments.eigenvector);
-  ctx.showToast(`Saddle: strength ${cachedSaddle.strength.toFixed(2)}`);
+  ctx.showToast(
+    cachedSaddle.underpopulated
+      ? 'Saddle: strength indeterminate (too few populated bins)'
+      : `Saddle: strength ${cachedSaddle.strength.toFixed(2)}`,
+  );
   updateResultsDisplay(ctx);
 }
 
@@ -627,10 +631,7 @@ function showCutSuggestions(ctx: AppContext): void {
   scoreCutConfidence(
     cachedSuggestions,
     flags,
-    cachedInsulation?.normalizedScores ?? null,
     cachedCompartments?.eigenvector ?? null,
-    cachedInsulation?.normalizedScores ?? null,  // reuse insulation as decay proxy
-    ranges,
   );
 
   // Sort by confidence (highest first) instead of orderIndex
@@ -657,7 +658,7 @@ function renderSuggestionCards(ctx: AppContext): void {
       conf?.level === 'medium' ? '#ffd633' : '#ff6b6b';
     const badgeLabel = conf ? `${Math.round(conf.score * 100)}%` : '';
     const badgeTitle = conf
-      ? `Confidence: ${Math.round(conf.score * 100)}% (TAD: ${Math.round(conf.components.tad * 100)}%, Comp: ${Math.round(conf.components.compartment * 100)}%, Decay: ${Math.round(conf.components.decay * 100)}%)`
+      ? `Confidence: ${Math.round(conf.score * 100)}% (TAD: ${Math.round(conf.components.tad * 100)}%, Comp: ${Math.round(conf.components.compartment * 100)}%)`
       : '';
     html += `<div class="cut-suggestion-card" data-idx="${i}">
       <div class="cut-suggestion-info">
@@ -977,10 +978,13 @@ function buildHealthScore(ctx: AppContext): HealthScoreResult | null {
     contigCount: metrics.contigCount,
     decayExponent: Number.isFinite(cachedDecay?.decayExponent) ? cachedDecay!.decayExponent : null,
     decayRSquared: Number.isFinite(cachedDecay?.rSquared) ? cachedDecay!.rSquared : null,
-    misassemblyCount: misassemblyFlags.getFlaggedCount(),
-    eigenvalue: cachedCompartments?.eigenvalue ?? null,
-    cisTransRatio: cachedQuality?.cisTransRatio ?? null,
-    checkerboardScore: cachedCheckerboard?.score ?? null,
+    // Misassembly detection only runs after insulation or compartments; if
+    // neither was computed it never ran, so report null (neutral) rather than 0.
+    misassemblyCount:
+      cachedInsulation || cachedCompartments ? misassemblyFlags.getFlaggedCount() : null,
+    eigenvalue: Number.isFinite(cachedCompartments?.eigenvalue) ? cachedCompartments!.eigenvalue : null,
+    cisTransRatio: Number.isFinite(cachedQuality?.cisTransRatio) ? cachedQuality!.cisTransRatio : null,
+    checkerboardScore: Number.isFinite(cachedCheckerboard?.score) ? cachedCheckerboard!.score : null,
   });
 }
 
@@ -1041,7 +1045,7 @@ function updateResultsDisplay(ctx: AppContext): void {
   if (cachedQuality) {
     html += `<div class="stats-row"><span>Cis contacts</span><span style="color:#64b4ff;">${cachedQuality.cisPercentage.toFixed(1)}%</span></div>`;
     html += `<div class="stats-row"><span>Long/short ratio</span><span>${cachedQuality.longShortRatio.toFixed(2)}</span></div>`;
-    html += `<div class="stats-row"><span>Contact density</span><span>${cachedQuality.contactDensity.toFixed(3)}</span></div>`;
+    html += `<div class="stats-row"><span>Mean contact (occupied)</span><span>${cachedQuality.contactDensity.toFixed(3)}</span></div>`;
     if (cachedQuality.flaggedContigs.length > 0) {
       html += `<div class="stats-row"><span>Low-cis contigs</span><span style="color:#e67e22;">${cachedQuality.flaggedContigs.length}</span></div>`;
     }
@@ -2009,6 +2013,7 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
       strength: data.saddle.strength,
       strengthProfile: Float32Array.from(data.saddle.strengthProfile),
       binEdges: Float32Array.from(data.saddle.binEdges),
+      underpopulated: false, // not persisted; treated as reliable on reload
     };
   }
 

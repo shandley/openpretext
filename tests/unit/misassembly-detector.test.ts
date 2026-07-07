@@ -432,6 +432,7 @@ describe('scoreCutConfidence', () => {
       contigId: 0,
       contigName: 'ctg1',
       pixelOffset: 50,
+      overviewPixel: 10,
       reason: 'tad_boundary',
       strength: 0.5,
       ...overrides,
@@ -442,10 +443,9 @@ describe('scoreCutConfidence', () => {
     const flags: MisassemblyFlag[] = [
       { orderIndex: 0, overviewPixel: 10, reason: 'tad_boundary', strength: 0.5 },
     ];
-    const suggestions = [makeSuggestion({ orderIndex: 0, strength: 0.5 })];
-    const ranges = makeRanges([[0, 20]]);
+    const suggestions = [makeSuggestion({ orderIndex: 0, overviewPixel: 10, strength: 0.5 })];
 
-    scoreCutConfidence(suggestions, flags, null, null, null, ranges);
+    scoreCutConfidence(suggestions, flags, null);
 
     expect(suggestions[0].confidence).toBeDefined();
     expect(suggestions[0].confidence!.score).toBeGreaterThanOrEqual(0);
@@ -459,12 +459,11 @@ describe('scoreCutConfidence', () => {
       { orderIndex: 1, overviewPixel: 25, reason: 'tad_boundary', strength: 0.1 },
     ];
     const suggestions = [
-      makeSuggestion({ orderIndex: 0, strength: 1.0 }),
-      makeSuggestion({ orderIndex: 1, contigName: 'ctg2', strength: 0.1 }),
+      makeSuggestion({ orderIndex: 0, overviewPixel: 10, strength: 1.0 }),
+      makeSuggestion({ orderIndex: 1, overviewPixel: 25, contigName: 'ctg2', strength: 0.1 }),
     ];
-    const ranges = makeRanges([[0, 20], [20, 40]]);
 
-    scoreCutConfidence(suggestions, flags, null, null, null, ranges);
+    scoreCutConfidence(suggestions, flags, null);
 
     expect(suggestions[0].confidence!.score).toBeGreaterThan(suggestions[1].confidence!.score);
   });
@@ -473,21 +472,39 @@ describe('scoreCutConfidence', () => {
     const flags: MisassemblyFlag[] = [
       { orderIndex: 0, overviewPixel: 10, reason: 'both', strength: 0.5 },
     ];
-    const suggestions = [makeSuggestion({ orderIndex: 0, strength: 0.5 })];
-    const ranges = makeRanges([[0, 20]]);
+    const suggestions = [makeSuggestion({ orderIndex: 0, overviewPixel: 10, strength: 0.5 })];
 
     // Large eigenvector jump at pixel 10
     const eigenvector = new Float32Array(20);
     for (let i = 0; i < 10; i++) eigenvector[i] = 0.5;
     for (let i = 10; i < 20; i++) eigenvector[i] = -0.5;
 
-    scoreCutConfidence(suggestions, flags, null, eigenvector, null, ranges);
+    scoreCutConfidence(suggestions, flags, eigenvector);
 
     expect(suggestions[0].confidence!.components.compartment).toBeGreaterThan(0);
   });
 
+  it('scores each suggestion at its own pixel, not the contig midpoint', () => {
+    // Two flags in the SAME contig, at pixels 5 and 40. The eigenvector jumps
+    // only at pixel 40. Previously all suggestions in a contig shared the
+    // midpoint's value; each must now reflect its own pixel.
+    const flags: MisassemblyFlag[] = [
+      { orderIndex: 0, overviewPixel: 5, reason: 'both', strength: 0.5 },
+      { orderIndex: 0, overviewPixel: 40, reason: 'both', strength: 0.5 },
+    ];
+    const atFlat = makeSuggestion({ orderIndex: 0, overviewPixel: 5, strength: 0.5 });
+    const atJump = makeSuggestion({ orderIndex: 0, overviewPixel: 40, strength: 0.5 });
+    const eigenvector = new Float32Array(50); // flat everywhere except a step at 40
+    for (let i = 40; i < 50; i++) eigenvector[i] = 1.0;
+
+    scoreCutConfidence([atFlat, atJump], flags, eigenvector);
+
+    expect(atFlat.confidence!.components.compartment).toBeCloseTo(0, 5);
+    expect(atJump.confidence!.components.compartment).toBeGreaterThan(0.5);
+  });
+
   it('handles empty suggestions array', () => {
-    scoreCutConfidence([], [], null, null, null, []);
+    scoreCutConfidence([], [], null);
     // Should not throw
   });
 
@@ -495,32 +512,27 @@ describe('scoreCutConfidence', () => {
     const flags: MisassemblyFlag[] = [
       { orderIndex: 0, overviewPixel: 10, reason: 'tad_boundary', strength: 0.2 },
     ];
-    const suggestions = [makeSuggestion({ orderIndex: 0, strength: 0.2 })];
-    const ranges = makeRanges([[0, 20]]);
+    const suggestions = [makeSuggestion({ orderIndex: 0, overviewPixel: 10, strength: 0.2 })];
 
-    scoreCutConfidence(suggestions, flags, null, null, null, ranges);
+    scoreCutConfidence(suggestions, flags, null);
 
-    // With only weak TAD signal and no compartment/decay, should be low-medium
+    // With only weak TAD signal and no compartment signal, should be low-medium.
     expect(suggestions[0].confidence!.score).toBeLessThan(0.7);
   });
 
   it('correctly classifies confidence levels', () => {
-    // Create suggestions with varying strengths
     const flags: MisassemblyFlag[] = [
       { orderIndex: 0, overviewPixel: 10, reason: 'both', strength: 1.0 },
     ];
-    const suggestions = [makeSuggestion({ orderIndex: 0, strength: 1.0 })];
-    const ranges = makeRanges([[0, 20]]);
+    const suggestions = [makeSuggestion({ orderIndex: 0, overviewPixel: 10, strength: 1.0 })];
 
-    // With strong TAD + compartment signal
     const eigenvector = new Float32Array(20);
     for (let i = 0; i < 10; i++) eigenvector[i] = 1.0;
     for (let i = 10; i < 20; i++) eigenvector[i] = -1.0;
 
-    scoreCutConfidence(suggestions, flags, null, eigenvector, null, ranges);
+    scoreCutConfidence(suggestions, flags, eigenvector);
 
-    // Strong TAD (1.0/1.0 = 1.0 * 0.5 = 0.5) + strong compartment (tanh(4) ~ 1.0 * 0.3 = 0.3)
-    // Total should be >= 0.7 → 'high'
+    // Strong TAD (1.0 * 0.6) + strong compartment (tanh(4) ~ 1.0 * 0.4) → ~1.0 → 'high'.
     expect(suggestions[0].confidence!.level).toBe('high');
   });
 
@@ -528,13 +540,12 @@ describe('scoreCutConfidence', () => {
     const flags: MisassemblyFlag[] = [
       { orderIndex: 0, overviewPixel: 10, reason: 'tad_boundary', strength: 0.5 },
     ];
-    const suggestions = [makeSuggestion({ orderIndex: 0, strength: 0.5 })];
-    const ranges = makeRanges([[0, 20]]);
+    const suggestions = [makeSuggestion({ orderIndex: 0, overviewPixel: 10, strength: 0.5 })];
 
-    scoreCutConfidence(suggestions, flags, null, null, null, ranges);
+    scoreCutConfidence(suggestions, flags, null);
 
     const conf = suggestions[0].confidence!;
-    const expected = 0.5 * conf.components.tad + 0.3 * conf.components.compartment + 0.2 * conf.components.decay;
+    const expected = 0.6 * conf.components.tad + 0.4 * conf.components.compartment;
     expect(conf.score).toBeCloseTo(expected, 5);
   });
 });

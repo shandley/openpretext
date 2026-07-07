@@ -6,6 +6,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Fixed
+- **Medium-severity analysis-audit findings.** Follow-up to the four high-severity
+  fixes (see `docs/analysis-audit-2026-07-06.md`):
+  - CheckerboardScore: corrected the inverted docstring to match the
+    implementation (higher entropy -> higher score, no inversion) and flagged the
+    score-direction question for review; standardized the Che et al. 2025
+    citation; an all-zero row now yields a skippable NaN rather than a fixed 1.0
+    "no data" distance that biased the entropy; the per-chromosome sample floor
+    is now the parameter `minSamplesPerChromosome` (default 10, unchanged) and the
+    `minSamples` doc clarified to govern the whole-genome fallback.
+  - HealthScore: integrity scores a neutral 50 when misassembly detection has not
+    run (was a perfect 100), and all component scorers guard with
+    `Number.isFinite` so a NaN input can't poison the overall score.
+  - SaddlePlot: reports `underpopulated` when a corner has too few populated cells
+    (e.g. a bimodal eigenvector), so strength reads as indeterminate instead of a
+    silent 0.
+  - Virtual4C: under log transform, empty bins are floored to the smallest
+    positive log so a no-contact bin no longer ranks above a genuinely depleted one.
+  - MisassemblyDetector: cut-confidence now scores each suggestion at its own
+    overview pixel (was the shared contig midpoint); removed the dead
+    `insulationScores` parameter and the fake `decayProfile` proxy (the caller had
+    passed the insulation profile as a stand-in for P(s) decay), reweighting to the
+    two real components (TAD 0.6, compartment 0.4).
+  - HiCQualityMetrics: `contactDensity` is mean-over-occupied-pixels, not a fill
+    density; corrected the docs and the user-facing label (numeric value unchanged).
 - **Analysis modules no longer emit confident results on degenerate input.** An
   audit of `src/analysis/` (see `docs/analysis-audit-2026-07-06.md`) found four
   modules that returned real-looking values on input that could not support them,
