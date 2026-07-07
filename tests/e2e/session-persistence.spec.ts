@@ -170,7 +170,7 @@ test.describe('Session persistence of analysis results', () => {
     await expect(restoredResults).toContainText('ICE Normalization');
     await expect(restoredResults).toContainText('P(s) exponent');
     await expect(restoredResults).toContainText('Cis contacts');
-    await expect(restoredResults).toContainText('Contact density');
+    await expect(restoredResults).toContainText('Mean contact (occupied)');
     await expect(page.locator('.saddle-container')).toContainText('Strength:');
   });
 });
