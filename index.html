@@ -1857,11 +1857,28 @@
       overflow-y: auto;
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
-    .workflow-card h2 {
+    .workflow-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin: 0 0 16px;
+    }
+    .workflow-card h2 {
+      margin: 0;
       font-size: 16px;
       color: var(--text-primary);
     }
+    .workflow-close-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+    .workflow-close-btn:hover { color: var(--text-primary); }
     .workflow-step {
       display: flex;
       align-items: baseline;
@@ -3018,9 +3035,12 @@
     </div>
 
     <!-- Workflow guide modal -->
-    <div id="workflow-guide">
+    <div id="workflow-guide" role="dialog" aria-modal="true" aria-labelledby="workflow-guide-title">
       <div class="workflow-card">
-        <h2>Recommended Workflow</h2>
+        <div class="workflow-header">
+          <h2 id="workflow-guide-title">Recommended Workflow</h2>
+          <button class="workflow-close-btn" type="button" aria-label="Close workflow guide" title="Close">&times;</button>
+        </div>
         <div class="workflow-step">
           <span class="workflow-step-num">1</span>
           <div><div class="workflow-step-title">Load</div><div class="workflow-step-desc">Open a .pretext file or load an example dataset</div></div>
@@ -3031,11 +3051,11 @@
         </div>
         <div class="workflow-step">
           <span class="workflow-step-num">3</span>
-          <div><div class="workflow-step-title">Sort</div><div class="workflow-step-desc">Run Auto Sort (Cmd+K &rarr; "Auto sort") to group contigs into chromosomes</div></div>
+          <div><div class="workflow-step-title">Sort</div><div class="workflow-step-desc">Run Auto Sort (Cmd/Ctrl+K, then "Auto sort") to group contigs into chromosomes</div></div>
         </div>
         <div class="workflow-step">
           <span class="workflow-step-num">4</span>
-          <div><div class="workflow-step-title">Cut</div><div class="workflow-step-desc">Run Auto Cut to split misassembled contigs at breakpoints</div></div>
+          <div><div class="workflow-step-title">Cut</div><div class="workflow-step-desc">Run Auto Cut (Cmd/Ctrl+K, then "Auto cut") to split misassembled contigs at breakpoints</div></div>
         </div>
         <div class="workflow-step">
           <span class="workflow-step-num">5</span>
@@ -3043,13 +3063,13 @@
         </div>
         <div class="workflow-step">
           <span class="workflow-step-num">6</span>
-          <div><div class="workflow-step-title">Analyze</div><div class="workflow-step-desc">Compute insulation, compartments, and P(s) decay to validate</div></div>
+          <div><div class="workflow-step-title">Analyze</div><div class="workflow-step-desc">Open the sidebar (I) and use its 3D Analysis section to compute insulation, compartments, and P(s) decay</div></div>
         </div>
         <div class="workflow-step">
           <span class="workflow-step-num">7</span>
           <div><div class="workflow-step-title">Export</div><div class="workflow-step-desc">Export curated assembly as AGP, BED, or FASTA</div></div>
         </div>
-        <div class="workflow-close">Press <kbd>Esc</kbd> to close</div>
+        <div class="workflow-close">Press <kbd>Esc</kbd> or tap outside to close</div>
       </div>
     </div>
 

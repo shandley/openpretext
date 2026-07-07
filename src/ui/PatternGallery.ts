@@ -7,6 +7,9 @@
  */
 
 import type { AppContext } from './AppContext';
+import { state } from '../core/State';
+import { loadSpecimenCatalog, type SpecimenEntry } from '../data/SpecimenCatalog';
+import { loadSpecimen } from './FileLoading';
 
 interface PatternEntry {
   id: string;
@@ -75,16 +78,101 @@ function renderPatterns(ctx: AppContext, modal: HTMLElement, patterns: PatternEn
 
   content.querySelectorAll('.pattern-card').forEach((card, i) => {
     card.addEventListener('click', () => {
-      const pattern = patterns[i];
-      const region = pattern.exampleRegion;
-      const cx = (region.x1 + region.x2) / 2;
-      const cy = (region.y1 + region.y2) / 2;
-      const span = Math.max(region.x2 - region.x1, region.y2 - region.y1);
-      const zoom = 1 / Math.max(span, 0.05);
-      ctx.camera.animateTo({ x: cx, y: cy, zoom }, 300);
-      togglePatternGallery(ctx);
+      void openPattern(ctx, patterns[i]);
     });
   });
+}
+
+/** Fly the camera to a pattern's example region on the currently-loaded map. */
+function flyToRegion(ctx: AppContext, region: PatternEntry['exampleRegion']): void {
+  const cx = (region.x1 + region.x2) / 2;
+  const cy = (region.y1 + region.y2) / 2;
+  const span = Math.max(region.x2 - region.x1, region.y2 - region.y1);
+  const zoom = 1 / Math.max(span, 0.05);
+  ctx.camera.animateTo({ x: cx, y: cy, zoom }, 300);
+}
+
+async function findSpecimen(id: string): Promise<SpecimenEntry | null> {
+  try {
+    const catalog = await loadSpecimenCatalog();
+    return catalog.specimens.find(s => s.id === id) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What clicking a pattern card should do, given the pattern's specimen and what
+ * is currently loaded. Kept pure so the decision is unit-testable without a DOM,
+ * fetch, or WebGL context.
+ *
+ * - `navigate`  — the pattern's specimen is already loaded; just fly there.
+ * - `load`      — download `specimen`, then fly to the region.
+ * - `toast`     — can't act; show `message` instead (guard or missing data).
+ */
+export type PatternAction =
+  | { kind: 'navigate' }
+  | { kind: 'load'; specimen: SpecimenEntry }
+  | { kind: 'toast'; message: string };
+
+export function resolvePatternAction(
+  specimen: SpecimenEntry | null,
+  loadedFile: string | null,
+  undoDepth: number,
+): PatternAction {
+  // Unknown specimen id: best effort on whatever is loaded, else guide the user.
+  if (!specimen) {
+    return loadedFile
+      ? { kind: 'navigate' }
+      : { kind: 'toast', message: 'Load a specimen to see this pattern' };
+  }
+
+  // The pattern's specimen is already loaded — just navigate.
+  if (loadedFile === specimen.releaseAsset) return { kind: 'navigate' };
+
+  // A different assembly is loaded with unsaved curation: don't discard it.
+  if (loadedFile && undoDepth > 0) {
+    return {
+      kind: 'toast',
+      message: `This pattern is shown on the ${specimen.commonName} specimen — finish or save your current work, then load it`,
+    };
+  }
+
+  // Nothing loaded (the welcome-screen case) or a clean different specimen.
+  return { kind: 'load', specimen };
+}
+
+/**
+ * Handle a pattern card click. The example region only means anything on the
+ * pattern's own specimen, so we make sure that specimen is loaded before flying
+ * there. From the welcome screen nothing is loaded, so the gallery previously
+ * closed and panned an empty map — the reported "non-functional" behaviour.
+ */
+async function openPattern(ctx: AppContext, pattern: PatternEntry): Promise<void> {
+  togglePatternGallery(ctx); // close the modal first so loading UI is visible
+
+  const specimen = await findSpecimen(pattern.specimenId);
+  const action = resolvePatternAction(
+    specimen,
+    state.get().map?.filename ?? null,
+    state.get().undoStack.length,
+  );
+
+  switch (action.kind) {
+    case 'navigate':
+      flyToRegion(ctx, pattern.exampleRegion);
+      return;
+    case 'toast':
+      ctx.showToast(action.message);
+      return;
+    case 'load':
+      await loadSpecimen(ctx, action.specimen);
+      // Only navigate if the load actually succeeded (parse can still fail).
+      if (state.get().map?.filename === action.specimen.releaseAsset) {
+        flyToRegion(ctx, pattern.exampleRegion);
+      }
+      return;
+  }
 }
 
 export function setupPatternGallery(): void {
