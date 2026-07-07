@@ -237,7 +237,7 @@ export function exportQualityTSV(
     `# Cis/trans ratio: ${result.cisTransRatio.toFixed(4)}`,
     `# Cis percentage: ${result.cisPercentage.toFixed(2)}%`,
     `# Long/short ratio: ${result.longShortRatio.toFixed(4)}`,
-    `# Contact density: ${result.contactDensity.toFixed(6)}`,
+    `# Mean occupied contact: ${result.contactDensity.toFixed(6)}`,
     `# Flagged contigs: ${result.flaggedContigs.length}`,
     'contig\tcis_ratio',
   ];

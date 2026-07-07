@@ -4,7 +4,9 @@
  * Computes:
  * - Cis/trans ratio: contacts within scaffold vs between scaffolds
  * - Short/long range ratio: intra-scaffold contacts below/above threshold
- * - Contact density: mean contact value across the upper triangle
+ * - Mean occupied contact (field: contactDensity): mean value over the non-zero
+ *   upper-triangle pixels. This is NOT a fill density — the denominator is the
+ *   occupied-pixel count, so it does not reflect how sparse the map is.
  * - Per-contig cis ratio: fraction of contacts that are intra-scaffold
  *
  * Pure algorithm — no DOM dependencies.
@@ -36,7 +38,9 @@ export interface HiCQualityResult {
   cisPercentage: number;
   /** Long-range / short-range contact ratio. */
   longShortRatio: number;
-  /** Mean contact value in the upper triangle. */
+  /** Mean contact over occupied (non-zero) upper-triangle pixels. Not a fill
+   *  density: it does not reflect map sparsity. Field name kept for session
+   *  compatibility. */
   contactDensity: number;
   /** Per-contig cis ratio. Length = number of contigs. */
   perContigCisRatio: Float32Array;
@@ -170,6 +174,8 @@ export function computeHiCQuality(
   const cisTransRatio = total > 0 ? cisTotal / total : 0;
   const cisPercentage = cisTransRatio * 100;
   const longShortRatio = shortRange > 0 ? longRange / shortRange : 0;
+  // Mean over occupied pixels only (totalPixels counts non-zero cells). Not a
+  // fill density — see the field doc.
   const contactDensity = totalPixels > 0 ? totalContact / totalPixels : 0;
 
   // Per-contig cis ratio
