@@ -332,6 +332,7 @@ async function runInsulation(ctx: AppContext): Promise<void> {
     s.map.contactMap,
     overviewSize,
     { windowSize: insulationWindowSize },
+    buildContigRanges(),
   );
   cachedInsulation = result;
   const { insulationTrack, boundaryTrack } = insulationToTracks(
@@ -574,6 +575,7 @@ async function runDirectionality(ctx: AppContext): Promise<void> {
     s.map.contactMap,
     overviewSize,
     { windowSize: insulationWindowSize },
+    buildContigRanges(),
   );
   cachedDI = result;
   const { diTrack, diBoundaryTrack } = directionalityToTracks(
@@ -1732,8 +1734,10 @@ export function exportAnalysisState(): SessionAnalysisData | null {
 
   if (cachedInsulation) {
     data.insulation = {
-      rawScores: Array.from(cachedInsulation.rawScores),
-      normalizedScores: Array.from(cachedInsulation.normalizedScores),
+      // Near-contig-edge positions are NaN (no valid window); the session format
+      // requires finite arrays, so persist them as 0 (matching the track render).
+      rawScores: Array.from(cachedInsulation.rawScores, (v) => (Number.isFinite(v) ? v : 0)),
+      normalizedScores: Array.from(cachedInsulation.normalizedScores, (v) => (Number.isFinite(v) ? v : 0)),
       boundaries: [...cachedInsulation.boundaries],
       boundaryStrengths: [...cachedInsulation.boundaryStrengths],
     };
@@ -1789,8 +1793,10 @@ export function exportAnalysisState(): SessionAnalysisData | null {
   // Directionality index
   if (cachedDI) {
     data.directionality = {
-      diScores: Array.from(cachedDI.diScores),
-      normalizedScores: Array.from(cachedDI.normalizedScores),
+      // Near-contig-edge positions are NaN; persist as finite (0) since the
+      // session format requires finite arrays (boundaries are kept separately).
+      diScores: Array.from(cachedDI.diScores, (v) => (Number.isFinite(v) ? v : 0)),
+      normalizedScores: Array.from(cachedDI.normalizedScores, (v) => (Number.isFinite(v) ? v : 0)),
       boundaries: [...cachedDI.boundaries],
       strengths: [...cachedDI.strengths],
     };

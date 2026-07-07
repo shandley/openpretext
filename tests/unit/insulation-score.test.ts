@@ -6,6 +6,7 @@ import {
   computeInsulation,
   insulationToTracks,
 } from '../../src/analysis/InsulationScore';
+import type { ContigRange } from '../../src/curation/AutoSort';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -358,5 +359,40 @@ describe('normalizeInsulationScores — empty-window outlier regression', () => 
     const map = makeTADMap(48, [0, 24], 0.8, 0.05);
     const result = computeInsulation(map, 48);
     expect(result.boundaries.some((b) => Math.abs(b - 24) <= 3)).toBe(true);
+  });
+});
+
+describe('computeInsulation — contig-awareness regression', () => {
+  it('does not manufacture a TAD boundary at a contig junction when given ranges', () => {
+    // Two contigs, strong intra-contig signal, zero inter-contig. Without ranges,
+    // windows straddle the junction and average in the zero inter-contig cells,
+    // producing a false boundary there. With ranges, near-junction positions are
+    // not measurable (NaN) and no false boundary is reported.
+    const size = 40;
+    // Faint (0.05) inter-contig floor so the junction is a smooth detectable
+    // dip, not an exactly-zero one that the log-floor flattens.
+    const map = new Float32Array(size * size).fill(0.05);
+    for (let i = 0; i < 20; i++) for (let j = 0; j < 20; j++) map[i * size + j] = 1;
+    for (let i = 20; i < 40; i++) for (let j = 20; j < 40; j++) map[i * size + j] = 1;
+    const ranges: ContigRange[] = [
+      { start: 0, end: 20, orderIndex: 0 },
+      { start: 20, end: 40, orderIndex: 1 },
+    ];
+    const nearJunction = (b: number) => Math.abs(b - 20) <= 3;
+    const without = computeInsulation(map, size, { windowSize: 6 });
+    const withRanges = computeInsulation(map, size, { windowSize: 6 }, ranges);
+    expect(without.boundaries.some(nearJunction)).toBe(true);
+    expect(withRanges.boundaries.some(nearJunction)).toBe(false);
+  });
+
+  it('marks a contig shorter than 2*w as not-measurable (NaN)', () => {
+    const size = 20;
+    const map = new Float32Array(size * size).fill(1);
+    const ranges: ContigRange[] = [
+      { start: 0, end: 8, orderIndex: 0 },
+      { start: 8, end: 20, orderIndex: 1 },
+    ];
+    const raw = computeInsulationScores(map, size, 6, ranges);
+    for (let p = 0; p < 8; p++) expect(Number.isNaN(raw[p])).toBe(true);
   });
 });

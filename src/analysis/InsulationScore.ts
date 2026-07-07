@@ -9,6 +9,28 @@
  */
 
 import type { TrackConfig } from '../renderer/TrackRenderer';
+import type { ContigRange } from '../curation/AutoSort';
+
+/**
+ * Per-pixel owning-contig bounds [lo, hi) for clamping analysis windows to a
+ * single contig. Pixels not covered by any range default to the full map.
+ */
+export function contigBoundsPerPixel(
+  size: number,
+  contigRanges: ContigRange[],
+): { lo: Int32Array; hi: Int32Array } {
+  const lo = new Int32Array(size).fill(0);
+  const hi = new Int32Array(size).fill(size);
+  for (const r of contigRanges) {
+    const start = Math.max(0, r.start);
+    const end = Math.min(size, r.end);
+    for (let p = start; p < end; p++) {
+      lo[p] = start;
+      hi[p] = end;
+    }
+  }
+  return { lo, hi };
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,11 +80,30 @@ export function computeInsulationScores(
   contactMap: Float32Array,
   size: number,
   windowSize: number,
+  contigRanges?: ContigRange[],
 ): Float64Array {
   const scores = new Float64Array(size);
   const w = Math.max(1, Math.min(windowSize, Math.floor(size / 2)));
 
+  // When contig ranges are given, the window must not reach across a contig
+  // boundary (which would average unrelated inter-contig cells and manufacture a
+  // false TAD boundary at every junction). A position needs a full half-window
+  // on both sides within its own contig; otherwise it has no valid measurement
+  // and is marked NaN (and excluded downstream). Contigs shorter than 2*w are
+  // entirely NaN, which is correct — insulation is not measurable in them.
+  const bounds =
+    contigRanges && contigRanges.length > 0 ? contigBoundsPerPixel(size, contigRanges) : null;
+
   for (let p = 0; p < size; p++) {
+    if (bounds) {
+      const cs = bounds.lo[p];
+      const ce = bounds.hi[p];
+      if (p - cs < w || ce - p < w) {
+        scores[p] = NaN;
+        continue;
+      }
+    }
+
     let sum = 0;
     let count = 0;
 
@@ -113,27 +154,32 @@ export function normalizeInsulationScores(
     return result;
   }
 
+  // NaN raw scores are near-contig-edge positions with no valid window; they
+  // pass through as NaN (log2(max(NaN, x)) = NaN) and are excluded from the
+  // min-max scan so one invalid position can't poison the range.
   const logScores = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     logScores[i] = Math.log2(Math.max(rawScores[i], minPositive));
   }
 
-  // Min-max normalize
-  let min = logScores[0];
-  let max = logScores[0];
-  for (let i = 1; i < n; i++) {
-    if (logScores[i] < min) min = logScores[i];
-    if (logScores[i] > max) max = logScores[i];
+  // Min-max normalize over finite values only.
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = logScores[i];
+    if (!Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
   }
 
   const range = max - min;
-  if (range === 0) {
-    result.fill(0);
+  if (!Number.isFinite(range) || range === 0) {
+    for (let i = 0; i < n; i++) result[i] = Number.isFinite(logScores[i]) ? 0 : NaN;
     return result;
   }
 
   for (let i = 0; i < n; i++) {
-    result[i] = (logScores[i] - min) / range;
+    result[i] = Number.isFinite(logScores[i]) ? (logScores[i] - min) / range : NaN;
   }
 
   return result;
@@ -154,6 +200,16 @@ export function detectTADBoundaries(
   if (n < 3) return { positions, strengths };
 
   for (let p = 1; p < n - 1; p++) {
+    // A NaN position (near a contig edge) has no valid measurement; it can be
+    // neither a boundary nor a comparable neighbor. Skip if it or either
+    // neighbor is NaN — a NaN neighbor makes the >= comparisons below silently
+    // false, which would otherwise flag a false boundary.
+    if (!Number.isFinite(normalizedScores[p]) ||
+        !Number.isFinite(normalizedScores[p - 1]) ||
+        !Number.isFinite(normalizedScores[p + 1])) {
+      continue;
+    }
+
     // Must be a local minimum (lower than both immediate neighbors)
     if (normalizedScores[p] >= normalizedScores[p - 1] ||
         normalizedScores[p] >= normalizedScores[p + 1]) {
@@ -198,9 +254,10 @@ export function computeInsulation(
   contactMap: Float32Array,
   size: number,
   params?: Partial<InsulationParams>,
+  contigRanges?: ContigRange[],
 ): InsulationResult {
   const p = { ...DEFAULT_PARAMS, ...params };
-  const rawScores = computeInsulationScores(contactMap, size, p.windowSize);
+  const rawScores = computeInsulationScores(contactMap, size, p.windowSize, contigRanges);
   const normalizedScores = normalizeInsulationScores(rawScores);
   const { positions, strengths } = detectTADBoundaries(
     normalizedScores,
@@ -241,7 +298,8 @@ export function insulationToTracks(
       Math.floor((tp / textureSize) * overviewSize),
       overviewSize - 1,
     );
-    insulationData[tp] = result.normalizedScores[op];
+    const v = result.normalizedScores[op];
+    insulationData[tp] = Number.isFinite(v) ? v : 0;
   }
 
   // Build boundary marker array

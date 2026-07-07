@@ -28,6 +28,7 @@ export interface InsulationRequest {
   contactMap: Float32Array;
   size: number;
   params?: Partial<InsulationParams>;
+  contigRanges?: ContigRange[];
 }
 
 export interface DecayRequest {
@@ -71,6 +72,7 @@ export interface DIRequest {
   contactMap: Float32Array;
   size: number;
   params?: Partial<DIParams>;
+  contigRanges?: ContigRange[];
 }
 
 export interface KRRequest {
@@ -194,7 +196,7 @@ self.onmessage = (event: MessageEvent<AnalysisRequest>) => {
   try {
     switch (msg.type) {
       case 'insulation': {
-        const result = computeInsulation(msg.contactMap, msg.size, msg.params);
+        const result = computeInsulation(msg.contactMap, msg.size, msg.params, msg.contigRanges);
         const response: InsulationResponse = {
           type: 'insulation',
           id: msg.id,
@@ -272,7 +274,7 @@ self.onmessage = (event: MessageEvent<AnalysisRequest>) => {
       }
 
       case 'directionality': {
-        const result = computeDirectionality(msg.contactMap, msg.size, msg.params);
+        const result = computeDirectionality(msg.contactMap, msg.size, msg.params, msg.contigRanges);
         const response: DIResponse = {
           type: 'directionality',
           id: msg.id,

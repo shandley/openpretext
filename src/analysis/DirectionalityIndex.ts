@@ -13,6 +13,8 @@
  */
 
 import type { TrackConfig } from '../renderer/TrackRenderer';
+import type { ContigRange } from '../curation/AutoSort';
+import { contigBoundsPerPixel } from './InsulationScore';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,11 +57,28 @@ export function computeDirectionalityScores(
   contactMap: Float32Array,
   size: number,
   windowSize: number,
+  contigRanges?: ContigRange[],
 ): Float32Array {
   const scores = new Float32Array(size);
   const w = Math.max(1, Math.min(windowSize, Math.floor(size / 2)));
 
+  // With contig ranges, a position needs a full window on both sides within its
+  // own contig; otherwise the upstream/downstream sums would reach across a
+  // contig boundary and manufacture a false DI zero-crossing at each junction.
+  // Near-edge positions have no valid measurement and are marked NaN.
+  const bounds =
+    contigRanges && contigRanges.length > 0 ? contigBoundsPerPixel(size, contigRanges) : null;
+
   for (let p = 0; p < size; p++) {
+    if (bounds) {
+      const cs = bounds.lo[p];
+      const ce = bounds.hi[p];
+      if (p - cs < w || ce - p < w) {
+        scores[p] = NaN;
+        continue;
+      }
+    }
+
     // A = sum of contacts upstream: contactMap[p][p-d] for d in [1, w]
     let A = 0;
     for (let d = 1; d <= w; d++) {
@@ -100,19 +119,21 @@ export function normalizeDIScores(diScores: Float32Array): Float32Array {
 
   if (n === 0) return result;
 
+  // NaN scores are near-contig-edge positions with no valid window; exclude them
+  // from the maxAbs scan and pass them through as NaN.
   let maxAbs = 0;
   for (let i = 0; i < n; i++) {
     const a = Math.abs(diScores[i]);
-    if (a > maxAbs) maxAbs = a;
+    if (Number.isFinite(a) && a > maxAbs) maxAbs = a;
   }
 
   if (maxAbs === 0) {
-    result.fill(0.5);
+    for (let i = 0; i < n; i++) result[i] = Number.isFinite(diScores[i]) ? 0.5 : NaN;
     return result;
   }
 
   for (let i = 0; i < n; i++) {
-    result[i] = 0.5 + (diScores[i] / maxAbs) * 0.5;
+    result[i] = Number.isFinite(diScores[i]) ? 0.5 + (diScores[i] / maxAbs) * 0.5 : NaN;
   }
 
   return result;
@@ -132,6 +153,9 @@ export function detectDIBoundaries(
   if (n < 2) return { positions, strengths };
 
   for (let i = 1; i < n; i++) {
+    // Skip NaN (near-contig-edge) positions: no valid measurement, and a NaN in
+    // the comparison would silently never cross.
+    if (!Number.isFinite(diScores[i - 1]) || !Number.isFinite(diScores[i])) continue;
     // Negative-to-positive zero crossing
     if (diScores[i - 1] < -significanceThreshold && diScores[i] > significanceThreshold) {
       positions.push(i);
@@ -153,6 +177,7 @@ export function computeDirectionality(
   contactMap: Float32Array,
   size: number,
   params?: Partial<DIParams>,
+  contigRanges?: ContigRange[],
 ): DIResult {
   const p = { ...DEFAULT_PARAMS, ...params };
 
@@ -165,7 +190,7 @@ export function computeDirectionality(
     };
   }
 
-  const diScores = computeDirectionalityScores(contactMap, size, p.windowSize);
+  const diScores = computeDirectionalityScores(contactMap, size, p.windowSize, contigRanges);
   const normalizedScores = normalizeDIScores(diScores);
   const { positions, strengths } = detectDIBoundaries(diScores, p.significanceThreshold);
 
@@ -194,7 +219,9 @@ export function directionalityToTracks(
       Math.floor((tp / textureSize) * overviewSize),
       overviewSize - 1,
     );
-    diData[tp] = result.normalizedScores[op];
+    const v = result.normalizedScores[op];
+    // NaN (near-contig-edge) positions render as the 0.5 neutral midpoint.
+    diData[tp] = Number.isFinite(v) ? v : 0.5;
   }
 
   const boundaryData = new Float32Array(textureSize);

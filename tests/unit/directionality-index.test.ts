@@ -6,6 +6,7 @@ import {
   computeDirectionality,
   directionalityToTracks,
 } from '../../src/analysis/DirectionalityIndex';
+import type { ContigRange } from '../../src/curation/AutoSort';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -282,5 +283,27 @@ describe('directionalityToTracks', () => {
     if (result.boundaries.length > 0) {
       expect(hasMarker).toBe(true);
     }
+  });
+});
+
+describe('computeDirectionality — contig-awareness regression', () => {
+  it('does not manufacture a DI boundary at a contig junction when given ranges', () => {
+    // Two contigs, strong intra-contig signal, zero inter-contig. Without ranges,
+    // the upstream/downstream sums straddle the junction and create a
+    // negative-to-positive DI crossing (a false boundary). With ranges, the
+    // near-junction positions are not measurable (NaN) and no crossing is found.
+    const size = 40;
+    const map = new Float32Array(size * size);
+    for (let i = 0; i < 20; i++) for (let j = 0; j < 20; j++) map[i * size + j] = 1;
+    for (let i = 20; i < 40; i++) for (let j = 20; j < 40; j++) map[i * size + j] = 1;
+    const ranges: ContigRange[] = [
+      { start: 0, end: 20, orderIndex: 0 },
+      { start: 20, end: 40, orderIndex: 1 },
+    ];
+    const nearJunction = (b: number) => Math.abs(b - 20) <= 3;
+    const without = computeDirectionality(map, size, { windowSize: 6 });
+    const withRanges = computeDirectionality(map, size, { windowSize: 6 }, ranges);
+    expect(without.boundaries.some(nearJunction)).toBe(true);
+    expect(withRanges.boundaries.some(nearJunction)).toBe(false);
   });
 });

@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Fixed
+- **Insulation and Directionality Index are now contig-aware.** Both slid their
+  windows without knowing contig boundaries, so at every contig junction the
+  window averaged across into the neighboring contig and manufactured a false
+  TAD/DI boundary — noise that scaled with assembly fragmentation. Given contig
+  ranges (now passed from the analysis panel through the worker), a position must
+  have a full window within its own contig; near-edge positions have no valid
+  measurement and are marked NaN, excluded from normalization and boundary
+  detection, and rendered neutral in the tracks. Contigs shorter than twice the
+  window are entirely not-measurable, which is correct. This changes the
+  insulation/DI/TAD outputs near junctions (the insulation BedGraph and TAD BED
+  exports will differ and should be regenerated).
 - **Medium-severity analysis-audit findings.** Follow-up to the four high-severity
   fixes (see `docs/analysis-audit-2026-07-06.md`):
   - CheckerboardScore: corrected the inverted docstring to match the

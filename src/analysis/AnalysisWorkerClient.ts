@@ -113,6 +113,7 @@ export class AnalysisWorkerClient {
     contactMap: Float32Array,
     size: number,
     params?: Partial<InsulationParams>,
+    contigRanges?: ContigRange[],
   ): Promise<InsulationResult> {
     if (!this.workerFailed && this.worker) {
       try {
@@ -123,6 +124,7 @@ export class AnalysisWorkerClient {
           contactMap,
           size,
           params,
+          contigRanges,
         }) as InsulationResponse;
         return {
           rawScores: resp.rawScores,
@@ -134,7 +136,7 @@ export class AnalysisWorkerClient {
         // Fall through to synchronous
       }
     }
-    return computeInsulation(contactMap, size, params);
+    return computeInsulation(contactMap, size, params, contigRanges);
   }
 
   /**
@@ -247,6 +249,7 @@ export class AnalysisWorkerClient {
     contactMap: Float32Array,
     size: number,
     params?: Partial<DIParams>,
+    contigRanges?: ContigRange[],
   ): Promise<DIResult> {
     if (!this.workerFailed && this.worker) {
       try {
@@ -257,6 +260,7 @@ export class AnalysisWorkerClient {
           contactMap,
           size,
           params,
+          contigRanges,
         }) as DIResponse;
         return {
           diScores: resp.diScores,
@@ -268,7 +272,7 @@ export class AnalysisWorkerClient {
         // Fall through to synchronous
       }
     }
-    return computeDirectionality(contactMap, size, params);
+    return computeDirectionality(contactMap, size, params, contigRanges);
   }
 
   /**
