@@ -120,15 +120,16 @@ describe('computeContactDecay', () => {
     const map = new Float32Array(0);
     const result = computeContactDecay(map, 0, []);
     expect(result.distances.length).toBe(0);
-    expect(result.decayExponent).toBe(0);
-    expect(result.rSquared).toBe(0);
+    // No data to fit → not-fitted sentinel, distinguishable from a genuine 0.
+    expect(Number.isNaN(result.decayExponent)).toBe(true);
+    expect(Number.isNaN(result.rSquared)).toBe(true);
   });
 
   it('handles empty contig ranges', () => {
     const map = makePowerLawMap(32, -1.0);
     const result = computeContactDecay(map, 32, []);
     expect(result.distances.length).toBe(0);
-    expect(result.decayExponent).toBe(0);
+    expect(Number.isNaN(result.decayExponent)).toBe(true);
   });
 
   it('handles zero contact map', () => {
@@ -136,7 +137,44 @@ describe('computeContactDecay', () => {
     const result = computeContactDecay(map, 32, singleContigRange(32));
     // All zeros → no positive contacts → empty distances
     expect(result.distances.length).toBe(0);
-    expect(result.decayExponent).toBe(0);
+    expect(Number.isNaN(result.decayExponent)).toBe(true);
+  });
+
+  it('does not report a spurious perfect fit when too few points support it', () => {
+    // A 3-pixel contig yields only 2 non-zero distances (d=1, d=2). OLS through
+    // 2 points has zero residual DOF and returns rSquared=1.0 by construction —
+    // a fake "perfect" fit. The guard must reject it as not-fitted (NaN) so a
+    // per-scaffold mean can exclude it rather than average in a spurious 1.0.
+    const size = 8;
+    const map = new Float32Array(size * size);
+    const set = (i: number, j: number, v: number) => {
+      map[i * size + j] = v;
+      map[j * size + i] = v;
+    };
+    set(0, 1, 4);
+    set(1, 2, 3);
+    set(0, 2, 2);
+    const result = computeContactDecay(map, size, [{ start: 0, end: 3, orderIndex: 0 }]);
+    expect(result.distances.length).toBeLessThan(5);
+    expect(Number.isNaN(result.rSquared)).toBe(true);
+    expect(Number.isNaN(result.decayExponent)).toBe(true);
+  });
+
+  it('still fits a well-supported curve (dense map unaffected by the guard)', () => {
+    const map = makePowerLawMap(128, -1.0);
+    const result = computeContactDecay(map, 128, singleContigRange(128));
+    expect(Number.isFinite(result.rSquared)).toBe(true);
+    expect(result.rSquared).toBeGreaterThan(0.9);
+  });
+
+  it('marks a sparse fit not-fitted but keeps the exponent for a dense fit', () => {
+    const minFitPoints = 5;
+    // 4-point support (contig length 5 → distances 1..4) is below the guard.
+    const size = 16;
+    const map = makePowerLawMap(size, -1.0);
+    const sparse = computeContactDecay(map, size, [{ start: 0, end: 5, orderIndex: 0 }], { minFitPoints });
+    expect(sparse.distances.length).toBeLessThan(minFitPoints);
+    expect(Number.isNaN(sparse.decayExponent)).toBe(true);
   });
 });
 

@@ -68,6 +68,13 @@ describe('computeHealthScore', () => {
     expect(result.overall).toBeGreaterThan(0);
   });
 
+  it('treats a not-fitted (NaN) decay exponent as neutral, not a NaN score', () => {
+    // A too-sparse P(s) fit reports NaN; the score must not propagate NaN.
+    const result = computeHealthScore(makeInput({ decayExponent: NaN }));
+    expect(result.components.decayQuality).toBe(50);
+    expect(Number.isFinite(result.overall)).toBe(true);
+  });
+
   it('handles zero contigs gracefully', () => {
     const result = computeHealthScore(makeInput({
       n50: 0,

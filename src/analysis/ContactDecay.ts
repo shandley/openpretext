@@ -25,7 +25,18 @@ export interface ContactDecayParams {
   maxDistance: number;
   /** Minimum count at a distance to include in fit. Default: 10. */
   minCountForFit: number;
+  /**
+   * Minimum number of distinct distances (fit points) required to report a
+   * decay exponent / R-squared. Below this the log-log OLS fit is unreliable —
+   * at 2 points R-squared is 1.0 by construction (zero residual degrees of
+   * freedom) — so the fit is reported as not-fitted (NaN) rather than a
+   * spurious value. Default: 5.
+   */
+  minFitPoints: number;
 }
+
+/** Default minimum distinct distances required for a trustworthy P(s) fit. */
+const DEFAULT_MIN_FIT_POINTS = 5;
 
 export interface ContactDecayResult {
   /** Diagonal distances (1, 2, 3, ...). */
@@ -36,9 +47,17 @@ export interface ContactDecayResult {
   logDistances: Float64Array;
   /** Log10 of mean contacts. */
   logContacts: Float64Array;
-  /** Decay exponent (slope of log-log fit). Typically -1.0 to -1.5. */
+  /**
+   * Decay exponent (slope of log-log fit). Typically -1.0 to -1.5. `NaN` when
+   * the curve could not be fitted (no data, or fewer than `minFitPoints`
+   * distinct distances) — check with `Number.isFinite` before use.
+   */
   decayExponent: number;
-  /** R-squared of the linear fit in log-log space. */
+  /**
+   * R-squared of the linear fit in log-log space. `NaN` when not fitted (see
+   * `decayExponent`); a sparse curve is deliberately not collapsed to 0 so
+   * callers can exclude it rather than average in a spurious value.
+   */
   rSquared: number;
   /** Maximum diagonal distance computed. */
   maxDistance: number;
@@ -113,17 +132,10 @@ export function computeContactDecay(
 ): ContactDecayResult {
   const maxD = params?.maxDistance ?? Math.min(Math.floor(size / 2), 500);
   const _minCount = params?.minCountForFit ?? 10;
+  const minFitPoints = params?.minFitPoints ?? DEFAULT_MIN_FIT_POINTS;
 
   if (size === 0 || contigRanges.length === 0) {
-    return {
-      distances: new Float64Array(0),
-      meanContacts: new Float64Array(0),
-      logDistances: new Float64Array(0),
-      logContacts: new Float64Array(0),
-      decayExponent: 0,
-      rSquared: 0,
-      maxDistance: maxD,
-    };
+    return notFitted(maxD);
   }
 
   const profile = computeIntraDiagonalProfile(contactMap, size, contigRanges, maxD);
@@ -142,6 +154,18 @@ export function computeContactDecay(
   const logDist = distArr.map(d => Math.log10(d));
   const logCont = contArr.map(c => Math.log10(c));
 
+  // Too few points to trust the log-log fit — keep the data (so the curve can
+  // still be plotted) but report the fit as not-fitted rather than spurious.
+  if (distArr.length < minFitPoints) {
+    return notFitted(
+      maxD,
+      Float64Array.from(distArr),
+      Float64Array.from(contArr),
+      Float64Array.from(logDist),
+      Float64Array.from(logCont),
+    );
+  }
+
   // Linear regression in log-log space
   const { slope, rSquared } = linearRegression(logDist, logCont);
 
@@ -152,6 +176,28 @@ export function computeContactDecay(
     logContacts: Float64Array.from(logCont),
     decayExponent: slope,
     rSquared,
+    maxDistance: maxD,
+  };
+}
+
+/**
+ * Build a not-fitted result: NaN exponent/R-squared, optionally carrying the
+ * raw curve data (present for a sparse curve, empty for no data at all).
+ */
+function notFitted(
+  maxD: number,
+  distances = new Float64Array(0),
+  meanContacts = new Float64Array(0),
+  logDistances = new Float64Array(0),
+  logContacts = new Float64Array(0),
+): ContactDecayResult {
+  return {
+    distances,
+    meanContacts,
+    logDistances,
+    logContacts,
+    decayExponent: NaN,
+    rSquared: NaN,
     maxDistance: maxD,
   };
 }
@@ -234,16 +280,17 @@ export function formatDecayStats(result: ContactDecayResult): string {
 
   const exp = result.decayExponent;
   const r2 = result.rSquared;
+  const fitted = Number.isFinite(exp);
 
-  // Color code: green if exponent is in typical Hi-C range [-1.5, -0.8]
-  const inRange = exp <= -0.8 && exp >= -1.5;
-  const color = inRange ? '#4caf50' : '#f39c12';
+  // Color code: green if exponent is in typical Hi-C range [-1.5, -0.8].
+  const inRange = fitted && exp <= -0.8 && exp >= -1.5;
+  const color = fitted ? (inRange ? '#4caf50' : '#f39c12') : 'var(--text-secondary)';
 
   let html = '';
   html += `<div class="stats-row"><span>P(s) exponent</span>`;
-  html += `<span style="color:${color};">${exp.toFixed(2)}</span></div>`;
+  html += `<span style="color:${color};">${fitted ? exp.toFixed(2) : '\u2014'}</span></div>`;
   html += `<div class="stats-row"><span>P(s) R\u00B2</span>`;
-  html += `<span>${r2.toFixed(3)}</span></div>`;
+  html += `<span>${Number.isFinite(r2) ? r2.toFixed(3) : '\u2014'}</span></div>`;
   html += `<div class="stats-row"><span>P(s) range</span>`;
   html += `<span>1–${result.maxDistance} px</span></div>`;
 

@@ -69,7 +69,8 @@ function scoreContiguity(n50: number, totalLength: number, _contigCount: number)
  * Score based on distance from ideal center (-1.15).
  */
 function scoreDecayQuality(exponent: number | null): number {
-  if (exponent === null) return 50;
+  // Treat a missing or not-fitted (NaN) exponent as neutral, not a 0 score.
+  if (exponent === null || !Number.isFinite(exponent)) return 50;
   const ideal = -1.15;
   const maxDeviation = 0.85;
   const distance = Math.abs(exponent - ideal);

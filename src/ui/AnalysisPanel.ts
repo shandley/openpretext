@@ -372,7 +372,9 @@ async function runDecay(ctx: AppContext): Promise<void> {
     cachedScaffoldDecay = null;
   }
 
-  ctx.showToast(`P(s) decay exponent: ${cachedDecay.decayExponent.toFixed(2)}`);
+  ctx.showToast(
+    `P(s) decay exponent: ${Number.isFinite(cachedDecay.decayExponent) ? cachedDecay.decayExponent.toFixed(2) : 'n/a (too sparse)'}`,
+  );
   updateResultsDisplay(ctx);
 }
 
@@ -860,11 +862,13 @@ function renderDecayChart(
     const by = baseline.logContacts;
     const bn = bx.length;
 
-    // Baseline fit line (gray dashed)
-    const bIntercept = computeRegressionIntercept(bx, by, baseline.decayExponent);
-    const bLineY0 = baseline.decayExponent * bx[0] + bIntercept;
-    const bLineYn = baseline.decayExponent * bx[bn - 1] + bIntercept;
-    svg += `<line x1="${sx(bx[0])}" y1="${sy(bLineY0)}" x2="${sx(bx[bn - 1])}" y2="${sy(bLineYn)}" stroke="#888" stroke-width="1" stroke-dasharray="3,3"/>`;
+    // Baseline fit line (gray dashed) — omitted when the fit is not defined.
+    if (Number.isFinite(baseline.decayExponent)) {
+      const bIntercept = computeRegressionIntercept(bx, by, baseline.decayExponent);
+      const bLineY0 = baseline.decayExponent * bx[0] + bIntercept;
+      const bLineYn = baseline.decayExponent * bx[bn - 1] + bIntercept;
+      svg += `<line x1="${sx(bx[0])}" y1="${sy(bLineY0)}" x2="${sx(bx[bn - 1])}" y2="${sy(bLineYn)}" stroke="#888" stroke-width="1" stroke-dasharray="3,3"/>`;
+    }
 
     // Baseline data points (gray)
     for (let i = 0; i < bn; i++) {
@@ -879,11 +883,14 @@ function renderDecayChart(
       if (d.logDistances.length < 2) continue;
       const sn = d.logDistances.length;
 
-      // Scaffold fit line (colored, thin dashed)
-      const sIntercept = computeRegressionIntercept(d.logDistances, d.logContacts, d.decayExponent);
-      const sLineY0 = d.decayExponent * d.logDistances[0] + sIntercept;
-      const sLineYn = d.decayExponent * d.logDistances[sn - 1] + sIntercept;
-      svg += `<line x1="${sx(d.logDistances[0])}" y1="${sy(sLineY0)}" x2="${sx(d.logDistances[sn - 1])}" y2="${sy(sLineYn)}" stroke="${sr.color}" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.6"/>`;
+      // Scaffold fit line (colored, thin dashed) — only when a fit exists;
+      // sparse scaffolds still show their data points below.
+      if (Number.isFinite(d.decayExponent)) {
+        const sIntercept = computeRegressionIntercept(d.logDistances, d.logContacts, d.decayExponent);
+        const sLineY0 = d.decayExponent * d.logDistances[0] + sIntercept;
+        const sLineYn = d.decayExponent * d.logDistances[sn - 1] + sIntercept;
+        svg += `<line x1="${sx(d.logDistances[0])}" y1="${sy(sLineY0)}" x2="${sx(d.logDistances[sn - 1])}" y2="${sy(sLineYn)}" stroke="${sr.color}" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.6"/>`;
+      }
 
       // Scaffold data points (colored, small)
       for (let i = 0; i < sn; i++) {
@@ -892,11 +899,13 @@ function renderDecayChart(
     }
   }
 
-  // Current fit line (white dashed)
-  const intercept = computeRegressionIntercept(xData, yData, result.decayExponent);
-  const lineY0 = result.decayExponent * xData[0] + intercept;
-  const lineYn = result.decayExponent * xData[n - 1] + intercept;
-  svg += `<line x1="${sx(xData[0])}" y1="${sy(lineY0)}" x2="${sx(xData[n - 1])}" y2="${sy(lineYn)}" stroke="#e8e8e8" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+  // Current fit line (white dashed) — omitted when the fit is not defined.
+  if (Number.isFinite(result.decayExponent)) {
+    const intercept = computeRegressionIntercept(xData, yData, result.decayExponent);
+    const lineY0 = result.decayExponent * xData[0] + intercept;
+    const lineYn = result.decayExponent * xData[n - 1] + intercept;
+    svg += `<line x1="${sx(xData[0])}" y1="${sy(lineY0)}" x2="${sx(xData[n - 1])}" y2="${sy(lineYn)}" stroke="#e8e8e8" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+  }
 
   // Current data points (red)
   for (let i = 0; i < n; i++) {
@@ -919,8 +928,8 @@ function renderDecayChart(
     }
     svg += '</div>';
 
-    // Delta exponent (only when baseline exists)
-    if (hasBaseline) {
+    // Delta exponent (only when baseline exists and both fits are defined)
+    if (hasBaseline && Number.isFinite(result.decayExponent) && Number.isFinite(baseline.decayExponent)) {
       const delta = result.decayExponent - baseline.decayExponent;
       const sign = delta >= 0 ? '+' : '';
       svg += `<div style="text-align:center;font-size:9px;color:var(--text-secondary);margin-top:2px;">`;
@@ -966,8 +975,8 @@ function buildHealthScore(ctx: AppContext): HealthScoreResult | null {
     n50: metrics.n50,
     totalLength: metrics.totalLength,
     contigCount: metrics.contigCount,
-    decayExponent: cachedDecay?.decayExponent ?? null,
-    decayRSquared: cachedDecay?.rSquared ?? null,
+    decayExponent: Number.isFinite(cachedDecay?.decayExponent) ? cachedDecay!.decayExponent : null,
+    decayRSquared: Number.isFinite(cachedDecay?.rSquared) ? cachedDecay!.rSquared : null,
     misassemblyCount: misassemblyFlags.getFlaggedCount(),
     eigenvalue: cachedCompartments?.eigenvalue ?? null,
     cisTransRatio: cachedQuality?.cisTransRatio ?? null,
@@ -1082,11 +1091,14 @@ function updateResultsDisplay(ctx: AppContext): void {
       for (const sr of cachedScaffoldDecay) {
         const exp = sr.decay.decayExponent;
         const r2 = sr.decay.rSquared;
-        const inRange = exp <= -0.8 && exp >= -1.5;
-        const expColor = inRange ? '#4caf50' : '#f39c12';
+        const fitted = Number.isFinite(exp);
+        const inRange = fitted && exp <= -0.8 && exp >= -1.5;
+        const expColor = fitted ? (inRange ? '#4caf50' : '#f39c12') : 'var(--text-secondary)';
+        const expStr = fitted ? exp.toFixed(2) : '\u2014';
+        const r2Str = Number.isFinite(r2) ? r2.toFixed(2) : '\u2014';
         html += `<div class="scaffold-decay-row">`;
         html += `<span style="color:${sr.color}">${sr.scaffoldName} (${sr.contigCount})</span>`;
-        html += `<span style="color:${expColor}">${exp.toFixed(2)} <span style="color:var(--text-secondary);font-size:9px;">R\u00B2=${r2.toFixed(2)}</span></span>`;
+        html += `<span style="color:${expColor}">${expStr} <span style="color:var(--text-secondary);font-size:9px;">R\u00B2=${r2Str}</span></span>`;
         html += '</div>';
       }
       html += '</div>';

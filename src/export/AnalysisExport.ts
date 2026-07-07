@@ -173,8 +173,8 @@ export function exportCompartmentBedGraph(
 export function exportDecayTSV(result: ContactDecayResult): string {
   const lines: string[] = [
     `# P(s) decay curve`,
-    `# Decay exponent: ${result.decayExponent.toFixed(4)}`,
-    `# R-squared: ${result.rSquared.toFixed(4)}`,
+    `# Decay exponent: ${Number.isFinite(result.decayExponent) ? result.decayExponent.toFixed(4) : 'n/a'}`,
+    `# R-squared: ${Number.isFinite(result.rSquared) ? result.rSquared.toFixed(4) : 'n/a'}`,
     `# Distance range: 1-${result.maxDistance} px`,
     `distance\tmean_contacts\tlog10_distance\tlog10_contacts`,
   ];
