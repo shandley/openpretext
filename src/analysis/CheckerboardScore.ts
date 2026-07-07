@@ -1,20 +1,24 @@
 /**
  * CheckerboardScore — Information-entropy-based compartment regularity metric.
  *
- * Implements the checkerboard score from Che et al. 2025 ("The evolution of
- * high-order genome architecture revealed from 1,000 species", bioRxiv
- * 2025.07.05.663309 — confirm the year against the final publication).
- * Quantifies how strongly a contact map exhibits the alternating A/B
- * compartment "checkerboard" pattern using cosine distance + Shannon entropy.
+ * Implements the checkerboard ("accordance") score from Che et al., Cell (2026),
+ * "The evolution of high-order genome architecture revealed from 1,000 species"
+ * (preprint: bioRxiv 2025.07.05.663309). Quantifies how strongly a contact map
+ * exhibits the alternating A/B compartment "checkerboard" pattern.
  *
- * Score direction (as implemented): the entropy of the cosine-distance
- * histogram is mapped directly to [0, 100] with NO inversion —
- * score = (entropy / maxEntropy) * 100. Higher entropy gives a higher score,
- * which the code treats as a stronger/more varied checkerboard pattern (this
- * matches the HiArch reference scale where mammals ~2.88 score above fungi
- * ~2.50). NOTE: whether higher histogram entropy really means "more
- * compartmentalized" is a scientific judgment worth confirming — higher entropy
- * usually reads as more disorder — so treat the direction as provisional.
+ * Score direction: the entropy of the pairwise cosine-distance histogram is used
+ * directly, with NO inversion — higher entropy = stronger checkerboard. This is
+ * verified against the HiArch reference implementation (`S2_get_entro.py`
+ * returns `scipy.stats.entropy(histogram)` directly) and the paper, which states
+ * "higher entropy reflects stronger segregation of active and inactive
+ * compartments". Here it is rescaled to [0, 100] via `(entropy / ln(numBins)) *
+ * 100`; HiArch reports the raw entropy (~2.3-3.0 range).
+ *
+ * Faithful to HiArch: cosine distance between rows (their `pdist(metric='cosine')`),
+ * histogram bins over [0, 1.6] with 30 bins, short-distance band at 15% of
+ * chromosome size. One difference: HiArch trims the distances at the 2nd/98th
+ * percentile before histogramming; this port does not, which shifts the absolute
+ * value slightly but not the direction.
  *
  * Reference: https://github.com/xjtu-omics/HiArch
  *
@@ -47,8 +51,7 @@ export interface CheckerboardParams {
 
 export interface CheckerboardResult {
   /** Raw Shannon entropy of the cosine-distance histogram. Mapped directly to
-   *  `score` (higher entropy -> higher score); see the module header on the
-   *  provisional direction. */
+   *  `score` (higher entropy -> higher score); see the module header. */
   entropy: number;
   /** Normalized score 0-100 = (entropy / maxEntropy) * 100. Higher entropy is
    *  treated as a stronger checkerboard pattern (no inversion). */
@@ -162,14 +165,14 @@ function shannonEntropy(probabilities: Float64Array): number {
  * When chromosomeRanges are provided (recommended), computes per-chromosome
  * by restricting both row and column sampling to within each chromosome's
  * pixel range, then averages the per-chromosome entropies. This matches the
- * HiArch algorithm (Che et al. 2025) and produces entropy values on the same
+ * HiArch algorithm (Che et al., Cell 2026) and produces entropy values on the same
  * scale as the 1,025-species reference (2.3–3.0).
  *
  * Without chromosomeRanges, operates on the whole-genome overview. This mixes
  * intra- and inter-chromosomal contacts and produces artificially low entropy
  * for genomes with many small chromosomes, which is not comparable to HiArch.
  *
- * Algorithm (Che et al. 2025):
+ * Algorithm (Che et al., Cell 2026):
  * 1. For each chromosome, compute cosine distances between row pairs at
  *    diagonal offsets d within [5%, 15%] of chromosome size, restricted to
  *    intra-chromosomal columns

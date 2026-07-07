@@ -9,9 +9,11 @@
  * 5. Extract first eigenvector via power iteration
  * 6. Expand and normalize for track display
  *
- * The first eigenvector of the O/E correlation matrix separates A (active)
- * and B (inactive) chromatin compartments, visible as a checkerboard pattern
- * in the Hi-C contact map.
+ * The first eigenvector of the O/E correlation matrix separates the two
+ * chromatin compartments, visible as a checkerboard pattern in the Hi-C contact
+ * map. Its sign is arbitrary, so the two lobes are NOT oriented to active (A)
+ * vs inactive (B): that labeling needs an external signal (GC content / gene
+ * density) this tool does not have. See the note on `CompartmentResult.eigenvector`.
  *
  * Pure algorithm — no side effects or state mutations.
  */
@@ -32,9 +34,16 @@ export interface CompartmentParams {
 }
 
 export interface CompartmentResult {
-  /** First eigenvector values (positive = A, negative = B). Length = overviewSize. */
+  /** First eigenvector values. Its sign separates the two compartments, but is
+   *  NOT anchored to active (A) vs inactive (B): power iteration returns an
+   *  arbitrary (though, with the fixed seed, reproducible) sign, and orienting it
+   *  biologically needs an external signal (GC content / gene density) the app
+   *  does not have. Treat the two lobes as compartment 1/2, not labeled A/B.
+   *  Length = overviewSize. */
   eigenvector: Float32Array;
-  /** Normalized to [0, 1] for track display (0 = B, 1 = A). Length = overviewSize. */
+  /** Normalized to [0, 1] for track display: the two extremes are the two
+   *  compartments; which extreme is A vs B is not determined (see `eigenvector`).
+   *  Length = overviewSize. */
   normalizedEigenvector: Float32Array;
   /** Number of power iterations used. */
   iterations: number;

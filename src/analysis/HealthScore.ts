@@ -97,7 +97,7 @@ function scoreIntegrity(misassemblyCount: number | null): number {
  * Compartments: Combines eigenvalue strength with checkerboard regularity.
  *
  * Eigenvalue measures A/B separation magnitude (from PCA).
- * Checkerboard score (Che et al. 2025) measures regularity of the alternating
+ * Checkerboard score (Che et al., Cell 2026) measures regularity of the alternating
  * pattern using information entropy of cosine distances.
  *
  * When both are available, blends 50/50. When only one is available, uses it alone.
