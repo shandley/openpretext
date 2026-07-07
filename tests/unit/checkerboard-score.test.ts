@@ -326,3 +326,42 @@ describe('CheckerboardScore', () => {
     });
   });
 });
+
+describe('CheckerboardScore — empty-scaffold sentinel regression', () => {
+  it('skips an all-zero chromosome instead of flooding it with 1.0 sentinels', () => {
+    // Chromosome 0 has real checkerboard structure; chromosome 1 is all zero
+    // (an empty scaffold). The empty one used to contribute a full histogram of
+    // 1.0 "no data" distances; it must now be skipped for lack of valid samples.
+    const size = 40;
+    const map = new Float32Array(size * size);
+    const block = 4;
+    for (let i = 0; i < 20; i++) {
+      for (let j = 0; j < 20; j++) {
+        const same = (Math.floor(i / block) % 2) === (Math.floor(j / block) % 2);
+        map[i * size + j] = same ? 0.8 : 0.1;
+      }
+    }
+    const ranges: ChromosomeRange[] = [
+      { start: 0, end: 20 },
+      { start: 20, end: 40 }, // all zero
+    ];
+    const result = computeCheckerboardScore(map, size, undefined, ranges);
+    expect(result.numChromosomes).toBe(1);
+  });
+
+  it('respects the parameterized minSamplesPerChromosome floor', () => {
+    // Two structured chromosomes both clear the default floor of 10.
+    const size = 40;
+    const map = makeCheckerboardMap(size, 4);
+    const ranges: ChromosomeRange[] = [
+      { start: 0, end: 20 },
+      { start: 20, end: 40 },
+    ];
+    const def = computeCheckerboardScore(map, size, undefined, ranges);
+    expect(def.numChromosomes).toBe(2);
+    // A floor above each chromosome's sample count excludes both from the
+    // per-chromosome path (it then falls back to whole-genome).
+    const high = computeCheckerboardScore(map, size, { minSamplesPerChromosome: 100000 }, ranges);
+    expect(high.numChromosomes).toBeLessThan(def.numChromosomes);
+  });
+});

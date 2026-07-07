@@ -20,8 +20,8 @@ export interface HealthScoreInput {
   decayExponent: number | null;
   /** R-squared of P(s) fit. Null if not computed. */
   decayRSquared: number | null;
-  /** Number of flagged misassemblies. */
-  misassemblyCount: number;
+  /** Number of flagged misassemblies. Null if misassembly detection has not run. */
+  misassemblyCount: number | null;
   /** First eigenvalue from compartment analysis. Null if not computed. */
   eigenvalue: number | null;
   /** Cis/trans ratio from Hi-C quality metrics. Null if not computed. */
@@ -46,6 +46,11 @@ export interface HealthScoreResult {
 // ---------------------------------------------------------------------------
 // Component scoring
 // ---------------------------------------------------------------------------
+
+/** A finite number (rejects null, undefined, NaN, +/-Infinity). Narrows the type. */
+function finite(x: number | null | undefined): x is number {
+  return x !== null && x !== undefined && Number.isFinite(x);
+}
 
 /**
  * Contiguity: N50 as a fraction of total length.
@@ -79,9 +84,12 @@ function scoreDecayQuality(exponent: number | null): number {
 
 /**
  * Integrity: Penalty for detected misassemblies.
- * Each misassembly costs 10 points from a base of 100.
+ * Each misassembly costs 10 points from a base of 100. Null means detection has
+ * not run, which scores a neutral 50 rather than a perfect 100 (0 flags found
+ * and 0 flags because nothing looked are not the same thing).
  */
-function scoreIntegrity(misassemblyCount: number): number {
+function scoreIntegrity(misassemblyCount: number | null): number {
+  if (!finite(misassemblyCount)) return 50;
   return Math.max(0, Math.min(100, 100 - misassemblyCount * 10));
 }
 
@@ -95,11 +103,12 @@ function scoreIntegrity(misassemblyCount: number): number {
  * When both are available, blends 50/50. When only one is available, uses it alone.
  */
 function scoreCompartments(eigenvalue: number | null, checkerboardScore: number | null): number {
-  const eigenScore = eigenvalue !== null ? Math.max(0, Math.min(100, eigenvalue * 200)) : null;
-  if (eigenScore !== null && checkerboardScore !== null) {
-    return eigenScore * 0.5 + checkerboardScore * 0.5;
+  const eigenScore = finite(eigenvalue) ? Math.max(0, Math.min(100, eigenvalue * 200)) : null;
+  const cb = finite(checkerboardScore) ? checkerboardScore : null;
+  if (eigenScore !== null && cb !== null) {
+    return eigenScore * 0.5 + cb * 0.5;
   }
-  if (checkerboardScore !== null) return checkerboardScore;
+  if (cb !== null) return cb;
   if (eigenScore !== null) return eigenScore;
   return 50; // default when nothing computed
 }
@@ -109,7 +118,7 @@ function scoreCompartments(eigenvalue: number | null, checkerboardScore: number 
  * Good libraries have cis ratio >= 0.7 (70% intra-chromosomal).
  */
 function scoreLibraryQuality(cisTransRatio: number | null): number {
-  if (cisTransRatio === null) return 50;
+  if (!finite(cisTransRatio)) return 50;
   return Math.max(0, Math.min(100, (cisTransRatio / 0.7) * 100));
 }
 

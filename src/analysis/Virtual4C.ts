@@ -93,8 +93,23 @@ export function scaleForDisplay(
   const transformed = new Float32Array(n);
 
   if (logTransform) {
+    // Log2 the positive (contacted) bins and track their minimum. Empty bins
+    // (O/E = 0) have no defined log; mapping them to 0 would rank them ABOVE a
+    // genuinely depleted bin (0 < O/E < 1, whose log is negative). Instead floor
+    // them at the smallest positive log so no-contact reads as least enriched.
+    let minLog = Infinity;
     for (let i = 0; i < n; i++) {
-      transformed[i] = profile[i] > 0 ? Math.log2(profile[i]) : 0;
+      if (profile[i] > 0) {
+        const lg = Math.log2(profile[i]);
+        transformed[i] = lg;
+        if (lg < minLog) minLog = lg;
+      } else {
+        transformed[i] = NaN;
+      }
+    }
+    const floor = Number.isFinite(minLog) ? minLog : 0;
+    for (let i = 0; i < n; i++) {
+      if (!Number.isFinite(transformed[i])) transformed[i] = floor;
     }
   } else {
     for (let i = 0; i < n; i++) {

@@ -222,3 +222,13 @@ describe('virtual4CToTrack', () => {
     expect(track.data.length).toBe(100);
   });
 });
+
+describe('scaleForDisplay — empty-vs-depleted log regression', () => {
+  it('does not rank an empty bin above a genuinely depleted bin', () => {
+    // O/E: [empty, depleted, neutral, enriched]. Under log transform, mapping
+    // the empty bin to 0 used to rank it above the depleted (negative-log) bin.
+    const out = scaleForDisplay(new Float32Array([0, 0.5, 1, 4]), true);
+    expect(out[0]).toBeLessThanOrEqual(out[1]);
+    expect(out[3]).toBeGreaterThan(out[2]); // enriched still highest
+  });
+});

@@ -75,6 +75,27 @@ describe('computeHealthScore', () => {
     expect(Number.isFinite(result.overall)).toBe(true);
   });
 
+  it('scores integrity neutral (50) when misassembly detection has not run', () => {
+    // null count = detection never ran; must not read as a perfect 100.
+    const result = computeHealthScore(makeInput({ misassemblyCount: null }));
+    expect(result.components.integrity).toBe(50);
+    expect(Number.isFinite(result.overall)).toBe(true);
+  });
+
+  it('still scores integrity 100 for an assessed, clean assembly (0 flags)', () => {
+    const result = computeHealthScore(makeInput({ misassemblyCount: 0 }));
+    expect(result.components.integrity).toBe(100);
+  });
+
+  it('treats a NaN eigenvalue or cis/trans ratio as neutral, not a NaN score', () => {
+    const eig = computeHealthScore(makeInput({ eigenvalue: NaN, checkerboardScore: null }));
+    expect(eig.components.compartments).toBe(50);
+    expect(Number.isFinite(eig.overall)).toBe(true);
+    const lib = computeHealthScore(makeInput({ cisTransRatio: NaN }));
+    expect(lib.components.libraryQuality).toBe(50);
+    expect(Number.isFinite(lib.overall)).toBe(true);
+  });
+
   it('handles zero contigs gracefully', () => {
     const result = computeHealthScore(makeInput({
       n50: 0,

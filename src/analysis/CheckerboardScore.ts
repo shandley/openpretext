@@ -2,15 +2,19 @@
  * CheckerboardScore — Information-entropy-based compartment regularity metric.
  *
  * Implements the checkerboard score from Che et al. 2025 ("The evolution of
- * high-order genome architecture revealed from 1,000 species"). Quantifies
- * how strongly a contact map exhibits the alternating A/B compartment
- * "checkerboard" pattern using cosine distance + Shannon entropy.
+ * high-order genome architecture revealed from 1,000 species", bioRxiv
+ * 2025.07.05.663309 — confirm the year against the final publication).
+ * Quantifies how strongly a contact map exhibits the alternating A/B
+ * compartment "checkerboard" pattern using cosine distance + Shannon entropy.
  *
- * Lower entropy = stronger, more regular compartment pattern.
- * Higher entropy = more random/disordered contacts.
- *
- * The score is inverted and normalized to [0, 100] for display:
- * 0 = no compartmentalization, 100 = perfectly regular checkerboard.
+ * Score direction (as implemented): the entropy of the cosine-distance
+ * histogram is mapped directly to [0, 100] with NO inversion —
+ * score = (entropy / maxEntropy) * 100. Higher entropy gives a higher score,
+ * which the code treats as a stronger/more varied checkerboard pattern (this
+ * matches the HiArch reference scale where mammals ~2.88 score above fungi
+ * ~2.50). NOTE: whether higher histogram entropy really means "more
+ * compartmentalized" is a scientific judgment worth confirming — higher entropy
+ * usually reads as more disorder — so treat the direction as provisional.
  *
  * Reference: https://github.com/xjtu-omics/HiArch
  *
@@ -30,14 +34,24 @@ export interface CheckerboardParams {
   numBins: number;
   /** Maximum cosine distance for histogram range. Default: 1.6. */
   maxDistance: number;
-  /** Minimum number of samples before computing entropy. Default: 200. */
+  /** Minimum samples before computing entropy on the WHOLE-GENOME fallback path.
+   *  Does not govern the per-chromosome path (see minSamplesPerChromosome).
+   *  Default: 200. */
   minSamples: number;
+  /** Minimum valid samples for a chromosome to contribute on the per-chromosome
+   *  path. Kept at the historical value so the entropy scale is unchanged; note
+   *  that 10 is arguably low for a numBins-wide histogram, and raising it would
+   *  move the reported numbers, so tune deliberately. Default: 10. */
+  minSamplesPerChromosome: number;
 }
 
 export interface CheckerboardResult {
-  /** Raw Shannon entropy of cosine distance distribution. Lower = stronger pattern. */
+  /** Raw Shannon entropy of the cosine-distance histogram. Mapped directly to
+   *  `score` (higher entropy -> higher score); see the module header on the
+   *  provisional direction. */
   entropy: number;
-  /** Normalized score 0-100. Higher = stronger checkerboard pattern. */
+  /** Normalized score 0-100 = (entropy / maxEntropy) * 100. Higher entropy is
+   *  treated as a stronger checkerboard pattern (no inversion). */
   score: number;
   /** Per-bin cosine distance adjacency values (for the last computed batch). */
   distanceHistogram: Float32Array;
@@ -62,6 +76,7 @@ const DEFAULT_PARAMS: CheckerboardParams = {
   numBins: 30,
   maxDistance: 1.6,
   minSamples: 200,
+  minSamplesPerChromosome: 10,
 };
 
 // Theoretical max entropy for a uniform distribution over numBins bins
@@ -119,7 +134,11 @@ function cosineDistanceSubset(
   const norm1 = vectorNorm(contactMap, off1, len);
   const norm2 = vectorNorm(contactMap, off2, len);
   const denom = norm1 * norm2;
-  if (denom === 0) return 1.0;
+  // An all-zero row (empty scaffold / microchromosome) has no defined cosine
+  // distance. Return NaN so callers skip it, rather than a fixed 1.0 that would
+  // flood the histogram with "no data" values indistinguishable from real ones
+  // and bias the entropy toward whatever the empty fraction is.
+  if (denom === 0) return NaN;
   return Math.max(0, Math.min(2, 1 - dot / denom));
 }
 
@@ -143,20 +162,20 @@ function shannonEntropy(probabilities: Float64Array): number {
  * When chromosomeRanges are provided (recommended), computes per-chromosome
  * by restricting both row and column sampling to within each chromosome's
  * pixel range, then averages the per-chromosome entropies. This matches the
- * HiArch algorithm (Che et al. 2026) and produces entropy values on the same
+ * HiArch algorithm (Che et al. 2025) and produces entropy values on the same
  * scale as the 1,025-species reference (2.3–3.0).
  *
  * Without chromosomeRanges, operates on the whole-genome overview. This mixes
  * intra- and inter-chromosomal contacts and produces artificially low entropy
  * for genomes with many small chromosomes, which is not comparable to HiArch.
  *
- * Algorithm (Che et al. 2026):
+ * Algorithm (Che et al. 2025):
  * 1. For each chromosome, compute cosine distances between row pairs at
  *    diagonal offsets d within [5%, 15%] of chromosome size, restricted to
  *    intra-chromosomal columns
  * 2. Compute Shannon entropy of the cosine distance histogram per chromosome
  * 3. Average per-chromosome entropies
- * 4. Convert to 0-100 score (inverted: lower entropy = higher score)
+ * 4. Map entropy directly to a 0-100 score (higher entropy -> higher score)
  */
 export function computeCheckerboardScore(
   contactMap: Float32Array,
@@ -197,11 +216,12 @@ function computeCheckerboardPerChromosome(
     const samples: number[] = [];
     for (let d = minDist; d < maxDist && d < chrSize; d++) {
       for (let i = cs; i + d < ce; i++) {
-        samples.push(cosineDistanceSubset(contactMap, size, i, i + d, cs, ce));
+        const cd = cosineDistanceSubset(contactMap, size, i, i + d, cs, ce);
+        if (Number.isFinite(cd)) samples.push(cd);
       }
     }
 
-    if (samples.length < 10) continue;
+    if (samples.length < p.minSamplesPerChromosome) continue;
 
     const histogram = new Float64Array(p.numBins);
     for (const s of samples) {
@@ -250,7 +270,8 @@ function computeCheckerboardWholeGenome(
 
   for (let d = minDist; d < maxDist && d < size; d++) {
     for (let i = 0; i + d < size; i++) {
-      samples.push(cosineDistance(contactMap, size, i, i + d));
+      const cd = cosineDistance(contactMap, size, i, i + d);
+      if (Number.isFinite(cd)) samples.push(cd);
     }
 
     if (samples.length >= p.minSamples) {
