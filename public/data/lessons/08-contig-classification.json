@@ -9,7 +9,7 @@
     {
       "id": "understand-tags",
       "title": "Understanding Meta Tag Types",
-      "instruction": "OpenPretext supports four meta tag types, matching the PretextView rapid curation workflow:\n\n\u2022 **Haplotig** (HAP, blue) \u2014 a duplicate copy of a genomic region from the alternate haplotype. These inflate assembly size and should typically be excluded from the primary assembly.\n\u2022 **Contaminant** (CON, red) \u2014 sequences from other organisms (bacteria, adapter sequences, etc.) that were accidentally assembled. Should be excluded.\n\u2022 **Unlocalised** (UNL, grey) \u2014 real sequences that belong to the organism but can't be confidently placed into a chromosome. Common for repetitive regions.\n\u2022 **Sex Chromosome** (SEX, magenta) \u2014 sex-linked chromosomes (X/Y, Z/W) that may need special handling during scaffolding.\n\nOpen the sidebar (press **I**) and scroll to find the **Meta Tags** section.",
+      "instruction": "OpenPretext supports four meta tag types, matching the PretextView rapid curation workflow:\n\n\u2022 **Haplotig** (HAP, purple): a duplicate copy of a genomic region from the alternate haplotype. These inflate assembly size and should typically be excluded from the primary assembly.\n\u2022 **Contaminant** (CON, red): sequences from other organisms (bacteria, adapter sequences, etc.) that were accidentally assembled. Should be excluded.\n\u2022 **Unlocalised** (UNL, blue): real sequences that belong to the organism but can't be confidently placed into a chromosome. Common for repetitive regions.\n\u2022 **Sex Chromosome** (SEX, green): sex-linked chromosomes (X/Y, Z/W) that may need special handling during scaffolding.\n\nOpen the sidebar (press **I**) and scroll to find the **Meta Tags** section.",
       "expectedAction": { "type": "observe" },
       "hint": "The Meta Tags section has a dropdown for tag type, and Apply/Clear buttons."
     },
@@ -23,9 +23,9 @@
     {
       "id": "apply-tag",
       "title": "Apply a Meta Tag",
-      "instruction": "With a contig selected:\n\n1. In the **Meta Tags** section, choose a tag type from the dropdown (try 'Unlocalised' for practice)\n2. Click **Apply Tag**\n\nYou should see a colored badge appear next to the contig name in the sidebar list. A summary showing the count of each tag type appears below the buttons.\n\nYou can tag multiple contigs with the same or different types. Each contig can only have one tag at a time \u2014 applying a new tag replaces the old one.",
+      "instruction": "With a contig selected:\n\n1. In the **Meta Tags** section, choose a tag type from the dropdown (try 'Unlocalised' for practice)\n2. Click **Apply Tag**\n\nYou should see a colored badge appear next to the contig name in the sidebar list. A summary showing the count of each tag type appears below the buttons.\n\nYou can tag multiple contigs with the same or different types. Each contig can only have one tag at a time; applying a new tag replaces the old one.",
       "expectedAction": { "type": "observe" },
-      "hint": "The tag badges are: HAP (blue), CON (red), UNL (grey), SEX (magenta). A toast notification confirms the action."
+      "hint": "The tag badges are: HAP (purple), CON (red), UNL (blue), SEX (green). A toast notification confirms the action."
     },
     {
       "id": "color-metric",
@@ -44,7 +44,7 @@
     {
       "id": "summary",
       "title": "Meta Tags Summary",
-      "instruction": "You've learned to use the meta tag system:\n\n\u2022 **Haplotig** for duplicate haplotype copies\n\u2022 **Contaminant** for foreign sequences\n\u2022 **Unlocalised** for unplaceable fragments\n\u2022 **Sex Chromosome** for sex-linked sequences\n\nTags are visual annotations \u2014 they help you organize your thinking during curation. In combination with contig exclusion (press **H** to hide contigs from exports), tags help you track which contigs need special handling.\n\nTip: In bird and reptile assemblies, look for one distinctively large chromosome block (Z) and a small noisy one (W) to tag as sex chromosomes.",
+      "instruction": "You've learned to use the meta tag system:\n\n\u2022 **Haplotig** for duplicate haplotype copies\n\u2022 **Contaminant** for foreign sequences\n\u2022 **Unlocalised** for unplaceable fragments\n\u2022 **Sex Chromosome** for sex-linked sequences\n\nTags are visual annotations that help you organize your thinking during curation. In combination with contig exclusion (press **H** to hide contigs from exports), tags help you track which contigs need special handling.\n\nTip: In bird and reptile assemblies, look for one distinctively large chromosome block (Z) and a small noisy one (W) to tag as sex chromosomes.",
       "expectedAction": { "type": "observe" }
     }
   ],

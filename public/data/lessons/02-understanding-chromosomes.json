@@ -9,7 +9,7 @@
     {
       "id": "intro-koala",
       "title": "The Koala Genome",
-      "instruction": "You're now viewing the koala genome assembly. Koalas have a relatively simple genome organization, making this a great learning example.\n\nTake a moment to observe the overall structure. Notice the bright blocks along the diagonal—each represents a chromosome or a large scaffold.",
+      "instruction": "You're now viewing the koala genome assembly. Koalas have a relatively simple genome organization, making this a great learning example.\n\nTake a moment to observe the overall structure. Notice the bright blocks along the diagonal. Each one represents a chromosome or a large scaffold.",
       "expectedAction": {
         "type": "observe"
       },
@@ -27,7 +27,7 @@
     {
       "id": "count-blocks",
       "title": "Count the Chromosome Blocks",
-      "instruction": "Zoom back out and try to count the number of major chromosome blocks you see along the diagonal.\n\nThis will give you an estimate of how many chromosomes have been successfully assembled. Compare this to what you know about koala biology—do the numbers match?",
+      "instruction": "Zoom back out and try to count the number of major chromosome blocks you see along the diagonal.\n\nThis will give you an estimate of how many chromosomes have been successfully assembled. Compare this to what you know about koala biology. Do the numbers match?",
       "expectedAction": {
         "type": "observe"
       },
@@ -36,7 +36,7 @@
     {
       "id": "open-sidebar",
       "title": "Open the Sidebar",
-      "instruction": "Now let's look at the individual contigs that make up these chromosomes. Click the sidebar button (three horizontal lines) in the top-right corner to open the contig list.",
+      "instruction": "Now let's look at the individual contigs that make up these chromosomes. Click the Info button in the top-right toolbar to open the contig list.",
       "highlight": {
         "type": "ui-element",
         "selector": "#btn-sidebar"
@@ -44,7 +44,7 @@
       "expectedAction": {
         "type": "navigate"
       },
-      "hint": "The sidebar button is typically in the top-right corner of the interface. It shows a list icon (☰)."
+      "hint": "The Info button is in the top-right toolbar, just to the right of Tracks. Its keyboard shortcut is I."
     },
     {
       "id": "understand-contigs",
@@ -67,15 +67,15 @@
     {
       "id": "color-maps",
       "title": "Explore Color Maps",
-      "instruction": "The color scheme affects how you perceive contact frequencies. Try switching between different color maps using the dropdown menu.\n\nEach color map emphasizes different aspects of the data. Find one that makes the chromosome boundaries most clear to you.",
+      "instruction": "The color scheme affects how you perceive contact frequencies. Open the Display menu in the top toolbar, then switch the Color Map setting.\n\nEach color map emphasizes different aspects of the data. Find one that makes the chromosome boundaries most clear to you.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#colormap-select"
+        "selector": "#btn-display-menu"
       },
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "Common color maps include 'Viridis', 'Plasma', and 'Hot'. Try a few to see which you prefer."
+      "hint": "Available color maps include Viridis, Hot, Cool, and Grayscale. Try a few to see which you prefer."
     },
     {
       "id": "summary",

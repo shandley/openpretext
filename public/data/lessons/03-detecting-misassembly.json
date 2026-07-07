@@ -4,7 +4,7 @@
   "difficulty": "intermediate",
   "estimatedMinutes": 15,
   "specimenId": "finch",
-  "introduction": "Real-world genome assemblies often contain errors—regions where the assembler incorrectly joined DNA sequences. These misassemblies create distinctive patterns on Hi-C contact maps that you can learn to recognize.\n\nIn this lesson, you'll examine a genome assembly and learn to identify common misassembly patterns: inversions (butterfly patterns), anti-diagonal signals, and translocations (off-diagonal blocks). Detecting these errors is the first step in manual curation.",
+  "introduction": "Real-world genome assemblies often contain errors: regions where the assembler incorrectly joined DNA sequences. These misassemblies create distinctive patterns on Hi-C contact maps that you can learn to recognize.\n\nIn this lesson, you'll examine a genome assembly and learn to identify common misassembly patterns: inversions (butterfly patterns), anti-diagonal signals, and translocations (off-diagonal blocks). Detecting these errors is the first step in manual curation.",
   "steps": [
     {
       "id": "intro-misassembly",
@@ -53,7 +53,7 @@
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "Not every irregularity is a misassembly—some patterns reflect real biology like centromeres or heterochromatin. Look for clear, systematic deviations from the expected diagonal pattern."
+      "hint": "Not every irregularity is a misassembly. Some patterns reflect real biology like centromeres or heterochromatin. Look for clear, systematic deviations from the expected diagonal pattern."
     },
     {
       "id": "summary",

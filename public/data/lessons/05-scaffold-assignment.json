@@ -9,7 +9,7 @@
     {
       "id": "enter-scaffold-mode",
       "title": "Enter Scaffold Mode",
-      "instruction": "To work with scaffolds, switch to Scaffold mode using the mode selector in the toolbar.\n\nIn Scaffold mode, you can:\n• Create new scaffolds (chromosomes)\n• Assign contigs to scaffolds\n• Rename and color-code scaffolds\n• Reorder contigs within scaffolds\n\nScaffold mode also displays colored bands on the contact map, helping you visualize which contigs belong to which chromosome.",
+      "instruction": "To work with scaffolds, switch to Scaffold mode using the mode selector in the toolbar.\n\nIn Scaffold mode, you can:\n• Create scaffolds (chromosomes)\n• Paint contigs into a scaffold by clicking them on the map\n• Let OpenPretext auto-detect scaffolds from the contact map\n\nScaffold mode also displays colored bands on the contact map, helping you visualize which contigs belong to which chromosome.",
       "highlight": {
         "type": "ui-element",
         "selector": "#btn-mode-scaffold"
@@ -17,35 +17,35 @@
       "expectedAction": {
         "type": "mode-change"
       },
-      "hint": "Look for the 'Scaffold' option in the mode selector. It's typically next to 'View' and 'Edit' modes.",
+      "hint": "Look for the 'Scaffold' option in the mode selector, next to Navigate and Edit.",
       "autoAdvance": true
     },
     {
       "id": "create-scaffold",
       "title": "Create a New Scaffold",
-      "instruction": "Let's create your first scaffold. In the scaffold panel (usually on the right side), click the 'New Scaffold' or '+' button.\n\nGive your scaffold a meaningful name like 'Chromosome 1' or 'Chr1'. You can also assign it a color to make it visually distinct on the map.\n\nScaffolds serve as containers for grouping related contigs into chromosome-level assemblies.",
+      "instruction": "Let's create your first scaffold. In Scaffold mode, press the N key. A new scaffold appears in the Scaffolds section of the sidebar (open the sidebar with the Info button if it is hidden). It is named automatically (Scaffold 1, Scaffold 2, and so on) and given its own color.\n\nScaffolds are containers for grouping related contigs into chromosome-level assemblies. Tip: the 'Auto-assign Scaffolds' button in the Scaffolds panel can detect chromosome blocks for you as a starting point.",
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "The scaffold creation button is usually in the scaffold management panel. Look for a '+' or 'Add' button."
+      "hint": "Press N in Scaffold mode to create a scaffold. There is no separate button, and the scaffold is named and colored automatically."
     },
     {
       "id": "assign-contigs",
       "title": "Assign Contigs to Scaffold",
-      "instruction": "Now assign contigs to your new scaffold. There are several ways to do this:\n\n1. Select contigs in the map (click or Shift+click for multiple)\n2. Click 'Assign to Scaffold' and choose your scaffold\n3. The contigs will be grouped and colored accordingly\n\nTry assigning a few contigs that clearly belong to the same chromosome (look for contigs within the same diagonal block).",
+      "instruction": "Now assign contigs to your scaffold. With a scaffold active (the one you just created), click a contig on the contact map to paint it into that scaffold. Shift+click a painted contig to remove it again.\n\nEach painted contig takes on the scaffold's color. Try painting a few contigs that clearly belong to the same chromosome (look for contigs within the same diagonal block).",
       "expectedAction": {
-        "type": "select-contig"
+        "type": "observe"
       },
       "hint": "Start with contigs in one of the bright diagonal blocks. These likely form a complete chromosome."
     },
     {
       "id": "drag-mode",
       "title": "Use Drag Mode for Reordering",
-      "instruction": "You can reorder contigs within a scaffold using drag-and-drop. This is especially useful for fine-tuning the linear order to match the Hi-C signal.\n\nTo reorder:\n1. Make sure you're in a mode that allows dragging (Edit or Scaffold)\n2. Click and hold on a contig in the sidebar\n3. Drag it to a new position\n4. Release to drop it\n\nThe contact map updates immediately to show the new ordering.",
+      "instruction": "You can reorder contigs using drag-and-drop in the sidebar contig list. This is especially useful for fine-tuning the linear order to match the Hi-C signal.\n\nTo reorder:\n1. Switch to Edit mode (sidebar drag-reorder works in Edit mode)\n2. Click and hold a contig in the sidebar list\n3. Drag it to a new position\n4. Release to drop it\n\nThe contact map updates immediately to show the new ordering.",
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "Drag-and-drop works in the sidebar contig list. Try moving a contig up or down to see how the map changes."
+      "hint": "Sidebar drag-and-drop reordering works in Edit mode. Try moving a contig up or down to see how the map changes."
     },
     {
       "id": "reorder-contigs",

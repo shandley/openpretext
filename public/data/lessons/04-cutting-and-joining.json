@@ -4,12 +4,12 @@
   "difficulty": "intermediate",
   "estimatedMinutes": 20,
   "specimenId": "quail",
-  "introduction": "Now that you can identify misassemblies, it's time to learn how to fix them. The two fundamental curation operations are cutting (splitting a contig at a misassembly point) and joining (merging two contigs that should be connected).\n\nIn this lesson, you'll practice these operations on the quail genome. You'll also learn about undo/redo—essential safety features that let you experiment without fear of breaking the assembly.",
+  "introduction": "Now that you can identify misassemblies, it's time to learn how to fix them. The two fundamental curation operations are cutting (splitting a contig at a misassembly point) and joining (merging two contigs that should be connected).\n\nIn this lesson, you'll practice these operations on the quail genome. You'll also learn about undo and redo, the safety features that let you experiment without fear of breaking the assembly.",
   "steps": [
     {
       "id": "enter-edit-mode",
       "title": "Enter Edit Mode",
-      "instruction": "To modify the assembly, you need to switch from View mode to Edit mode. Click the \"Edit\" mode button in the toolbar.\n\nIn Edit mode, you can:\n• Cut contigs at misassembly points\n• Join adjacent contigs\n• Invert contig orientation\n• Reorder contigs\n\nLet's start with the basics: cutting and joining.",
+      "instruction": "To modify the assembly, you need to switch from Navigate mode to Edit mode. Click the \"Edit\" mode button in the toolbar.\n\nIn Edit mode, you can:\n• Cut contigs at misassembly points\n• Join adjacent contigs\n• Invert contig orientation\n• Reorder contigs\n\nLet's start with the basics: cutting and joining.",
       "highlight": {
         "type": "ui-element",
         "selector": "#btn-mode-edit"
@@ -17,59 +17,51 @@
       "expectedAction": {
         "type": "mode-change"
       },
-      "hint": "Look for the mode selector in the toolbar. Switch from 'View' to 'Edit'.",
+      "hint": "Look for the mode selector in the toolbar. Switch from Navigate to Edit.",
       "autoAdvance": true
     },
     {
       "id": "understand-cut",
       "title": "Understanding the Cut Tool",
-      "instruction": "The Cut tool splits a contig into two pieces at a specified position. Use this when you've identified a misassembly within a contig.\n\nTo cut a contig:\n1. Select the contig by clicking on it (it will highlight)\n2. Click the Cut button\n3. Choose where to split the contig\n\nThe cut creates two new contigs from the original one. The contact map updates immediately to reflect the new structure.",
+      "instruction": "The Cut tool splits a contig into two pieces at the point you choose. Use this when you've identified a misassembly within a contig.\n\nTo cut a contig, in Edit mode:\n1. Move the mouse over the contig, to the spot where you want to split it\n2. Press the C key\n\nThe split lands at the cursor's position along the contig, so aim before you press. You can't cut right at a contig's edge. The cut creates two new contigs from the original one, and the contact map updates immediately.",
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "Find a contig on the map that looks suspicious—perhaps one with an inversion pattern inside it."
+      "hint": "Find a contig on the map that looks suspicious, perhaps one with an inversion pattern inside it."
     },
     {
       "id": "practice-cut",
       "title": "Practice a Cut Operation",
-      "instruction": "Now try it yourself:\n\n1. Click on a contig in the map to select it\n2. Click the 'Cut' button in the toolbar\n3. Confirm the operation\n\nWatch how the contig splits and the map redraws. The sidebar will show two new contigs where there was one before.",
-      "highlight": {
-        "type": "ui-element",
-        "selector": "#btn-mode-edit"
-      },
+      "instruction": "Now try it yourself, in Edit mode:\n\n1. Move the mouse over a contig, at the point where you want to split it\n2. Press the C key\n\nWatch how the contig splits and the map redraws. The sidebar will show two new contigs where there was one before.",
       "expectedAction": {
         "type": "cut"
       },
-      "hint": "Select any contig and use the Cut tool. Don't worry—you can undo this in the next step!",
+      "hint": "Hover over one of the large diagonal blocks and press C. Very small contigs can't be split, so pick a big one. Don't worry, you can undo this in the next step!",
       "autoAdvance": true
     },
     {
       "id": "understand-join",
       "title": "Understanding the Join Tool",
-      "instruction": "The Join tool does the opposite—it merges two adjacent contigs into a single contig. Use this when the assembler incorrectly split a continuous sequence.\n\nTo join contigs:\n1. Select two adjacent contigs (hold Shift and click each one)\n2. Click the Join button\n3. Confirm the operation\n\nThe two contigs become one, and the boundary between them disappears.",
+      "instruction": "The Join tool does the opposite: it merges two adjacent contigs into a single contig. Use this when the assembler incorrectly split a continuous sequence.\n\nTo join contigs, in Edit mode:\n1. Click a contig to select it, then Shift+click the adjacent contig\n2. Press the J key\n\nThe two contigs become one, and the boundary between them disappears. Selecting a single contig and pressing J joins it with its right-hand neighbor.",
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "Look for two adjacent contigs with strong contact signal between them—these are good candidates for joining."
+      "hint": "Look for two adjacent contigs with strong contact signal between them. These are good candidates for joining."
     },
     {
       "id": "practice-join",
       "title": "Practice a Join Operation",
-      "instruction": "Try joining two contigs:\n\n1. Click on one contig to select it\n2. Hold Shift and click an adjacent contig (both should be highlighted)\n3. Click the 'Join' button in the toolbar\n4. Confirm the operation\n\nWatch the two contigs merge into one. The contact map will update to show the new unified sequence.",
-      "highlight": {
-        "type": "ui-element",
-        "selector": "#btn-mode-edit"
-      },
+      "instruction": "Try joining two contigs, in Edit mode:\n\n1. Click one contig to select it\n2. Hold Shift and click an adjacent contig (both should be highlighted)\n3. Press the J key\n\nWatch the two contigs merge into one. The contact map will update to show the new unified sequence.",
       "expectedAction": {
         "type": "join"
       },
-      "hint": "You need to select exactly two adjacent contigs before the Join button will activate.",
+      "hint": "Select two adjacent contigs (or just one, to join it with its right neighbor), then press J.",
       "autoAdvance": true
     },
     {
       "id": "undo-operation",
       "title": "Undo Your Changes",
-      "instruction": "Made a mistake? No problem! OpenPretext maintains a full undo history.\n\nClick the Undo button (or press Ctrl+Z / Cmd+Z) to reverse your last operation. The assembly will return to its previous state.\n\nUndo is unlimited—you can step backward through your entire curation session.",
+      "instruction": "Made a mistake? No problem! OpenPretext maintains a full undo history.\n\nClick the Undo button (or press Ctrl+Z / Cmd+Z) to reverse your last operation. The assembly will return to its previous state.\n\nUndo history holds up to 200 operations, so you can step back through your recent work.",
       "highlight": {
         "type": "ui-element",
         "selector": "#btn-undo"
@@ -99,7 +91,7 @@
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "The best way to learn is by doing. Don't be afraid to experiment—you can always undo!"
+      "hint": "The best way to learn is by doing. Don't be afraid to experiment, you can always undo!"
     }
   ],
   "assessment": null

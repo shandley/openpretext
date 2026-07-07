@@ -4,7 +4,7 @@
     {
       "id": "clean-diagonal",
       "title": "Strong Diagonal",
-      "description": "A bright, continuous line running from top-left to bottom-right. This is the normal intra-chromosomal Hi-C signal — contigs within the same chromosome show strong contact frequency along the diagonal.",
+      "description": "A bright, continuous line running from top-left to bottom-right. This is the normal intra-chromosomal Hi-C signal. Contigs within the same chromosome show strong contact frequency along the diagonal.",
       "whatToLookFor": "Bright continuous diagonal line with gradual fade-off perpendicular to the diagonal.",
       "specimenId": "koala",
       "exampleRegion": { "x1": 0.0, "y1": 0.0, "x2": 0.15, "y2": 0.15 }
@@ -12,7 +12,7 @@
     {
       "id": "chromosome-block",
       "title": "Chromosome Block",
-      "description": "Square blocks along the diagonal, each representing one chromosome. Within a block, contigs have high mutual contact frequency. Between blocks, contact is much lower — this is how Hi-C reveals chromosome boundaries.",
+      "description": "Square blocks along the diagonal, each representing one chromosome. Within a block, contigs have high mutual contact frequency. Between blocks, contact is much lower, which is how Hi-C reveals chromosome boundaries.",
       "whatToLookFor": "Distinct square regions of bright signal along the diagonal, separated by darker gaps.",
       "specimenId": "wrasse",
       "exampleRegion": { "x1": 0.0, "y1": 0.0, "x2": 0.3, "y2": 0.3 }

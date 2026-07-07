@@ -4,12 +4,12 @@
   "difficulty": "beginner",
   "estimatedMinutes": 10,
   "specimenId": "wrasse",
-  "introduction": "Welcome to your first lesson in genome assembly curation! In this lesson, you'll learn how to read and interpret a Hi-C contact map. Hi-C maps visualize the 3D proximity of different genomic regions—brighter pixels indicate DNA sequences that are physically close to each other in the cell nucleus.\n\nYou'll explore the wrasse genome and learn to identify key features like the diagonal, chromosome blocks, and use the navigation tools. Take your time and get comfortable with the interface.",
+  "introduction": "Welcome to your first lesson in genome assembly curation! In this lesson, you'll learn how to read and interpret a Hi-C contact map. Hi-C maps visualize the 3D proximity of different genomic regions. Brighter pixels indicate DNA sequences that are physically close to each other in the cell nucleus.\n\nYou'll explore the wrasse genome and learn to identify key features like the diagonal, chromosome blocks, and use the navigation tools. Take your time and get comfortable with the interface.",
   "steps": [
     {
       "id": "welcome",
       "title": "Welcome to the Contact Map",
-      "instruction": "You're looking at a Hi-C contact map of the wrasse genome. Each pixel represents the interaction frequency between two genomic positions. Brighter colors mean those regions are physically close in 3D space inside the nucleus.\n\nThe map is symmetric across the diagonal—the top-right triangle mirrors the bottom-left. We'll explore what these patterns mean.",
+      "instruction": "You're looking at a Hi-C contact map of the wrasse genome. Each pixel represents the interaction frequency between two genomic positions. Brighter colors mean those regions are physically close in 3D space inside the nucleus.\n\nThe map is symmetric across the diagonal, so the top-right triangle mirrors the bottom-left. We'll explore what these patterns mean.",
       "expectedAction": {
         "type": "observe"
       },
@@ -28,7 +28,7 @@
     {
       "id": "understand-diagonal",
       "title": "The Diagonal Line",
-      "instruction": "The bright diagonal line you see represents each genomic position interacting with itself. This is always the brightest signal because a DNA sequence is always closest to itself.\n\nThe square blocks along the diagonal are chromosome territories—regions that interact strongly within themselves but less with other regions.",
+      "instruction": "The bright diagonal line you see represents each genomic position interacting with itself. This is always the brightest signal because a DNA sequence is always closest to itself.\n\nThe square blocks along the diagonal are chromosome territories: regions that interact strongly within themselves but less with other regions.",
       "expectedAction": {
         "type": "observe"
       },
@@ -56,10 +56,10 @@
     {
       "id": "use-minimap",
       "title": "Navigate with the Minimap",
-      "instruction": "Notice the small overview map in the corner? That's the minimap. It shows your current viewport as a white rectangle.\n\nClick anywhere in the minimap to jump to that region instantly. Try it now—click on different parts of the minimap.",
+      "instruction": "Notice the small overview map in the corner? That's the minimap. It shows your current viewport as a white rectangle.\n\nClick anywhere in the minimap to jump to that region instantly. Try it now, clicking on different parts of the minimap.",
       "highlight": {
         "type": "ui-element",
-        "selector": "#btn-minimap"
+        "selector": "#minimap-canvas"
       },
       "expectedAction": {
         "type": "observe"
