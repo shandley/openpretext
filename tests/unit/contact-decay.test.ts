@@ -176,6 +176,38 @@ describe('computeContactDecay', () => {
     expect(sparse.distances.length).toBeLessThan(minFitPoints);
     expect(Number.isNaN(sparse.decayExponent)).toBe(true);
   });
+
+  it('honors minCountForFit: filters low-support distances from the fit only', () => {
+    // Single 64px contig → maxD=32, counts[d] = 64 - d. minCountForFit=60 keeps
+    // only d=1..4 for the fit (4 points < minFitPoints=5) → not-fitted, but the
+    // raw curve (all ~32 distances) is still returned for plotting.
+    const size = 64;
+    const map = makePowerLawMap(size, -1.0);
+    const result = computeContactDecay(map, size, singleContigRange(size), { minCountForFit: 60 });
+    expect(result.distances.length).toBeGreaterThan(20);
+    expect(Number.isNaN(result.decayExponent)).toBe(true);
+  });
+
+  it('default minCountForFit does not filter a well-supported dense map', () => {
+    // counts[d] = 128 - d ≥ 64 for all computed d, so the default 10 excludes
+    // nothing — the dense fit is unchanged.
+    const map = makePowerLawMap(128, -1.0);
+    const result = computeContactDecay(map, 128, singleContigRange(128));
+    expect(result.decayExponent).toBeCloseTo(-1.0, 0);
+    expect(result.rSquared).toBeGreaterThan(0.9);
+  });
+
+  it('logbin fit method recovers the exponent and is opt-in (default stays linear)', () => {
+    const map = makePowerLawMap(128, -1.0);
+    const linear = computeContactDecay(map, 128, singleContigRange(128));
+    const logbin = computeContactDecay(map, 128, singleContigRange(128), { fitMethod: 'logbin' });
+    expect(logbin.decayExponent).toBeCloseTo(-1.0, 0);
+    expect(Number.isFinite(logbin.rSquared)).toBe(true);
+    // Omitting fitMethod must equal explicit 'linear' (no silent redefinition).
+    const explicitLinear = computeContactDecay(map, 128, singleContigRange(128), { fitMethod: 'linear' });
+    expect(linear.decayExponent).toBe(explicitLinear.decayExponent);
+    expect(linear.rSquared).toBe(explicitLinear.rSquared);
+  });
 });
 
 // ---------------------------------------------------------------------------

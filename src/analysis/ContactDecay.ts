@@ -12,7 +12,7 @@
  */
 
 import {
-  computeIntraDiagonalProfile,
+  computeIntraDiagonalProfileWithCounts,
   type ContigRange,
 } from '../curation/AutoSort';
 
@@ -33,6 +33,20 @@ export interface ContactDecayParams {
    * spurious value. Default: 5.
    */
   minFitPoints: number;
+  /**
+   * How to fit the exponent in log-log space.
+   * - `'linear'` (default): ordinary least squares over every qualifying
+   *   distance. Simple, but the many noisy large-distance points dominate the
+   *   slope (there are far more of them than short-distance points).
+   * - `'logbin'`: aggregate distances into log-spaced (geometric) bins,
+   *   count-weighted within each bin, then OLS over the bins so each part of
+   *   the distance range contributes comparably. This is the Hi-C field
+   *   convention, but it redefines the metric — it systematically raises R²
+   *   by averaging out tail noise and can compress cross-sample R² spread.
+   *   Opt-in so that change is a deliberate, validated choice, not a silent
+   *   swap. Default: `'linear'`.
+   */
+  fitMethod: 'linear' | 'logbin';
 }
 
 /** Default minimum distinct distances required for a trustworthy P(s) fit. */
@@ -131,32 +145,45 @@ export function computeContactDecay(
   params?: Partial<ContactDecayParams>,
 ): ContactDecayResult {
   const maxD = params?.maxDistance ?? Math.min(Math.floor(size / 2), 500);
-  const _minCount = params?.minCountForFit ?? 10;
+  const minCount = params?.minCountForFit ?? 10;
   const minFitPoints = params?.minFitPoints ?? DEFAULT_MIN_FIT_POINTS;
+  const fitMethod = params?.fitMethod ?? 'linear';
 
   if (size === 0 || contigRanges.length === 0) {
     return notFitted(maxD);
   }
 
-  const profile = computeIntraDiagonalProfile(contactMap, size, contigRanges, maxD);
+  const { profile, counts } = computeIntraDiagonalProfileWithCounts(
+    contactMap, size, contigRanges, maxD,
+  );
 
-  // Collect non-zero distances and their mean contacts
+  // Full raw curve (every observed distance) — returned as-is for plotting so
+  // the chart stays faithful. The fit uses only the well-supported subset.
   const distArr: number[] = [];
   const contArr: number[] = [];
+  // Fit subset: distances backed by at least `minCount` pixel pairs, so a mean
+  // from one or two noisy pairs can't steer the slope.
+  const fitDist: number[] = [];
+  const fitCont: number[] = [];
+  const fitCounts: number[] = [];
   for (let d = 1; d <= maxD; d++) {
     if (profile[d] > 0) {
       distArr.push(d);
       contArr.push(profile[d]);
+      if (counts[d] >= minCount) {
+        fitDist.push(d);
+        fitCont.push(profile[d]);
+        fitCounts.push(counts[d]);
+      }
     }
   }
 
-  // Log-transform
   const logDist = distArr.map(d => Math.log10(d));
   const logCont = contArr.map(c => Math.log10(c));
 
-  // Too few points to trust the log-log fit — keep the data (so the curve can
-  // still be plotted) but report the fit as not-fitted rather than spurious.
-  if (distArr.length < minFitPoints) {
+  // Too few well-supported points to trust the log-log fit — keep the data (so
+  // the curve can still be plotted) but report the fit as not-fitted.
+  if (fitDist.length < minFitPoints) {
     return notFitted(
       maxD,
       Float64Array.from(distArr),
@@ -166,8 +193,10 @@ export function computeContactDecay(
     );
   }
 
-  // Linear regression in log-log space
-  const { slope, rSquared } = linearRegression(logDist, logCont);
+  const { slope, rSquared } =
+    fitMethod === 'logbin'
+      ? fitLogBinned(fitDist, fitCont, fitCounts)
+      : linearRegression(fitDist.map(d => Math.log10(d)), fitCont.map(c => Math.log10(c)));
 
   return {
     distances: Float64Array.from(distArr),
@@ -178,6 +207,43 @@ export function computeContactDecay(
     rSquared,
     maxDistance: maxD,
   };
+}
+
+/**
+ * Fit the decay exponent over log-spaced (geometric) distance bins so the many
+ * noisy large-distance points don't dominate the slope. Within each bin the
+ * position and contact level are count-weighted means (in log10 space, i.e. a
+ * geometric mean of contacts); the bins are then fit by OLS. Each bin carries
+ * equal weight in the final fit, which is the point — every part of the
+ * distance range contributes comparably regardless of how many raw distances
+ * fall in it.
+ */
+function fitLogBinned(
+  dist: number[],
+  cont: number[],
+  counts: number[],
+  binsPerDecade = 10,
+): { slope: number; rSquared: number } {
+  const bins = new Map<number, { wLogD: number; wLogC: number; wSum: number }>();
+  for (let i = 0; i < dist.length; i++) {
+    const w = counts[i];
+    if (w <= 0) continue;
+    const key = Math.floor(Math.log10(dist[i]) * binsPerDecade);
+    const b = bins.get(key) ?? { wLogD: 0, wLogC: 0, wSum: 0 };
+    b.wLogD += w * Math.log10(dist[i]);
+    b.wLogC += w * Math.log10(cont[i]);
+    b.wSum += w;
+    bins.set(key, b);
+  }
+
+  const x: number[] = [];
+  const y: number[] = [];
+  for (const b of bins.values()) {
+    x.push(b.wLogD / b.wSum);
+    y.push(b.wLogC / b.wSum);
+  }
+
+  return linearRegression(x, y);
 }
 
 /**

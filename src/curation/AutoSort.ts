@@ -91,12 +91,24 @@ const DEFAULT_PARAMS: AutoSortParams = {
  * @returns Float64Array of length maxD+1 where profile[d] is the average
  *          intensity at diagonal distance d.
  */
-export function computeIntraDiagonalProfile(
+export interface IntraDiagonalProfile {
+  /** Mean intra-contig contact intensity at each diagonal distance (index = d). */
+  profile: Float64Array;
+  /** Number of pixel pairs contributing to each distance (index = d). */
+  counts: Float64Array;
+}
+
+/**
+ * Compute the per-distance mean intra-contig contact intensity together with
+ * the pair counts that produced each mean. The counts let callers weight or
+ * filter distances by how much support they have (e.g. P(s) fitting).
+ */
+export function computeIntraDiagonalProfileWithCounts(
   contactMap: Float32Array,
   size: number,
   contigRanges: ContigRange[],
   maxD: number,
-): Float64Array {
+): IntraDiagonalProfile {
   const sums = new Float64Array(maxD + 1);
   const counts = new Float64Array(maxD + 1);
 
@@ -119,7 +131,17 @@ export function computeIntraDiagonalProfile(
     profile[d] = counts[d] > 0 ? sums[d] / counts[d] : 0;
   }
 
-  return profile;
+  return { profile, counts };
+}
+
+/** Mean intra-contig contact intensity at each diagonal distance (index = d). */
+export function computeIntraDiagonalProfile(
+  contactMap: Float32Array,
+  size: number,
+  contigRanges: ContigRange[],
+  maxD: number,
+): Float64Array {
+  return computeIntraDiagonalProfileWithCounts(contactMap, size, contigRanges, maxD).profile;
 }
 
 // ---------------------------------------------------------------------------
