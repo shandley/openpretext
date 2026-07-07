@@ -471,7 +471,7 @@ async function runKRNormalization(ctx: AppContext): Promise<void> {
   ctx.trackRenderer.addTrack(track);
   ctx.tracksVisible = true;
   ctx.updateTrackConfigPanel();
-  ctx.showToast(`KR: ${result.iterations} iterations, ${result.maskedBins.length} masked bins`);
+  ctx.showToast(`Sinkhorn-Knopp: ${result.iterations} iterations, ${result.maskedBins.length} masked bins`);
 
   // Re-run compartments on normalized matrix if already computed
   if (cachedCompartments) {
@@ -485,7 +485,7 @@ async function runKRNormalization(ctx: AppContext): Promise<void> {
   // Re-run P(s) decay on normalized matrix if already computed
   if (cachedDecay) {
     await runDecay(ctx);
-    ctx.showToast('P(s) recomputed on KR-normalized map');
+    ctx.showToast('P(s) recomputed on Sinkhorn-Knopp-normalized map');
   }
 
   updateResultsDisplay(ctx);
@@ -1054,7 +1054,7 @@ function updateResultsDisplay(ctx: AppContext): void {
 
   // KR normalization status
   if (cachedKR) {
-    html += `<div class="stats-row"><span>KR Normalization</span><span style="color:#ff7675;">${cachedKR.iterations} iters, ${cachedKR.maskedBins.length} masked</span></div>`;
+    html += `<div class="stats-row"><span>Sinkhorn-Knopp</span><span style="color:#ff7675;">${cachedKR.iterations} iters, ${cachedKR.maskedBins.length} masked</span></div>`;
   }
 
   // Telomere detection status
@@ -1190,7 +1190,7 @@ function updateResultsDisplay(ctx: AppContext): void {
       exportHtml += `<button class="analysis-btn" id="btn-export-compartments"${!cachedCompartments ? ' disabled title="Run analysis first"' : ''}>Compartments <span class="export-fmt">(BedGraph)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-di"${!cachedDI ? ' disabled title="Run analysis first"' : ''}>DI <span class="export-fmt">(BedGraph)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-ice"${!cachedICE ? ' disabled title="Run analysis first"' : ''}>ICE Bias <span class="export-fmt">(BedGraph)</span></button>`;
-      exportHtml += `<button class="analysis-btn" id="btn-export-kr"${!cachedKR ? ' disabled title="Run analysis first"' : ''}>KR Bias <span class="export-fmt">(BedGraph)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-kr"${!cachedKR ? ' disabled title="Run analysis first"' : ''}>SK Bias <span class="export-fmt">(BedGraph)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-quality"${!cachedQuality ? ' disabled title="Run analysis first"' : ''}>Quality <span class="export-fmt">(TSV)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-saddle"${!cachedSaddle ? ' disabled title="Run analysis first"' : ''}>Saddle <span class="export-fmt">(TSV)</span></button>`;
       exportEl.innerHTML = exportHtml || '<div style="color: var(--text-secondary); font-size: 11px;">Run analyses first to enable export.</div>';
@@ -1243,7 +1243,7 @@ function updateResultsDisplay(ctx: AppContext): void {
   document.getElementById('btn-export-kr')?.addEventListener('click', () => {
     if (cachedKR) {
       downloadKRBiasBedGraph(cachedKR, s, overviewSize);
-      ctx.showToast('KR Bias BedGraph exported');
+      ctx.showToast('SK Bias BedGraph exported');
     }
   });
   document.getElementById('btn-export-quality')?.addEventListener('click', () => {
@@ -1527,7 +1527,7 @@ export function exportAnalysisByKey(ctx: AppContext, key: string): boolean {
     case 'kr':
       if (!cachedKR) return false;
       downloadKRBiasBedGraph(cachedKR, s, overviewSize);
-      ctx.showToast('KR Bias BedGraph exported');
+      ctx.showToast('SK Bias BedGraph exported');
       return true;
     case 'quality':
       if (!cachedQuality) return false;
@@ -2120,7 +2120,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       <button class="analysis-btn" id="btn-compute-directionality" style="margin-bottom:2px;width:100%;">Directionality</button>
       <button class="analysis-btn" id="btn-compute-quality" style="margin-bottom:2px;width:100%;">Library Quality</button>
       <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:2px;width:100%;background:#6c5ce7;color:#fff;">Normalize (ICE)</button>
-      <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (KR)</button>
+      <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (Sinkhorn-Knopp)</button>
       <div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;">
         <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
           <label for="ml-backend" style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">ML backend</label>
@@ -2633,7 +2633,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   ctx.trackRenderer.removeTrack('A/B Compartments');
   ctx.trackRenderer.removeTrack('Misassembly Flags');
   ctx.trackRenderer.removeTrack('ICE Bias');
-  ctx.trackRenderer.removeTrack('KR Bias');
+  ctx.trackRenderer.removeTrack('SK Bias');
   ctx.trackRenderer.removeTrack('Directionality Index');
   ctx.trackRenderer.removeTrack('DI Boundaries');
   ctx.trackRenderer.removeTrack('Per-Contig Cis Ratio');

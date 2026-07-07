@@ -214,7 +214,7 @@ export function exportICEBiasBedGraph(
 }
 
 /**
- * Export KR bias vector as BedGraph.
+ * Export the Sinkhorn-Knopp bias vector as BedGraph.
  */
 export function exportKRBiasBedGraph(
   result: KRResult,
@@ -222,7 +222,7 @@ export function exportKRBiasBedGraph(
   overviewSize: number,
 ): string {
   const pixelMap = buildPixelToContigMap(appState, overviewSize);
-  return formatAnalysisBedGraph('KR Bias', result.biasVector, pixelMap);
+  return formatAnalysisBedGraph('SK Bias', result.biasVector, pixelMap);
 }
 
 /**

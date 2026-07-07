@@ -140,7 +140,7 @@ function getCommands(ctx: AppContext) {
     { name: 'Export Compartments BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'compartments') },
     { name: 'Export Directionality BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'di') },
     { name: 'Export ICE Bias BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'ice') },
-    { name: 'Export KR Bias BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'kr') },
+    { name: 'Export SK Bias BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'kr') },
     { name: 'Export Quality TSV', shortcut: '', action: () => exportAnalysisByKey(ctx, 'quality') },
     { name: 'Export Saddle TSV', shortcut: '', action: () => exportAnalysisByKey(ctx, 'saddle') },
   ];

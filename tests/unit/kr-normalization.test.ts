@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  knightRuiz,
+  sinkhornKnoppBalance,
   computeKRNormalization,
   krToTrack,
 } from '../../src/analysis/KRNormalization';
@@ -63,13 +63,13 @@ function symMatrix(size: number, values: number[]): Float32Array {
 }
 
 // ---------------------------------------------------------------------------
-// knightRuiz
+// sinkhornKnoppBalance
 // ---------------------------------------------------------------------------
 
-describe('knightRuiz', () => {
+describe('sinkhornKnoppBalance', () => {
   it('handles empty matrix', () => {
     const m = new Float32Array(0);
-    const result = knightRuiz(m, 0, new Set(), 10, 1e-4);
+    const result = sinkhornKnoppBalance(m, 0, new Set(), 10, 1e-4);
     expect(result.biasVector.length).toBe(0);
     // With no active bins, maxDev stays 0 so the loop breaks after 1 iteration
     expect(result.iterations).toBe(1);
@@ -79,7 +79,7 @@ describe('knightRuiz', () => {
   it('identity matrix is already balanced — converges in 1 iteration', () => {
     const size = 4;
     const m = buildIdentity(size);
-    const result = knightRuiz(m, size, new Set(), 200, 1e-6);
+    const result = sinkhornKnoppBalance(m, size, new Set(), 200, 1e-6);
     // Each row already sums to 1, so should converge immediately
     expect(result.maxDeviation).toBeLessThan(1e-6);
     expect(result.iterations).toBeLessThanOrEqual(2);
@@ -92,7 +92,7 @@ describe('knightRuiz', () => {
   it('converges for uniform matrix', () => {
     const size = 4;
     const m = buildUniformMap(size, 1);
-    const result = knightRuiz(m, size, new Set(), 50, 1e-4);
+    const result = sinkhornKnoppBalance(m, size, new Set(), 50, 1e-4);
     expect(result.maxDeviation).toBeLessThan(1e-3);
     // After normalization, rows should sum to ~1
     for (let i = 0; i < size; i++) {
@@ -106,7 +106,7 @@ describe('knightRuiz', () => {
     // Upper-triangle: [2, 1, 3, 4, 2, 5] for 3x3
     const size = 3;
     const m = symMatrix(size, [2, 1, 3, 4, 2, 5]);
-    const result = knightRuiz(m, size, new Set(), 200, 1e-6);
+    const result = sinkhornKnoppBalance(m, size, new Set(), 200, 1e-6);
     expect(result.maxDeviation).toBeLessThan(1e-4);
     for (let i = 0; i < size; i++) {
       let s = 0;
@@ -119,7 +119,7 @@ describe('knightRuiz', () => {
     const size = 4;
     const m = buildUniformMap(size, 1);
     const masked = new Set([0, 2]);
-    const result = knightRuiz(m, size, masked, 50, 1e-4);
+    const result = sinkhornKnoppBalance(m, size, masked, 50, 1e-4);
     expect(result.biasVector[0]).toBe(1.0);
     expect(result.biasVector[2]).toBe(1.0);
   });
@@ -127,14 +127,14 @@ describe('knightRuiz', () => {
   it('respects maxIterations', () => {
     const size = 4;
     const m = buildDiagonalDecay(size);
-    const result = knightRuiz(m, size, new Set(), 3, 1e-15);
+    const result = sinkhornKnoppBalance(m, size, new Set(), 3, 1e-15);
     expect(result.iterations).toBe(3);
   });
 
   it('reports correct iteration count', () => {
     const size = 6;
     const m = buildDiagonalDecay(size);
-    const result = knightRuiz(m, size, new Set(), 100, 1e-6);
+    const result = sinkhornKnoppBalance(m, size, new Set(), 100, 1e-6);
     expect(result.iterations).toBeGreaterThan(0);
     expect(result.iterations).toBeLessThanOrEqual(100);
   });
@@ -143,11 +143,11 @@ describe('knightRuiz', () => {
     const size = 8;
     // Run for 2 iterations
     const m1 = buildDiagonalDecay(size);
-    const res2 = knightRuiz(m1, size, new Set(), 2, 1e-15);
+    const res2 = sinkhornKnoppBalance(m1, size, new Set(), 2, 1e-15);
 
     // Run for 20 iterations
     const m2 = buildDiagonalDecay(size);
-    const res20 = knightRuiz(m2, size, new Set(), 20, 1e-15);
+    const res20 = sinkhornKnoppBalance(m2, size, new Set(), 20, 1e-15);
 
     expect(res20.maxDeviation).toBeLessThan(res2.maxDeviation);
   });
@@ -155,7 +155,7 @@ describe('knightRuiz', () => {
   it('empty masked set — all bins active', () => {
     const size = 4;
     const m = buildDiagonalDecay(size);
-    const result = knightRuiz(m, size, new Set(), 50, 1e-4);
+    const result = sinkhornKnoppBalance(m, size, new Set(), 50, 1e-4);
     expect(result.maxDeviation).toBeLessThan(1e-3);
     // All bias values should have been modified
     for (let i = 0; i < size; i++) {
@@ -168,7 +168,7 @@ describe('knightRuiz', () => {
     const m = buildUniformMap(size, 5);
     const original = Float32Array.from(m);
     const masked = new Set([0, 1, 2]);
-    const result = knightRuiz(m, size, masked, 50, 1e-4);
+    const result = sinkhornKnoppBalance(m, size, masked, 50, 1e-4);
     // Bias vector should remain all 1s
     for (let i = 0; i < size; i++) {
       expect(result.biasVector[i]).toBe(1.0);
@@ -180,7 +180,7 @@ describe('knightRuiz', () => {
   it('produces positive bias values for all active bins', () => {
     const size = 6;
     const m = buildDiagonalDecay(size);
-    const result = knightRuiz(m, size, new Set(), 50, 1e-4);
+    const result = sinkhornKnoppBalance(m, size, new Set(), 50, 1e-4);
     for (let i = 0; i < size; i++) {
       expect(result.biasVector[i]).toBeGreaterThan(0);
     }
@@ -189,7 +189,7 @@ describe('knightRuiz', () => {
   it('converges for diagonal-decay matrix', () => {
     const size = 8;
     const m = buildDiagonalDecay(size);
-    const result = knightRuiz(m, size, new Set(), 100, 1e-4);
+    const result = sinkhornKnoppBalance(m, size, new Set(), 100, 1e-4);
     expect(result.maxDeviation).toBeLessThan(1e-3);
   });
 });
@@ -410,12 +410,12 @@ describe('computeKRNormalization', () => {
 // ---------------------------------------------------------------------------
 
 describe('krToTrack', () => {
-  it('returns correct track config name "KR Bias"', () => {
+  it('returns correct track config name "SK Bias"', () => {
     const result = computeKRNormalization(buildDiagonalDecay(8), 8, {
       sparseFilterQuantile: 0,
     });
     const track = krToTrack(result, 8, 16);
-    expect(track.name).toBe('KR Bias');
+    expect(track.name).toBe('SK Bias');
   });
 
   it('returns correct color #ff7675', () => {

@@ -5,6 +5,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+- **P(s) decay R² no longer reports spurious perfect fits.** A curve with too
+  few supporting distances (e.g. a small scaffold with 2 non-zero distances) fit
+  2 points and returned R²=1.0 by construction. It is now reported as not-fitted
+  (NaN, shown as "—") when fewer than 5 well-supported distances back it, and
+  the previously dead `minCountForFit` now filters low-support distances from the
+  fit. Added an opt-in log-binned `fitMethod` for evaluation; the default stays
+  the linear fit.
+- **"KR" normalization relabeled to Sinkhorn-Knopp — it was never Knight-Ruiz.**
+  The `KRNormalization` module implements symmetric Sinkhorn-Knopp iterative
+  matrix balancing, not the Knight-Ruiz (2013) algorithm it was named and cited
+  for. The false citation is removed, the internal function is renamed
+  `sinkhornKnoppBalance`, and all user-facing labels now read "Sinkhorn-Knopp" /
+  "SK Bias". Internal symbol names and the `kr` session key keep the abbreviation
+  for backward compatibility. Numeric behavior is unchanged.
+
 ### Changed
 - **Toolbar reorganized to fit without horizontal scroll.** ~21 controls in one
   strip overflowed on typical laptop widths (the toolbar scrolled with a hidden

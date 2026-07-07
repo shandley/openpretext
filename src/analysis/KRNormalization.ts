@@ -1,14 +1,23 @@
 /**
- * KRNormalization — Knight-Ruiz matrix balancing for Hi-C contact maps.
+ * KRNormalization — symmetric Sinkhorn-Knopp matrix balancing for Hi-C
+ * contact maps.
  *
- * Implements the Knight-Ruiz algorithm (Knight & Ruiz 2013):
+ * This is iterative matrix balancing (Sinkhorn-Knopp), NOT the Knight-Ruiz
+ * (2013) Newton/conjugate-gradient algorithm despite the historical "KR"
+ * naming. It was previously mislabeled as Knight-Ruiz; the exported symbol
+ * names, the `kr` session key, and the `'kr'` analysis key keep the "KR"
+ * abbreviation for backward compatibility only. Do not re-introduce a
+ * Knight-Ruiz citation for this code.
+ *
+ * Algorithm:
  * 1. Compute row sums, mask bins below a low-coverage quantile
- * 2. Iteratively: x_new = x * sqrt(rowSum), apply correction ratio x_new/x
+ * 2. Iteratively: x *= sqrt(rowSum), divide entries by the ratio outer product
  * 3. Converge when max |rowSum - 1| < epsilon
  *
- * Key difference from ICE: KR uses x_new = x * sqrt(rowSum) and applies the
- * correction as a ratio x_new/x, converging faster than ICE's direct
- * bias = sqrt(rowSum) approach.
+ * This is the same family as the ICE module (`ICENormalization`, Imakaev et al.
+ * 2012). The two differ only in the update form (this accumulates the bias
+ * multiplicatively; ICE recomputes bias = sqrt(rowSum) each pass) and in the
+ * default iteration/epsilon settings — not a fundamentally distinct algorithm.
  *
  * Pure algorithm — no DOM dependencies.
  */
@@ -49,16 +58,16 @@ const DEFAULT_PARAMS: KRParams = {
 };
 
 // ---------------------------------------------------------------------------
-// Knight-Ruiz iteration
+// Sinkhorn-Knopp balancing iteration
 // ---------------------------------------------------------------------------
 
 /**
- * Perform Knight-Ruiz iterative matrix balancing.
+ * Perform symmetric Sinkhorn-Knopp iterative matrix balancing.
  *
  * Modifies matrix in place. Returns bias vector and convergence info.
  * Masked bins are excluded from balancing (their scaling stays at 1).
  */
-export function knightRuiz(
+export function sinkhornKnoppBalance(
   matrix: Float32Array,
   size: number,
   maskedBins: Set<number>,
@@ -138,7 +147,8 @@ export function knightRuiz(
 // ---------------------------------------------------------------------------
 
 /**
- * Compute KR-normalized contact matrix.
+ * Compute the Sinkhorn-Knopp-balanced contact matrix. (Kept the `KR` name for
+ * backward compatibility; see the module header.)
  */
 export function computeKRNormalization(
   contactMap: Float32Array,
@@ -171,7 +181,7 @@ export function computeKRNormalization(
   const maskedBins = filterLowCoverageBins(rowSums, p.sparseFilterQuantile);
   const maskedSet = new Set(maskedBins);
 
-  // Step 3: Zero out masked bins, then run Knight-Ruiz in place
+  // Step 3: Zero out masked bins, then run Sinkhorn-Knopp balancing in place
   for (const bin of maskedBins) {
     for (let j = 0; j < size; j++) {
       normalizedMatrix[bin * size + j] = 0;
@@ -179,7 +189,7 @@ export function computeKRNormalization(
     }
   }
 
-  const { biasVector, iterations, maxDeviation } = knightRuiz(
+  const { biasVector, iterations, maxDeviation } = sinkhornKnoppBalance(
     normalizedMatrix,
     size,
     maskedSet,
@@ -207,7 +217,7 @@ export function computeKRNormalization(
 // ---------------------------------------------------------------------------
 
 /**
- * Convert KR bias vector to a track for display.
+ * Convert the Sinkhorn-Knopp bias vector to a track for display.
  * Shows per-bin bias values as a line track.
  */
 export function krToTrack(
@@ -234,7 +244,7 @@ export function krToTrack(
   }
 
   return {
-    name: 'KR Bias',
+    name: 'SK Bias',
     type: 'line',
     data,
     color: '#ff7675',
