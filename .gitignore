@@ -8,3 +8,4 @@ coverage/
 *.png
 bench/data/
 .playwright-mcp/
+.vercel
