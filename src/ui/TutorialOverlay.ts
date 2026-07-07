@@ -15,6 +15,7 @@ export function setupTutorialOverlay(ctx: AppContext, tutorialManager: TutorialM
   if (!panel) return;
 
   const titleEl = panel.querySelector('.tutorial-title') as HTMLElement;
+  const stepTitleEl = panel.querySelector('.tutorial-step-title') as HTMLElement;
   const progressBar = panel.querySelector('.tutorial-progress-fill') as HTMLElement;
   const progressText = panel.querySelector('.tutorial-progress-text') as HTMLElement;
   const instructionEl = panel.querySelector('.tutorial-instruction') as HTMLElement;
@@ -34,6 +35,7 @@ export function setupTutorialOverlay(ctx: AppContext, tutorialManager: TutorialM
     panel.classList.add('visible');
     const lesson = tutorialManager.getCurrentLesson();
     titleEl.textContent = lesson?.title ?? '';
+    if (stepTitleEl) stepTitleEl.textContent = step.title ?? '';
     progressText.textContent = `Step ${progress.current} of ${progress.total}`;
     const pct = progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
     progressBar.style.width = `${pct}%`;
@@ -59,6 +61,7 @@ export function setupTutorialOverlay(ctx: AppContext, tutorialManager: TutorialM
     }
 
     prevBtn.style.visibility = progress.current > 1 ? 'visible' : 'hidden';
+    nextBtn.textContent = progress.current >= progress.total ? 'Finish' : 'Next';
 
     applyHighlight(step);
   });

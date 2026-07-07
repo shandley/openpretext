@@ -822,6 +822,17 @@
       flex: 1;
     }
 
+    .tutorial-step-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .tutorial-step-title:empty {
+      display: none;
+    }
+
     .tutorial-instruction {
       font-size: 13px;
       line-height: 1.6;
@@ -3098,6 +3109,7 @@
         </div>
       </div>
       <div class="tutorial-body">
+        <div class="tutorial-step-title"></div>
         <div class="tutorial-instruction"></div>
         <button class="tutorial-hint-btn" style="display:none;">Show Hint</button>
         <div class="tutorial-hint-text" style="display:none;"></div>
