@@ -326,6 +326,31 @@ export function computeCompartments(
   // Step 4: Correlation matrix
   const corrMatrix = computeCorrelationMatrix(oeMatrix, binnedSize);
 
+  // Guard the no-compartment case. A genome with normal distance decay but no
+  // compartments produces a constant observed/expected matrix, so every
+  // correlation-matrix row has zero variance and the off-diagonals are all 0 —
+  // the correlation matrix is the identity. The alternating power-iteration seed
+  // is a fixed point of the identity, so it would be returned unchanged as a
+  // spurious hard A/B checkerboard. Detect the absence of off-diagonal structure
+  // and return a flat, no-compartment result instead.
+  let maxOffDiag = 0;
+  for (let i = 0; i < binnedSize; i++) {
+    for (let j = i + 1; j < binnedSize; j++) {
+      const a = Math.abs(corrMatrix[i * binnedSize + j]);
+      if (a > maxOffDiag) maxOffDiag = a;
+    }
+  }
+  if (maxOffDiag < 1e-9) {
+    const flat = new Float32Array(size);
+    flat.fill(0.5);
+    return {
+      eigenvector: new Float32Array(size),
+      normalizedEigenvector: flat,
+      iterations: 0,
+      eigenvalue: 0,
+    };
+  }
+
   // Step 5: Power iteration
   const { eigenvector: binnedEV, eigenvalue, iterations } = powerIteration(
     corrMatrix,

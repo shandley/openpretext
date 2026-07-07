@@ -386,3 +386,27 @@ describe('compartmentToTrack', () => {
     expect(track.visible).toBe(true);
   });
 });
+
+describe('computeCompartments — no-structure degeneracy regression', () => {
+  it('returns a flat, no-compartment result on a structureless map', () => {
+    // A uniform map has a constant observed/expected matrix, so the correlation
+    // matrix collapses to the identity. The alternating power-iteration seed is
+    // a fixed point of the identity and used to be returned as a spurious hard
+    // A/B checkerboard. It must now read as no compartments.
+    const map = makeUniformMap(16, 1);
+    const result = computeCompartments(map, 16, { binSize: 1 });
+    const allHalf = Array.from(result.normalizedEigenvector).every(
+      (v) => Math.abs(v - 0.5) < 1e-6,
+    );
+    expect(allHalf).toBe(true);
+    expect(result.eigenvalue).toBe(0);
+  });
+
+  it('still recovers real compartments from a checkerboard map', () => {
+    const result = computeCompartments(makeCheckerboardMap(32, 8), 32, { binSize: 1 });
+    const nonFlat = Array.from(result.normalizedEigenvector).some(
+      (v) => Math.abs(v - 0.5) > 0.1,
+    );
+    expect(nonFlat).toBe(true);
+  });
+});

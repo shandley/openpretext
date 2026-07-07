@@ -32,12 +32,21 @@ import type { ContigRange } from '../curation/AutoSort';
 export interface CentromereParams {
   /** Smoothing kernel width as fraction of contig length. Default: 0.10. */
   kernelFraction: number;
-  /** Minimum contig span (overview pixels) to attempt detection. Default: 8. */
+  /** Minimum contig span (overview pixels) to attempt detection. Default: 16.
+   *  Below this a contig has too few overview pixels for a reliable smoothed
+   *  prominence, and z-normalization turns ordinary noise into a confident-
+   *  looking peak (fragmented/microchromosome genomes were flagged 8/8). */
   minContigSpan: number;
   /** Minimum peak prominence relative to contig mean. Default: 0.5. */
   minProminence: number;
   /** Weight for anti-diagonal signal (0 = inter-only, 1 = equal blend). Default: 0.3. */
   antiDiagonalWeight: number;
+  /** A contig is skipped unless its mean per-pixel inter-contig contact is at
+   *  least this fraction of the map's mean contact, so a near-isolated contig
+   *  with negligible real signal does not get a confident centromere call. Kept
+   *  small so it only rejects near-empty contigs, not real (sparse-hub) ones.
+   *  Default: 0.02. */
+  minInterContactFraction: number;
 }
 
 export interface CentromereResult {
@@ -53,9 +62,10 @@ export interface CentromereResult {
 
 const DEFAULT_PARAMS: CentromereParams = {
   kernelFraction: 0.10,
-  minContigSpan: 8,
+  minContigSpan: 16,
   minProminence: 0.5,
   antiDiagonalWeight: 0.3,
+  minInterContactFraction: 0.02,
 };
 
 // ---------------------------------------------------------------------------
@@ -257,6 +267,12 @@ export function detectCentromeres(
   const contigIndices: number[] = [];
   const signalProfile = new Float32Array(size);
 
+  // Map-wide mean contact, used as the reference scale for the absolute
+  // inter-contig gate below.
+  let mapSum = 0;
+  for (let i = 0; i < contactMap.length; i++) mapSum += contactMap[i];
+  const mapMean = contactMap.length > 0 ? mapSum / contactMap.length : 0;
+
   for (const range of contigRanges) {
     const len = range.end - range.start;
     if (len < p.minContigSpan) continue;
@@ -265,6 +281,18 @@ export function detectCentromeres(
 
     // Step 1: Inter-contig row sums
     const interSums = computeInterRowSums(contactMap, size, range.start, range.end);
+
+    // Absolute-magnitude gate: skip contigs whose inter-contig contact is weak
+    // relative to the map's own scale. Prominence is measured on a z-normalized
+    // signal (nearly scale-free), so without this a sparse or isolated contig's
+    // noise clears the threshold and yields a confident centromere call.
+    const nInterCols = size - len;
+    if (nInterCols > 0 && mapMean > 0) {
+      let interSum = 0;
+      for (let i = 0; i < interSums.length; i++) interSum += interSums[i];
+      const perPixelInter = interSum / (interSums.length * nInterCols);
+      if (perPixelInter < p.minInterContactFraction * mapMean) continue;
+    }
 
     // Step 2: Anti-diagonal signal (optional blend)
     let combinedSignal: Float64Array;

@@ -279,4 +279,40 @@ describe('CentromereDetector', () => {
       expect(markerTrack.data.length).toBe(1024);
     });
   });
+
+  describe('spurious-call regression', () => {
+    it('does not call centromeres on small noisy microchromosomes', () => {
+      // Eight span-8 contigs on a 64x64 noise map. z-normalized prominence used
+      // to flag all 8/8 at high confidence; contigs this small are now below the
+      // minimum span and no reliable centromere can be called.
+      const size = 64;
+      const map = makeNoiseMap(size);
+      const blocks = Array.from({ length: 8 }, (_, k) => ({ start: k * 8, end: k * 8 + 8 }));
+      const result = detectCentromeres(map, size, makeContigRanges(blocks));
+      expect(result.positions.length).toBe(0);
+    });
+
+    it('skips a near-isolated contig with negligible inter-contig contact', () => {
+      // One large contig with strong intra-contig signal but no inter-contig
+      // contact at all — nothing for a Hi-C centromere signal to stand on.
+      const size = 64;
+      const map = new Float32Array(size * size);
+      for (let i = 0; i < 32; i++) {
+        for (let j = 0; j < 32; j++) map[i * size + j] = Math.exp(-Math.abs(i - j) * 0.2) * 5;
+      }
+      const result = detectCentromeres(map, size, [{ start: 0, end: 32, orderIndex: 0 }]);
+      expect(result.positions.length).toBe(0);
+    });
+
+    it('still detects a centromere on a large contig with real inter-contig hubs', () => {
+      const size = 64;
+      const blocks = [
+        { start: 0, end: 30, centromere: 15 },
+        { start: 30, end: 64, centromere: 47 },
+      ];
+      const map = makeMapWithCentromeres(size, blocks);
+      const result = detectCentromeres(map, size, makeContigRanges(blocks));
+      expect(result.positions.length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });

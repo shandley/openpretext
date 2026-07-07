@@ -146,12 +146,18 @@ export function detectChromosomeBlocks(
     }
   }
 
-  // Find boundaries using adaptive threshold
-  const scoreValues: number[] = [];
+  // Adaptive threshold from a positive statistic. Using median(all scores) let
+  // the threshold collapse to 0 whenever half or more of the adjacent pairs had
+  // no inter-contig contact (the normal case for sparse/fragmented assemblies),
+  // so no boundary was ever found and every contig merged into one block. Taking
+  // the median of the non-zero scores keeps the threshold positive, so a
+  // zero-contact pair (a genuine chromosome break) always falls below it. When
+  // no pair has any contact, every adjacency is a boundary.
+  const positiveScores: number[] = [];
   for (let i = 0; i < normalizedScores.length; i++) {
-    scoreValues.push(normalizedScores[i]);
+    if (normalizedScores[i] > 0) positiveScores.push(normalizedScores[i]);
   }
-  const threshold = median(scoreValues) * 0.3;
+  const threshold = positiveScores.length > 0 ? median(positiveScores) * 0.3 : Infinity;
 
   // A boundary is between contig i and i+1 when score[i] < threshold
   const boundaryIndices: number[] = [];

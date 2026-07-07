@@ -303,4 +303,27 @@ describe('ScaffoldDetection', () => {
       expect(result.blocks.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  describe('fragmented-assembly threshold regression', () => {
+    it('splits a fully fragmented assembly instead of reporting one block', () => {
+      // 6 contigs, strong intra-contig signal, zero inter-contig contact. The
+      // median-times-0.3 threshold used to collapse to 0 here (most scores are
+      // 0), so no boundary was found and all 6 merged into one block.
+      const size = 60;
+      const n = 6;
+      const per = size / n;
+      const map = new Float32Array(size * size);
+      for (let k = 0; k < n; k++) {
+        const s = k * per;
+        for (let i = s; i < s + per; i++) {
+          for (let j = s; j < s + per; j++) {
+            map[i * size + j] = 1.0; // intra-contig only; inter stays 0
+          }
+        }
+      }
+      const contigs = makeContigs(n, size);
+      const result = detectChromosomeBlocks(map, size, contigs, makeOrder(n), size);
+      expect(result.blocks.length).toBe(n);
+    });
+  });
 });

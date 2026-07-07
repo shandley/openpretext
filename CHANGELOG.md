@@ -6,6 +6,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Fixed
+- **Analysis modules no longer emit confident results on degenerate input.** An
+  audit of `src/analysis/` (see `docs/analysis-audit-2026-07-06.md`) found four
+  modules that returned real-looking values on input that could not support them,
+  the same class as the P(s) R² bug. All four now detect the degenerate case and
+  are covered by regression tests:
+  - **InsulationScore**: position 0 (and any all-zero window) took
+    `log2(0 + 1e-10) ≈ -33`, an outlier that dominated min-max normalization and
+    compressed all real variation near 1.0, hiding true TAD boundaries. It now
+    floors the log at the smallest positive raw score. The `boundaryProminence`
+    default is corrected to the documented 0.1 to match the restored range.
+  - **ScaffoldDetection**: the `median × 0.3` boundary threshold collapsed to 0
+    when half or more inter-contig scores were 0 (fragmented assemblies),
+    reporting one chromosome for the whole genome. The threshold now uses the
+    median of the non-zero scores, and every adjacency is a boundary when no pair
+    has contact.
+  - **CompartmentAnalysis**: a no-compartment genome yields a constant O/E and an
+    identity correlation matrix, of which the alternating power-iteration seed is
+    a fixed point, so a spurious hard A/B checkerboard was returned. It now
+    detects the absence of off-diagonal structure and returns a flat result.
+  - **CentromereDetector**: prominence measured on a z-normalized (scale-free)
+    signal called confident centromeres on small, noisy microchromosomes (8/8 on
+    a noise map). The minimum contig span is raised to 16 and a contig is skipped
+    unless its inter-contig contact is non-negligible relative to the map scale.
 - **P(s) decay R² no longer reports spurious perfect fits.** A curve with too
   few supporting distances (e.g. a small scaffold with 2 non-zero distances) fit
   2 points and returned R²=1.0 by construction. It is now reported as not-fitted

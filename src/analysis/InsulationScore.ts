@@ -34,7 +34,11 @@ export interface InsulationResult {
 
 const DEFAULT_PARAMS: InsulationParams = {
   windowSize: 10,
-  boundaryProminence: 0.03,
+  // With the normalization fix above, real boundaries now use the full [0,1]
+  // range, so the documented 0.1 minimum prominence separates true boundaries
+  // from noise (verified in the unit tests). The previous 0.03 was a workaround
+  // for the compressed range and now over-detects.
+  boundaryProminence: 0.1,
 };
 
 // ---------------------------------------------------------------------------
@@ -93,10 +97,25 @@ export function normalizeInsulationScores(
 
   if (n === 0) return result;
 
-  // Log2 transform (add epsilon to avoid log(0))
+  // Floor at the smallest positive raw score before the log. Empty windows
+  // (position 0 always, plus any all-zero region in a sparse map) have a raw
+  // score of 0; a fixed 1e-10 epsilon would send them to log2 ≈ -33, an outlier
+  // that dominates the min-max range and compresses all real insulation
+  // variation into a sliver near 1.0, silently hiding true TAD boundaries.
+  // Flooring to the smallest real score keeps zeros on the data's own scale.
+  let minPositive = Infinity;
+  for (let i = 0; i < n; i++) {
+    if (rawScores[i] > 0 && rawScores[i] < minPositive) minPositive = rawScores[i];
+  }
+  if (!Number.isFinite(minPositive)) {
+    // No positive scores at all — nothing to normalize.
+    result.fill(0);
+    return result;
+  }
+
   const logScores = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    logScores[i] = Math.log2(rawScores[i] + 1e-10);
+    logScores[i] = Math.log2(Math.max(rawScores[i], minPositive));
   }
 
   // Min-max normalize

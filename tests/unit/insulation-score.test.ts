@@ -341,3 +341,22 @@ describe('insulationToTracks', () => {
     expect(boundaryTrack.visible).toBe(true);
   });
 });
+
+describe('normalizeInsulationScores — empty-window outlier regression', () => {
+  it('an empty/zero window does not compress the real range to a sliver', () => {
+    // rawScores[0] = 0 stands in for position 0's always-empty window. A fixed
+    // 1e-10 epsilon sends it to log2 ≈ -33.2, which becomes the min-max floor
+    // and crushes the real 0.5..0.6 variation into a band ~0.008 wide near 1.0.
+    const raw = new Float64Array([0, 0.5, 0.6, 0.55, 0.5]);
+    const norm = normalizeInsulationScores(raw);
+    const positives = [norm[1], norm[2], norm[3], norm[4]];
+    const spread = Math.max(...positives) - Math.min(...positives);
+    expect(spread).toBeGreaterThan(0.3);
+  });
+
+  it('a real TAD boundary is detected, not hidden by the outlier', () => {
+    const map = makeTADMap(48, [0, 24], 0.8, 0.05);
+    const result = computeInsulation(map, 48);
+    expect(result.boundaries.some((b) => Math.abs(b - 24) <= 3)).toBe(true);
+  });
+});
