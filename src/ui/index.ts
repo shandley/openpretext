@@ -20,7 +20,7 @@ export { toggleShortcutsModal, setupShortcutsModal } from './ShortcutsModal';
 export { formatBp, updateSidebarContigList, updateSidebarScaffoldList, setupContigSearch, autoAssignScaffolds, getContigColorMetric } from './Sidebar';
 
 // StatsPanel
-export { updateStatsPanel } from './StatsPanel';
+export { updateStatsPanel, setupStatsPanel } from './StatsPanel';
 
 // TrackConfig
 export { updateTrackConfigPanel } from './TrackConfig';

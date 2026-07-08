@@ -56,6 +56,7 @@ import {
   refreshAfterCuration,
   setupSpecimenPicker,
   setupAnalysisPanel,
+  setupStatsPanel,
 } from './ui';
 
 class OpenPretextApp {
@@ -208,6 +209,7 @@ class OpenPretextApp {
     setupLessonBrowser(ctx);
     setupZoomControls(ctx);
     setupAnalysisPanel(ctx);
+    setupStatsPanel();
 
     console.log('OpenPretext initialized');
   }

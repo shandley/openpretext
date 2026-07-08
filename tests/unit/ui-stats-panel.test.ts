@@ -59,6 +59,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     waypointManager: {} as any,
     metricsTracker: {
       getSummary: vi.fn(() => null),
+      getLatest: vi.fn(() => null),
     } as any,
     tileManager: null,
     cancelTileDecode: null,
@@ -111,6 +112,40 @@ describe('StatsPanel', () => {
       updateStatsPanel(ctx);
 
       expect(statsEl.innerHTML).toContain('No data loaded');
+    });
+
+    it('should fall back to the latest snapshot (no deltas) before the first edit', () => {
+      // Before any curation edit, getSummary() is null (needs two snapshots for
+      // deltas). The panel should still show current metrics via getLatest().
+      const latest = {
+        contigCount: 1245,
+        totalLength: 3_190_000_000,
+        n50: 428_000_000,
+        l50: 3,
+        n90: 260_000_000,
+        l90: 7,
+        longestContig: 730_000_000,
+        shortestContig: 353,
+        medianLength: 24_300,
+        scaffoldCount: 1245,
+        operationCount: 0,
+      };
+
+      const ctx = createMockCtx({
+        metricsTracker: {
+          getSummary: vi.fn(() => null),
+          getLatest: vi.fn(() => latest),
+        } as any,
+      });
+
+      updateStatsPanel(ctx);
+
+      expect(statsEl.innerHTML).not.toContain('No data loaded');
+      expect(statsEl.innerHTML).toContain('1245');
+      expect(statsEl.innerHTML).toContain('428.00 Mb');
+      // No delta indicators without a baseline to compare against.
+      expect(statsEl.innerHTML).not.toContain('#4caf50');
+      expect(statsEl.innerHTML).not.toContain('#ff6b6b');
     });
 
     it('should display all metrics when summary is available', () => {

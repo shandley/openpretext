@@ -377,6 +377,64 @@
       margin-bottom: 8px;
     }
 
+    /* The contig and scaffold lists scroll within themselves so the sections
+       below them (metrics, analysis) stay reachable even on assemblies with
+       thousands of contigs. */
+    #contig-list {
+      max-height: 42vh;
+      overflow-y: auto;
+    }
+    #scaffold-list {
+      max-height: 22vh;
+      overflow-y: auto;
+    }
+
+    /* Pinned assembly-status strip: the health/metrics glance stays at the top
+       of the sidebar while everything below it scrolls. */
+    .sidebar-status {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .stats-summary-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      font: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .stats-summary-toggle:hover { background: var(--bg-surface); }
+    .stats-summary {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 3px 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .stats-summary .metric-num { color: var(--text-primary); font-weight: 600; }
+    .stats-summary .metric-unit { opacity: 0.7; }
+    .stats-summary .sep { opacity: 0.35; }
+    .stats-chevron {
+      flex-shrink: 0;
+      color: var(--text-secondary);
+      font-size: 10px;
+      transition: transform 0.15s ease-out;
+    }
+    .stats-summary-toggle[aria-expanded="true"] .stats-chevron { transform: rotate(180deg); }
+    .stats-detail { padding: 0 12px 12px; }
+    .stats-detail[hidden] { display: none; }
+
     /* Status bar */
     #statusbar {
       height: var(--statusbar-height);
@@ -2793,6 +2851,16 @@
         </div>
       </div>
       <div id="sidebar">
+        <div class="sidebar-status">
+          <button type="button" class="stats-summary-toggle" id="stats-summary-toggle"
+                  aria-expanded="false" aria-controls="stats-content" title="Assembly metrics">
+            <span class="stats-summary" id="stats-summary">
+              <span style="color: var(--text-secondary);">No data loaded</span>
+            </span>
+            <span class="stats-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="stats-detail" id="stats-content" hidden></div>
+        </div>
         <div class="sidebar-section">
           <h3>Contigs</h3>
           <input type="text" id="contig-search" placeholder="Search contigs...">
@@ -2823,12 +2891,6 @@
             <button class="analysis-btn" id="btn-clear-metatag" style="width:100%;margin:2px 0;">Clear Tag</button>
           </div>
           <div id="metatag-summary"></div>
-        </div>
-        <div class="sidebar-section">
-          <h3>Assembly Metrics</h3>
-          <div id="stats-content">
-            <div style="color: var(--text-secondary); font-size: 12px;">No data loaded</div>
-          </div>
         </div>
         <div class="sidebar-section">
           <h3>History</h3>
