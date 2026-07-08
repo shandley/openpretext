@@ -52,7 +52,18 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     comparisonSnapshot: null,
     comparisonInvertedSnapshot: null,
     comparisonVisible: false,
-    renderer: {} as any,
+    // Faithful stand-in for WebGLRenderer.mapToCanvas (the inverse of
+    // canvasToMap). Hardcodes the 800x600 canvas the overlay tests use.
+    renderer: {
+      mapToCanvas: (mapX: number, mapY: number, camera: { x: number; y: number; zoom: number }) => {
+        const W = 800, H = 600, aspect = W / H;
+        let nx = (mapX - camera.x) * camera.zoom * 2;
+        let ny = (mapY - camera.y) * camera.zoom * 2;
+        if (aspect > 1) nx /= aspect;
+        else ny *= aspect;
+        return { x: (nx + 1) * W / 2, y: (ny + 1) * H / 2 };
+      },
+    } as any,
     labelRenderer: {} as any,
     trackRenderer: {} as any,
     scaffoldOverlay: {} as any,

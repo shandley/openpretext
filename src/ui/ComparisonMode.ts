@@ -209,8 +209,7 @@ export function renderComparisonOverlay(ctx: AppContext, canvasCtx: CanvasRender
   canvasCtx.lineWidth = 1;
 
   for (const boundary of origBoundaries) {
-    const screenX = (boundary - cam.x) * cam.zoom * canvasWidth + canvasWidth / 2;
-    const screenY = (boundary - cam.y) * cam.zoom * canvasHeight + canvasHeight / 2;
+    const { x: screenX, y: screenY } = ctx.renderer.mapToCanvas(boundary, boundary, cam);
 
     if (screenX > 0 && screenX < canvasWidth) {
       canvasCtx.beginPath();
@@ -247,10 +246,15 @@ export function renderComparisonOverlay(ctx: AppContext, canvasCtx: CanvasRender
     const color = CHANGE_COLORS[changeType];
     canvasCtx.strokeStyle = color;
 
-    // Draw tick marks at the edges of the map for this contig
-    const screenStart = (startNorm - cam.x) * cam.zoom * canvasWidth + canvasWidth / 2;
-    const screenEnd = (endNorm - cam.x) * cam.zoom * canvasWidth + canvasWidth / 2;
-    const screenMid = (midNorm - cam.x) * cam.zoom * canvasWidth + canvasWidth / 2;
+    // Draw tick marks at the edges of the map for this contig. mapToCanvas.x
+    // depends only on the map-x arg and .y only on map-y, so passing (p, p)
+    // yields both the vertical (.x) and horizontal (.y) screen positions for p.
+    const start = ctx.renderer.mapToCanvas(startNorm, startNorm, cam);
+    const end = ctx.renderer.mapToCanvas(endNorm, endNorm, cam);
+    const mid = ctx.renderer.mapToCanvas(midNorm, midNorm, cam);
+    const screenStart = start.x;
+    const screenEnd = end.x;
+    const screenMid = mid.x;
 
     // Top edge marker (horizontal bar)
     if (screenStart < canvasWidth && screenEnd > 0) {
@@ -263,8 +267,8 @@ export function renderComparisonOverlay(ctx: AppContext, canvasCtx: CanvasRender
     }
 
     // Left edge marker (vertical bar)
-    const screenStartY = (startNorm - cam.y) * cam.zoom * canvasHeight + canvasHeight / 2;
-    const screenEndY = (endNorm - cam.y) * cam.zoom * canvasHeight + canvasHeight / 2;
+    const screenStartY = start.y;
+    const screenEndY = end.y;
     if (screenStartY < canvasHeight && screenEndY > 0) {
       const y0 = Math.max(0, screenStartY);
       const y1 = Math.min(canvasHeight, screenEndY);
@@ -275,7 +279,7 @@ export function renderComparisonOverlay(ctx: AppContext, canvasCtx: CanvasRender
     }
 
     // Draw change icon at midpoint if visible
-    const screenMidY = (midNorm - cam.y) * cam.zoom * canvasHeight + canvasHeight / 2;
+    const screenMidY = mid.y;
     if (screenMid > 10 && screenMid < canvasWidth - 10) {
       canvasCtx.fillStyle = color;
       canvasCtx.font = '10px monospace';

@@ -1151,6 +1151,9 @@
       opacity: 0;
       transform: translateY(10px);
       transition: all 0.2s ease;
+      /* Container is pointer-events:none; re-enable on the toast itself so
+         hovering it pauses the auto-dismiss (see showToast). */
+      pointer-events: auto;
     }
 
     .toast.visible {

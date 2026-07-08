@@ -597,8 +597,37 @@ export class WebGLRenderer {
     // Undo camera transform
     const mapX = nx / (camera.zoom * 2) + camera.x;
     const mapY = ny / (camera.zoom * 2) + camera.y;
-    
+
     return { x: mapX, y: mapY };
+  }
+
+  /**
+   * Convert map coordinates (0-1) to canvas pixel coordinates (CSS px). This is
+   * the exact inverse of canvasToMap and derives the rect the same way, so the
+   * two cannot drift apart. Overlays that draw at map positions (crosshair,
+   * comparison boundaries) must use this rather than reimplementing the
+   * transform, which historically omitted the aspect-ratio correction below.
+   */
+  mapToCanvas(mapX: number, mapY: number, camera: { x: number; y: number; zoom: number }): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const aspect = rect.width / rect.height;
+
+    // Apply camera transform
+    let nx = (mapX - camera.x) * (camera.zoom * 2);
+    let ny = (mapY - camera.y) * (camera.zoom * 2);
+
+    // Apply aspect ratio correction (inverse of canvasToMap's undo step)
+    if (aspect > 1) {
+      nx /= aspect;
+    } else {
+      ny *= aspect;
+    }
+
+    // Denormalize from -1..1 to pixels
+    const canvasX = (nx + 1) * rect.width / 2;
+    const canvasY = (ny + 1) * rect.height / 2;
+
+    return { x: canvasX, y: canvasY };
   }
 
   // ─── Tile Detail Rendering ─────────────────────────────────

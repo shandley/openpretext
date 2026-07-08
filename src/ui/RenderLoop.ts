@@ -205,9 +205,10 @@ export function startRenderLoop(ctx: AppContext): void {
 }
 
 export function renderCutIndicator(ctx: AppContext, canvasCtx: CanvasRenderingContext2D, cam: CameraState, canvasWidth: number, canvasHeight: number): void {
-  const mapX = ctx.mouseMapPos.x;
-  // Convert map position to canvas pixel
-  const canvasX = (mapX - cam.x) * cam.zoom * canvasWidth + canvasWidth / 2;
+  // Map position to canvas pixel via the shared inverse of canvasToMap, so the
+  // crosshair lands exactly on the pointer regardless of window aspect ratio.
+  const { x: canvasX, y: canvasY } = ctx.renderer.mapToCanvas(
+    ctx.mouseMapPos.x, ctx.mouseMapPos.y, cam);
 
   canvasCtx.save();
   canvasCtx.setLineDash([6, 4]);
@@ -221,7 +222,6 @@ export function renderCutIndicator(ctx: AppContext, canvasCtx: CanvasRenderingCo
   canvasCtx.stroke();
 
   // Horizontal line
-  const canvasY = (mapX - cam.y) * cam.zoom * canvasHeight + canvasHeight / 2;
   canvasCtx.beginPath();
   canvasCtx.moveTo(0, canvasY);
   canvasCtx.lineTo(canvasWidth, canvasY);

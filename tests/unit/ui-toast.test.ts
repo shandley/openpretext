@@ -18,6 +18,7 @@ function createMockElement(tag = 'div'): any {
       has: (cls: string) => classes.has(cls),
     },
     appendChild: vi.fn((child: any) => { children.push(child); }),
+    addEventListener: vi.fn(),
     remove: vi.fn(),
     _children: children,
     _classes: classes,
