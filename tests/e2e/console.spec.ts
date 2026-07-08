@@ -86,6 +86,34 @@ test.describe('Script console', () => {
     await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
   });
 
+  test('Preview effects reports the result without keeping it', async ({ page }) => {
+    await loadDemo(page);
+    await openConsole(page);
+    await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
+
+    await page.locator('#script-input').fill('cut #0 20\ncut #1 20');
+    await page.evaluate(() => document.getElementById('btn-preview-effects')?.click());
+
+    const output = page.locator('#script-output');
+    await expect(output).toContainText('ran and reverted');
+    await expect(output).toContainText('12 → 14');
+    // The assembly itself is untouched.
+    await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
+  });
+
+  test('Preview validates without applying', async ({ page }) => {
+    await loadDemo(page);
+    await openConsole(page);
+
+    await page.locator('#script-input').fill('invert chr1\ninvert nope');
+    await page.evaluate(() => document.getElementById('btn-preview-script')?.click());
+
+    const output = page.locator('#script-output');
+    await expect(output).toContainText('nothing applied');
+    await expect(output).toContainText('not found');
+    await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
+  });
+
   test('a malformed line reports a parse error', async ({ page }) => {
     await loadDemo(page);
     await openConsole(page);

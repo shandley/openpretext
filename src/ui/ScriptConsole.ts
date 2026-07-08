@@ -8,7 +8,7 @@ import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { operationsToScript } from '../scripting/ScriptReplay';
 import { DSL_REFERENCE, type DSLCommandDoc } from '../scripting/DSLReference';
-import { runDSL } from './DSLRunner';
+import { runDSL, dryRunValidate, previewEffects, type DSLRunOutcome } from './DSLRunner';
 
 let scriptConsoleVisible = false;
 
@@ -102,6 +102,30 @@ function showHelp(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Shared output rendering
+// ---------------------------------------------------------------------------
+
+/** Render parse errors + per-command result lines (shared by run and preview). */
+function renderResultLines(outcome: DSLRunOutcome): string {
+  let html = '';
+  for (const err of outcome.parseErrors) {
+    html += `<div class="script-output-error">Parse error (line ${err.line}): ${escapeHtml(err.message)}</div>`;
+  }
+  for (const result of outcome.results) {
+    const cls = result.success ? 'script-output-success' : 'script-output-error';
+    html += `<div class="${cls}">Line ${result.line}: ${escapeHtml(result.message)}</div>`;
+  }
+  return html;
+}
+
+function fmtBp(bp: number): string {
+  if (bp >= 1_000_000_000) return `${(bp / 1_000_000_000).toFixed(2)} Gb`;
+  if (bp >= 1_000_000) return `${(bp / 1_000_000).toFixed(2)} Mb`;
+  if (bp >= 1_000) return `${(bp / 1_000).toFixed(1)} kb`;
+  return `${bp} bp`;
+}
+
+// ---------------------------------------------------------------------------
 // Visibility
 // ---------------------------------------------------------------------------
 
@@ -129,6 +153,12 @@ export function setupScriptConsole(ctx: AppContext): void {
   });
   document.getElementById('btn-run-script')?.addEventListener('click', () => {
     runScript(ctx);
+  });
+  document.getElementById('btn-preview-script')?.addEventListener('click', () => {
+    previewScript(ctx);
+  });
+  document.getElementById('btn-preview-effects')?.addEventListener('click', () => {
+    previewScriptEffects(ctx);
   });
   document.getElementById('btn-help-script')?.addEventListener('click', () => {
     showHelp();
@@ -238,21 +268,11 @@ export function runScript(ctx: AppContext): void {
   pushHistory(text);
   const outcome = runDSL(ctx, text);
 
-  // Show parse errors
-  let html = '';
-  for (const err of outcome.parseErrors) {
-    html += `<div class="script-output-error">Parse error (line ${err.line}): ${escapeHtml(err.message)}</div>`;
-  }
+  // Each result's message is already the human-readable outcome (including echo
+  // text), rendered in execution order, so echoes need no separate pass.
+  let html = renderResultLines(outcome);
 
-  // Show execution results. Each result's message is already the human-readable
-  // outcome (including echo text), rendered in execution order, so echoes need
-  // no separate pass.
   if (outcome.commandCount > 0) {
-    for (const result of outcome.results) {
-      const cls = result.success ? 'script-output-success' : 'script-output-error';
-      html += `<div class="${cls}">Line ${result.line}: ${escapeHtml(result.message)}</div>`;
-    }
-
     const successCount = outcome.results.filter((r) => r.success).length;
     const failCount = outcome.results.filter((r) => !r.success).length;
     const executed = outcome.results.length;
@@ -268,4 +288,61 @@ export function runScript(ctx: AppContext): void {
   }
 
   outputEl.innerHTML = html || '<span class="script-output-info">No commands to execute.</span>';
+}
+
+/** Read the trimmed input, or null (and render a message) if there is nothing to preview. */
+function previewInput(outputEl: HTMLElement): string | null {
+  const input = document.getElementById('script-input') as HTMLTextAreaElement;
+  const text = input?.value.trim() ?? '';
+  if (!text) {
+    outputEl.innerHTML = '<span class="script-output-info">Nothing to preview.</span>';
+    return null;
+  }
+  if (/^(help|\?|commands)$/i.test(text)) {
+    showHelp();
+    return null;
+  }
+  return text;
+}
+
+/** Validate the script against the current assembly without applying it (safe). */
+export function previewScript(ctx: AppContext): void {
+  const outputEl = document.getElementById('script-output');
+  if (!outputEl) return;
+  const text = previewInput(outputEl);
+  if (text === null) return;
+
+  const outcome = dryRunValidate(ctx, text);
+  let html = '<div class="script-output-info">Preview — validated against the current assembly, nothing applied.</div>';
+  html += renderResultLines(outcome);
+  if (outcome.commandCount > 0) {
+    const ok = outcome.results.filter((r) => r.success).length;
+    const problems = outcome.results.filter((r) => !r.success).length + outcome.parseErrors.length;
+    html += `<div class="script-output-info">---</div>`;
+    html += `<div class="script-output-info">${ok} valid, ${problems} problem${problems === 1 ? '' : 's'}. Lines that depend on an earlier line's result may show a false error in preview.</div>`;
+  }
+  outputEl.innerHTML = html;
+}
+
+/** Preview the real effect (contig count, N50, reordering) by running then reverting. */
+export function previewScriptEffects(ctx: AppContext): void {
+  const outputEl = document.getElementById('script-output');
+  if (!outputEl) return;
+  const text = previewInput(outputEl);
+  if (text === null) return;
+
+  const { outcome, diff } = previewEffects(ctx, text);
+  let html = '<div class="script-output-info">Preview of effects — ran and reverted, nothing kept.</div>';
+  html += renderResultLines(outcome);
+  if (diff) {
+    const dc = diff.contigCountAfter - diff.contigCountBefore;
+    html += `<div class="script-output-info">---</div>`;
+    html += `<div class="script-output-info">Contigs: ${diff.contigCountBefore} → ${diff.contigCountAfter}${dc ? ` (${dc > 0 ? '+' : ''}${dc})` : ''}</div>`;
+    html += `<div class="script-output-info">N50: ${fmtBp(diff.n50Before)} → ${fmtBp(diff.n50After)}</div>`;
+    if (diff.contigsMoved !== null && diff.contigsMoved > 0) {
+      html += `<div class="script-output-info">Reordered: ${diff.contigsMoved} contig position(s) changed</div>`;
+    }
+    html += `<div class="script-output-info">${diff.applied} operation(s) applied and reverted</div>`;
+  }
+  outputEl.innerHTML = html;
 }
