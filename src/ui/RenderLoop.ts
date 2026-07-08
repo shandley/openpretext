@@ -211,6 +211,12 @@ export function renderCutIndicator(ctx: AppContext, canvasCtx: CanvasRenderingCo
     ctx.mouseMapPos.x, ctx.mouseMapPos.y, cam);
 
   canvasCtx.save();
+  // LabelRenderer scales the context by devicePixelRatio and restores it, so the
+  // context arrives here at identity. canvasX/canvasY (and canvasWidth/Height) are
+  // CSS pixels, so on a HiDPI display we must re-apply the dpr scale or the
+  // crosshair is drawn at 1/dpr of its intended position (toward the top-left).
+  const dpr = globalThis.devicePixelRatio || 1;
+  canvasCtx.scale(dpr, dpr);
   canvasCtx.setLineDash([6, 4]);
 
   const drawLines = () => {

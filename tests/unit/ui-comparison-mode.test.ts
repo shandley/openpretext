@@ -89,6 +89,7 @@ function createMockCanvasCtx(): CanvasRenderingContext2D {
   return {
     save: vi.fn(),
     restore: vi.fn(),
+    scale: vi.fn(),
     setLineDash: vi.fn(),
     beginPath: vi.fn(),
     moveTo: vi.fn(),
@@ -484,6 +485,31 @@ describe('ComparisonMode', () => {
 
       expect(canvasCtx.save).toHaveBeenCalledTimes(1);
       expect(canvasCtx.restore).toHaveBeenCalledTimes(1);
+    });
+
+    it('should scale the context by devicePixelRatio so the overlay is not drawn at 1/dpr on HiDPI', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
+        map: {
+          textureSize: 1000,
+          contigs: {
+            0: { pixelStart: 0, pixelEnd: 500, inverted: false },
+            1: { pixelStart: 500, pixelEnd: 1000, inverted: false },
+          },
+        },
+        contigOrder: [0, 1],
+      });
+      const ctx = createMockCtx({
+        comparisonVisible: true,
+        comparisonSnapshot: [0, 1],
+        comparisonInvertedSnapshot: new Map([[0, false], [1, false]]),
+      });
+      const canvasCtx = createMockCanvasCtx();
+
+      renderComparisonOverlay(ctx, canvasCtx, cam, canvasWidth, canvasHeight);
+
+      // dpr is undefined in the node test env, so the guard resolves to 1.
+      const dpr = globalThis.devicePixelRatio || 1;
+      expect(canvasCtx.scale).toHaveBeenCalledWith(dpr, dpr);
     });
 
     it('should set dashed line style for baseline overlay', () => {

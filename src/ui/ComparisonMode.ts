@@ -202,6 +202,11 @@ export function renderComparisonOverlay(ctx: AppContext, canvasCtx: CanvasRender
   }
 
   canvasCtx.save();
+  // The context arrives at identity (LabelRenderer restores its own dpr scale),
+  // but the coordinates below are CSS pixels, so re-apply the dpr scale or the
+  // overlay is drawn at 1/dpr of its intended size/position on HiDPI displays.
+  const dpr = globalThis.devicePixelRatio || 1;
+  canvasCtx.scale(dpr, dpr);
 
   // Draw original boundaries as semi-transparent blue dashed lines
   canvasCtx.setLineDash([4, 4]);
