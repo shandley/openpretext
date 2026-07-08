@@ -68,13 +68,13 @@ test.describe('Stats panel', () => {
     await loadDemo(page);
     await openSidebar(page);
 
-    const statsContent = page.locator('#stats-content');
-    await expect(statsContent).toBeVisible();
+    // The pinned status strip is always visible and carries the glanceable
+    // summary (health, contig count, N50). The full metric list lives in a
+    // collapsible detail (#stats-content) that is hidden until expanded.
+    const statsSummary = page.locator('#stats-summary');
+    await expect(statsSummary).toBeVisible();
 
-    // getSummary() requires >=2 snapshots (initial + post-curation).
-    // After loading demo data there is only 1 snapshot, so the panel
-    // correctly shows "No data loaded" until a curation op creates a
-    // second snapshot.  Perform a cut to generate the second snapshot.
+    // Perform a cut so metrics are populated (and a second snapshot exists).
     await enterEditMode(page);
     await hoverCanvasCenter(page);
     await page.keyboard.press('c');
@@ -85,8 +85,16 @@ test.describe('Stats panel', () => {
     // Re-open sidebar to refresh stats
     await openSidebar(page);
 
-    // Stats should now be populated
-    await expect(statsContent).not.toHaveText('No data loaded', { timeout: 5_000 });
+    // The summary strip reflects the assembly (not the empty state).
+    await expect(statsSummary).not.toHaveText('No data loaded', { timeout: 5_000 });
+    const summaryText = await statsSummary.textContent();
+    expect(summaryText).toContain('N50');
+    expect(summaryText).toContain('contigs');
+
+    // Expand the strip to reveal the full metric list.
+    await page.locator('#stats-summary-toggle').click();
+    const statsContent = page.locator('#stats-content');
+    await expect(statsContent).toBeVisible();
 
     const statsText = await statsContent.textContent();
     expect(statsText).toBeTruthy();
