@@ -114,6 +114,27 @@ test.describe('Script console', () => {
     await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
   });
 
+  test('a failing assert halts the script before later commands run', async ({ page }) => {
+    await loadDemo(page);
+    await openConsole(page);
+    await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
+
+    // The assert fails, so the cut on the next line must not run.
+    await runScript(page, 'assert contigs == 99\ncut #0 20');
+
+    await expect(page.locator('#script-output')).toContainText('Assertion FAILED');
+    await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
+  });
+
+  test('predicate selection selects matching contigs', async ({ page }) => {
+    await loadDemo(page);
+    await openConsole(page);
+
+    // Demo contigs are all unscaffolded, so this selects all 12.
+    await runScript(page, 'select where unscaffolded');
+    await expect(page.locator('#script-output')).toContainText('Selected 12');
+  });
+
   test('a malformed line reports a parse error', async ({ page }) => {
     await loadDemo(page);
     await openConsole(page);

@@ -48,6 +48,7 @@ export interface SelectionAPI {
   selectSingle(orderIndex: number): void;
   selectRange(orderIndex: number): void;
   selectAll(): void;
+  selectIndices(indices: number[]): void;
   clearSelection(): void;
 }
 
@@ -94,6 +95,23 @@ export interface NavAPI {
 }
 
 /**
+ * Read-only queries over assembly metrics and per-contig flags, used by
+ * `assert` and `select where`. Optional: commands that need it report a clear
+ * error when it is absent (e.g. a headless context without metrics wiring).
+ */
+export interface QueryAPI {
+  contigCount(): number;
+  n50(): number;
+  totalLength(): number;
+  scaffoldCount(): number;
+  misassemblyCount(): number;
+  /** Whether the contig at the given order index is misassembly-flagged. */
+  isMisassembled(orderIndex: number): boolean;
+  /** Whether the contig at the given order index is excluded. */
+  isExcluded(orderIndex: number): boolean;
+}
+
+/**
  * The execution context provides all the dependencies a command needs.
  */
 export interface ScriptContext {
@@ -103,8 +121,30 @@ export interface ScriptContext {
   state: StateAPI;
   batch?: BatchAPI;
   nav?: NavAPI;
+  query?: QueryAPI;
   /** Optional callback for echo messages. Defaults to console.log. */
   onEcho?: (message: string) => void;
+}
+
+/** Evaluate a numeric comparison for the given operator. */
+function compareNumbers(a: number, op: string, b: number): boolean {
+  switch (op) {
+    case '<': return a < b;
+    case '<=': return a <= b;
+    case '>': return a > b;
+    case '>=': return a >= b;
+    case '==': return a === b;
+    case '!=': return a !== b;
+    default: return false;
+  }
+}
+
+/** Format a base-pair count compactly for result messages. */
+function fmtBp(bp: number): string {
+  if (bp >= 1_000_000_000) return `${(bp / 1_000_000_000).toFixed(2)} Gb`;
+  if (bp >= 1_000_000) return `${(bp / 1_000_000).toFixed(2)} Mb`;
+  if (bp >= 1_000) return `${(bp / 1_000).toFixed(1)} kb`;
+  return `${bp} bp`;
 }
 
 // ---------------------------------------------------------------------------
@@ -332,12 +372,81 @@ export function executeCommand(cmd: ScriptCommand, ctx: ScriptContext): ScriptRe
         };
       }
 
+      // ----- select where <field> [<op> <value>] -----
+      case 'select_where': {
+        const s = ctx.state.get();
+        if (!s.map) throw new Error('No map loaded');
+        const field = cmd.args.field as string;
+        const op = cmd.args.op as string | undefined;
+        const value = cmd.args.value as number | undefined;
+
+        const matched: number[] = [];
+        for (let i = 0; i < s.contigOrder.length; i++) {
+          const contig = s.map.contigs[s.contigOrder[i]];
+          let keep = false;
+          switch (field) {
+            case 'length': keep = compareNumbers(contig.length, op!, value!); break;
+            case 'inverted': keep = contig.inverted === true; break;
+            case 'unscaffolded': keep = contig.scaffoldId == null; break;
+            case 'scaffolded': keep = contig.scaffoldId != null; break;
+            case 'misassembled': keep = ctx.query?.isMisassembled(i) ?? false; break;
+            case 'excluded': keep = ctx.query?.isExcluded(i) ?? false; break;
+            default:
+              return { success: false, message: `Unknown selection field '${field}'`, line: cmd.line };
+          }
+          if (keep) matched.push(i);
+        }
+
+        ctx.selection.selectIndices(matched);
+        const criterion =
+          field === 'length' ? `length ${op} ${fmtBp(value!)}` : field;
+        return {
+          success: true,
+          message: `Selected ${matched.length} contig(s) where ${criterion}`,
+          line: cmd.line,
+        };
+      }
+
       // ----- deselect -----
       case 'deselect': {
         ctx.selection.clearSelection();
         return {
           success: true,
           message: 'Cleared selection',
+          line: cmd.line,
+        };
+      }
+
+      // ----- assert <metric> <op> <value> -----
+      case 'assert': {
+        if (!ctx.query) {
+          return { success: false, message: 'Assertions are not available in this context', line: cmd.line };
+        }
+        const metric = cmd.args.metric as string;
+        const op = cmd.args.op as string;
+        const value = cmd.args.value as number;
+
+        let actual: number;
+        let label: string;
+        let isBp = false;
+        switch (metric) {
+          case 'contigs': actual = ctx.query.contigCount(); label = 'contigs'; break;
+          case 'scaffolds': actual = ctx.query.scaffoldCount(); label = 'scaffolds'; break;
+          case 'misassemblies': actual = ctx.query.misassemblyCount(); label = 'misassemblies'; break;
+          case 'n50': actual = ctx.query.n50(); label = 'N50'; isBp = true; break;
+          case 'length': actual = ctx.query.totalLength(); label = 'total length'; isBp = true; break;
+          default:
+            return { success: false, message: `Unknown assert metric '${metric}'`, line: cmd.line };
+        }
+
+        const pass = compareNumbers(actual, op, value);
+        const shownActual = isBp ? fmtBp(actual) : String(actual);
+        const shownExpected = isBp ? fmtBp(value) : String(value);
+        return {
+          success: pass,
+          message: pass
+            ? `Assertion passed: ${label} ${op} ${shownExpected} (actual ${shownActual})`
+            : `Assertion FAILED: expected ${label} ${op} ${shownExpected}, actual ${shownActual}`,
           line: cmd.line,
         };
       }

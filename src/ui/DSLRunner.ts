@@ -11,8 +11,34 @@ import { CurationEngine, undoBatch } from '../curation/CurationEngine';
 import { SelectionManager } from '../curation/SelectionManager';
 import { autoSortContigs, autoCutContigs } from '../curation/BatchOperations';
 import { calculateMetrics } from '../curation/QualityMetrics';
+import { misassemblyFlags } from '../curation/MisassemblyFlags';
+import { contigExclusion } from '../curation/ContigExclusion';
 import { parseScript, type ParseError } from '../scripting/ScriptParser';
-import { executeScript, type ScriptContext, type ScriptResult } from '../scripting/ScriptExecutor';
+import { executeScript, type ScriptContext, type ScriptResult, type QueryAPI } from '../scripting/ScriptExecutor';
+
+/**
+ * Read-only queries for `assert` / `select where`, backed by the live metrics
+ * and flag singletons. Safe in dry-run (never mutates).
+ */
+function buildQuery(ctx: AppContext): QueryAPI {
+  const metrics = () => {
+    const s = state.get();
+    return calculateMetrics(s.map?.contigs ?? [], s.contigOrder);
+  };
+  return {
+    contigCount: () => state.get().contigOrder.length,
+    n50: () => metrics().n50,
+    totalLength: () => metrics().totalLength,
+    scaffoldCount: () => ctx.scaffoldManager.getAllScaffolds().length,
+    misassemblyCount: () => misassemblyFlags.getFlaggedCount(),
+    isMisassembled: (orderIndex) => misassemblyFlags.isFlagged(orderIndex),
+    isExcluded: (orderIndex) => {
+      const s = state.get();
+      const contigId = s.contigOrder[orderIndex];
+      return contigId != null && contigExclusion.isExcluded(contigId);
+    },
+  };
+}
 
 /** Monotonic per-session counters for unique batch ids. */
 let scriptRunSeq = 0;
@@ -45,6 +71,7 @@ export function buildScriptContext(ctx: AppContext, onEcho: (message: string) =>
       resetView: () => ctx.camera.resetView(),
       goto: (x, y) => ctx.camera.animateTo({ x, y }),
     },
+    query: buildQuery(ctx),
     onEcho,
   };
 }
@@ -111,7 +138,7 @@ function buildDryRunContext(ctx: AppContext, onEcho: (message: string) => void):
   const noop = () => {};
   return {
     curation: { cut: noop, join: noop, invert: noop, move: noop },
-    selection: { selectSingle: noop, selectRange: noop, selectAll: noop, clearSelection: noop },
+    selection: { selectSingle: noop, selectRange: noop, selectAll: noop, selectIndices: noop, clearSelection: noop },
     scaffold: {
       createScaffold: () => -1,
       deleteScaffold: noop,
@@ -124,6 +151,7 @@ function buildDryRunContext(ctx: AppContext, onEcho: (message: string) => void):
       autoSortContigs: () => ({ operationsPerformed: 0, description: 'auto-sort (not simulated in preview)' }),
     },
     nav: { zoomToContigRange: noop, resetView: noop, goto: noop },
+    query: buildQuery(ctx),
     onEcho,
   };
 }

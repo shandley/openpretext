@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { state, type ContigInfo, type MapData } from '../../src/core/State';
-import { previewEffects, dryRunValidate } from '../../src/ui/DSLRunner';
+import { SelectionManager } from '../../src/curation/SelectionManager';
+import { previewEffects, dryRunValidate, runDSL } from '../../src/ui/DSLRunner';
 import type { AppContext } from '../../src/ui/AppContext';
 
 // ---------------------------------------------------------------------------
@@ -97,5 +98,46 @@ describe('dryRunValidate (no mutation)', () => {
     expect(out.results).toHaveLength(2);
     expect(out.results[0].success).toBe(false);
     expect(out.results[1].success).toBe(true);
+  });
+});
+
+describe('assert (real metrics via query)', () => {
+  beforeEach(setupState);
+
+  it('passes or fails against the real contig count', () => {
+    expect(dryRunValidate(ctx, 'assert contigs == 4').results[0].success).toBe(true);
+    expect(dryRunValidate(ctx, 'assert contigs > 10').results[0].success).toBe(false);
+  });
+
+  it('a failed assert halts a real run before later commands', () => {
+    const invertedBefore = state.get().map!.contigs.map((c) => c.inverted);
+    const outcome = runDSL(ctx, 'assert contigs == 99\ninvert chr1');
+    // stop-on-first-failure: only the assert ran, invert did not
+    expect(outcome.results).toHaveLength(1);
+    expect(outcome.results[0].success).toBe(false);
+    expect(state.get().map!.contigs.map((c) => c.inverted)).toEqual(invertedBefore);
+  });
+
+  it('sees post-mutation metrics inside previewEffects, then reverts', () => {
+    // lengths are set so two cuts make 6 contigs; assert must see 6 mid-preview.
+    const { outcome } = previewEffects(ctx, 'cut #0 20\ncut #1 20\nassert contigs == 6');
+    expect(outcome.results[2].success).toBe(true);
+    expect(state.get().contigOrder.length).toBe(4); // reverted
+  });
+});
+
+describe('predicate selection (real state)', () => {
+  beforeEach(setupState);
+
+  it('reports the count of contigs matching a length predicate', () => {
+    // lengths 10000, 8000, 6000, 4000 -> two are < 7000
+    const out = dryRunValidate(ctx, 'select where length < 7000');
+    expect(out.results[0].success).toBe(true);
+    expect(out.results[0].message).toContain('Selected 2');
+  });
+
+  it('actually sets the selection when run', () => {
+    runDSL(ctx, 'select where length < 7000');
+    expect(SelectionManager.getSelectedIndices()).toEqual([2, 3]);
   });
 });

@@ -240,6 +240,15 @@ export function selectAll(): void {
 }
 
 /**
+ * Replace the selection with exactly the given order indices (used by
+ * predicate selection, e.g. `select where length < 1Mb`).
+ */
+export function selectIndices(indices: number[]): void {
+  state.update({ selectedContigs: new Set(indices) });
+  events.emit('render:request', {});
+}
+
+/**
  * Get the currently selected contig indices (in contigOrder).
  */
 export function getSelectedIndices(): number[] {
@@ -272,6 +281,7 @@ export const SelectionManager = {
   selectRange,
   clearSelection,
   selectAll,
+  selectIndices,
   getSelectedIndices,
   getSelectedContigs,
 };

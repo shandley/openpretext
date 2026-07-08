@@ -26,7 +26,9 @@ export type ScriptCommandType =
   | 'select'
   | 'select_range'
   | 'select_all'
+  | 'select_where'
   | 'deselect'
+  | 'assert'
   | 'scaffold_create'
   | 'scaffold_paint'
   | 'scaffold_unpaint'
@@ -140,6 +142,44 @@ export function tokenize(line: string): string[] {
   return tokens;
 }
 
+/** Comparison operators shared by `select where` and `assert`. */
+export type ComparisonOp = '<' | '<=' | '>' | '>=' | '==' | '!=';
+const COMPARISON_OPS: ComparisonOp[] = ['<=', '>=', '==', '!=', '<', '>'];
+
+/** Fields usable as a bare boolean predicate in `select where <field>`. */
+const SELECT_FLAG_FIELDS = ['misassembled', 'unscaffolded', 'scaffolded', 'inverted', 'excluded'];
+
+/** Metrics assertable via `assert <metric> <op> <value>`. */
+const ASSERT_METRICS = ['contigs', 'scaffolds', 'n50', 'length', 'misassemblies'];
+
+function parseComparisonOp(token: string, lineNumber: number): ComparisonOp {
+  if ((COMPARISON_OPS as string[]).includes(token)) return token as ComparisonOp;
+  throw new Error(
+    `Line ${lineNumber}: expected a comparison operator (< <= > >= == !=), got '${token}'`
+  );
+}
+
+/**
+ * Parse a numeric value with an optional size unit (bp/kb/Mb/Gb, case-insensitive),
+ * returning base pairs. Plain numbers are returned as-is (for counts).
+ */
+function parseUnitValue(token: string, lineNumber: number, label: string): number {
+  const m = token.match(/^([0-9]*\.?[0-9]+)(bp|kb|mb|gb)?$/i);
+  if (!m) {
+    throw new Error(
+      `Line ${lineNumber}: ${label} must be a number, optionally with a bp/kb/Mb/Gb suffix, got '${token}'`
+    );
+  }
+  let value = parseFloat(m[1]);
+  switch ((m[2] ?? '').toLowerCase()) {
+    case 'kb': value *= 1_000; break;
+    case 'mb': value *= 1_000_000; break;
+    case 'gb': value *= 1_000_000_000; break;
+    default: break; // bp or none
+  }
+  return value;
+}
+
 // ---------------------------------------------------------------------------
 // Single-line parser
 // ---------------------------------------------------------------------------
@@ -236,6 +276,27 @@ export function parseLine(line: string, lineNumber: number = 1): ScriptCommand |
       if (arg.toLowerCase() === 'all') {
         return { type: 'select_all', args: {}, line: lineNumber };
       }
+      // Predicate selection: select where <field> [<op> <value>]
+      if (arg.toLowerCase() === 'where') {
+        if (tokens.length < 3) {
+          throw new Error(`Line ${lineNumber}: 'select where' requires a field (length, ${SELECT_FLAG_FIELDS.join(', ')})`);
+        }
+        const field = tokens[2].toLowerCase();
+        if (field === 'length') {
+          if (tokens.length < 5) {
+            throw new Error(`Line ${lineNumber}: 'select where length' requires <op> <value>, e.g. 'select where length < 1Mb'`);
+          }
+          const op = parseComparisonOp(tokens[3], lineNumber);
+          const value = parseUnitValue(tokens[4], lineNumber, 'length');
+          return { type: 'select_where', args: { field, op, value }, line: lineNumber };
+        }
+        if (SELECT_FLAG_FIELDS.includes(field)) {
+          return { type: 'select_where', args: { field }, line: lineNumber };
+        }
+        throw new Error(
+          `Line ${lineNumber}: unknown selection field '${tokens[2]}'. Expected length or one of: ${SELECT_FLAG_FIELDS.join(', ')}`
+        );
+      }
       // Check for range syntax: contig1..contig2
       const rangeMatch = arg.match(/^(.+)\.\.(.+)$/);
       if (rangeMatch) {
@@ -325,6 +386,24 @@ export function parseLine(line: string, lineNumber: number = 1): ScriptCommand |
         throw new Error(`Line ${lineNumber}: 'goto' coordinates must be numbers`);
       }
       return { type: 'goto', args: { x, y }, line: lineNumber };
+    }
+
+    // ----- assert <metric> <op> <value> -----
+    case 'assert': {
+      if (tokens.length < 4) {
+        throw new Error(
+          `Line ${lineNumber}: 'assert' requires <metric> <op> <value>, e.g. 'assert n50 > 10Mb' (metrics: ${ASSERT_METRICS.join(', ')})`
+        );
+      }
+      const metric = tokens[1].toLowerCase();
+      if (!ASSERT_METRICS.includes(metric)) {
+        throw new Error(
+          `Line ${lineNumber}: unknown assert metric '${tokens[1]}'. Expected one of: ${ASSERT_METRICS.join(', ')}`
+        );
+      }
+      const op = parseComparisonOp(tokens[2], lineNumber);
+      const value = parseUnitValue(tokens[3], lineNumber, 'value');
+      return { type: 'assert', args: { metric, op, value }, line: lineNumber };
     }
 
     // ----- echo <message> -----

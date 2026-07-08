@@ -107,6 +107,18 @@ export const DSL_REFERENCE: DSLCommandDoc[] = [
   },
   {
     category: 'Selection',
+    syntax: 'select where length <op> <size>',
+    summary: 'Select contigs by length (op: < <= > >= == !=; size accepts bp/kb/Mb/Gb).',
+    example: 'select where length < 1Mb',
+  },
+  {
+    category: 'Selection',
+    syntax: 'select where <flag>',
+    summary: 'Select contigs by flag: misassembled, unscaffolded, scaffolded, inverted, or excluded.',
+    example: 'select where unscaffolded',
+  },
+  {
+    category: 'Selection',
     syntax: 'deselect',
     summary: 'Clear the current selection.',
     example: 'deselect',
@@ -170,5 +182,11 @@ export const DSL_REFERENCE: DSLCommandDoc[] = [
     syntax: 'echo <message>',
     summary: 'Print a message to the script output; useful for annotating scripts.',
     example: 'echo starting curation',
+  },
+  {
+    category: 'Meta',
+    syntax: 'assert <metric> <op> <value>',
+    summary: 'Halt the script unless an assembly metric holds (metric: contigs, scaffolds, n50, length, misassemblies). Makes a script a self-checking protocol.',
+    example: 'assert n50 > 10Mb',
   },
 ];

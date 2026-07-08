@@ -19,6 +19,7 @@ const PARSER_KEYWORDS = [
   'echo',
   'autocut',
   'autosort',
+  'assert',
 ] as const;
 
 const VALID_CATEGORIES: DSLCommandDoc['category'][] = [

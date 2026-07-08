@@ -18,6 +18,7 @@ import {
   type ScaffoldAPI,
   type StateAPI,
   type NavAPI,
+  type QueryAPI,
 } from '../../src/scripting/ScriptExecutor';
 import type { AppState, ContigInfo, MapData } from '../../src/core/State';
 import type { Scaffold } from '../../src/curation/ScaffoldManager';
@@ -69,6 +70,7 @@ function createMockContext(
   calls: Record<string, any[][]>;
   scaffolds: Scaffold[];
   appState: AppState;
+  query: QueryAPI;
 } {
   const contigs = names.map((name, i) =>
     makeContig(name, i, i * 100, (i + 1) * 100, 10000 - i * 2000)
@@ -109,6 +111,7 @@ function createMockContext(
     zoomToContigRange: [],
     resetView: [],
     goto: [],
+    selectIndices: [],
   };
 
   const stateApi: StateAPI = {
@@ -155,6 +158,10 @@ function createMockContext(
       calls.clearSelection.push([]);
       appState.selectedContigs = new Set();
     },
+    selectIndices: (indices) => {
+      calls.selectIndices.push([indices]);
+      appState.selectedContigs = new Set(indices);
+    },
   };
 
   const scaffold: ScaffoldAPI = {
@@ -184,19 +191,32 @@ function createMockContext(
     goto: (x, y) => { calls.goto.push([x, y]); },
   };
 
+  // Query defaults derive from state/scaffolds; tests override individual
+  // methods (e.g. query.n50 = () => 5_000_000) to exercise assert/select-where.
+  const query: QueryAPI = {
+    contigCount: () => appState.contigOrder.length,
+    n50: () => 0,
+    totalLength: () => 0,
+    scaffoldCount: () => scaffolds.length,
+    misassemblyCount: () => 0,
+    isMisassembled: () => false,
+    isExcluded: () => false,
+  };
+
   const ctx: ScriptContext = {
     curation,
     selection,
     scaffold,
     state: stateApi,
     nav,
+    query,
     onEcho: (msg) => {
       calls.echo.push([msg]);
       echoMessages.push(msg);
     },
   };
 
-  return { ctx, calls, scaffolds, appState };
+  return { ctx, calls, scaffolds, appState, query };
 }
 
 // ===========================================================================
@@ -530,6 +550,62 @@ describe('ScriptParser', () => {
   // -----------------------------------------------------------------------
   // parseLine - goto
   // -----------------------------------------------------------------------
+  describe('parseLine - select where (predicate)', () => {
+    it('should parse a length predicate with a unit', () => {
+      const cmd = parseLine('select where length < 1Mb');
+      expect(cmd!.type).toBe('select_where');
+      expect(cmd!.args.field).toBe('length');
+      expect(cmd!.args.op).toBe('<');
+      expect(cmd!.args.value).toBe(1_000_000);
+    });
+
+    it('should parse kb and Gb units and bare numbers', () => {
+      expect(parseLine('select where length >= 500kb')!.args.value).toBe(500_000);
+      expect(parseLine('select where length > 2Gb')!.args.value).toBe(2_000_000_000);
+      expect(parseLine('select where length == 1000')!.args.value).toBe(1000);
+    });
+
+    it('should parse bare flag fields', () => {
+      for (const f of ['misassembled', 'unscaffolded', 'scaffolded', 'inverted', 'excluded']) {
+        const cmd = parseLine(`select where ${f}`);
+        expect(cmd!.type).toBe('select_where');
+        expect(cmd!.args.field).toBe(f);
+      }
+    });
+
+    it('should throw for an unknown field', () => {
+      expect(() => parseLine('select where wingspan > 3')).toThrow('unknown selection field');
+    });
+
+    it('should throw for a bad operator', () => {
+      expect(() => parseLine('select where length =< 1Mb')).toThrow('comparison operator');
+    });
+  });
+
+  describe('parseLine - assert', () => {
+    it('should parse a count assertion', () => {
+      const cmd = parseLine('assert contigs == 32');
+      expect(cmd!.type).toBe('assert');
+      expect(cmd!.args.metric).toBe('contigs');
+      expect(cmd!.args.op).toBe('==');
+      expect(cmd!.args.value).toBe(32);
+    });
+
+    it('should parse an n50 assertion with a unit', () => {
+      const cmd = parseLine('assert n50 > 10Mb');
+      expect(cmd!.args.metric).toBe('n50');
+      expect(cmd!.args.value).toBe(10_000_000);
+    });
+
+    it('should throw for an unknown metric', () => {
+      expect(() => parseLine('assert wingspan > 3')).toThrow('unknown assert metric');
+    });
+
+    it('should throw when arguments are missing', () => {
+      expect(() => parseLine('assert n50')).toThrow("'assert' requires");
+    });
+  });
+
   describe('parseLine - goto', () => {
     it('should parse goto with integer coordinates', () => {
       const cmd = parseLine('goto 100 200');
@@ -1034,6 +1110,70 @@ describe('ScriptExecutor', () => {
       const result = executeCommand(cmd, ctx);
       expect(result.success).toBe(true);
       expect(calls.clearSelection.length).toBe(1);
+    });
+  });
+
+  describe('executeCommand - select_where', () => {
+    it('selects contigs matching a length predicate (lengths 10000,8000,6000,4000)', () => {
+      const { ctx, calls } = createMockContext();
+      const cmd: ScriptCommand = {
+        type: 'select_where',
+        args: { field: 'length', op: '<', value: 7000 },
+        line: 1,
+      };
+      const result = executeCommand(cmd, ctx);
+      expect(result.success).toBe(true);
+      expect(calls.selectIndices).toEqual([[[2, 3]]]);
+    });
+
+    it('selects inverted contigs from state', () => {
+      const { ctx, calls, appState } = createMockContext();
+      appState.map!.contigs[1].inverted = true;
+      const cmd: ScriptCommand = { type: 'select_where', args: { field: 'inverted' }, line: 1 };
+      executeCommand(cmd, ctx);
+      expect(calls.selectIndices[0][0]).toEqual([1]);
+    });
+
+    it('uses the query API for the misassembled flag', () => {
+      const { ctx, calls, query } = createMockContext();
+      query.isMisassembled = (i) => i === 2;
+      const cmd: ScriptCommand = { type: 'select_where', args: { field: 'misassembled' }, line: 1 };
+      executeCommand(cmd, ctx);
+      expect(calls.selectIndices[0][0]).toEqual([2]);
+    });
+  });
+
+  describe('executeCommand - assert', () => {
+    it('passes when the metric satisfies the condition', () => {
+      const { ctx } = createMockContext(); // contigCount = 4
+      const cmd: ScriptCommand = { type: 'assert', args: { metric: 'contigs', op: '==', value: 4 }, line: 1 };
+      const result = executeCommand(cmd, ctx);
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('passed');
+    });
+
+    it('fails (success=false) when the condition does not hold', () => {
+      const { ctx, query } = createMockContext();
+      query.n50 = () => 5_000_000;
+      const cmd: ScriptCommand = { type: 'assert', args: { metric: 'n50', op: '>', value: 10_000_000 }, line: 1 };
+      const result = executeCommand(cmd, ctx);
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('FAILED');
+    });
+
+    it('halts a script at a failed assertion (self-checking protocol)', () => {
+      const { ctx, calls, query } = createMockContext();
+      query.misassemblyCount = () => 9;
+      const results = executeScript(
+        [
+          { type: 'assert', args: { metric: 'misassemblies', op: '<', value: 5 }, line: 1 },
+          { type: 'invert', args: { contig: { kind: 'index', value: 0 } }, line: 2 },
+        ],
+        ctx,
+      );
+      expect(results).toHaveLength(1);
+      expect(results[0].success).toBe(false);
+      expect(calls.invert.length).toBe(0);
     });
   });
 
