@@ -212,20 +212,27 @@ export function renderCutIndicator(ctx: AppContext, canvasCtx: CanvasRenderingCo
 
   canvasCtx.save();
   canvasCtx.setLineDash([6, 4]);
-  canvasCtx.strokeStyle = 'rgba(255, 220, 50, 0.8)';
+
+  const drawLines = () => {
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(canvasX, 0);
+    canvasCtx.lineTo(canvasX, canvasHeight);
+    canvasCtx.stroke();
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(0, canvasY);
+    canvasCtx.lineTo(canvasWidth, canvasY);
+    canvasCtx.stroke();
+  };
+
+  // Draw a dark casing first, then the bright line on top, so the crosshair
+  // stays legible over both the red signal and the pale (cream/white) empty
+  // regions of the map where a plain yellow line would wash out.
+  canvasCtx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+  canvasCtx.lineWidth = 3.5;
+  drawLines();
+  canvasCtx.strokeStyle = 'rgba(255, 213, 0, 0.95)';
   canvasCtx.lineWidth = 1.5;
-
-  // Vertical line
-  canvasCtx.beginPath();
-  canvasCtx.moveTo(canvasX, 0);
-  canvasCtx.lineTo(canvasX, canvasHeight);
-  canvasCtx.stroke();
-
-  // Horizontal line
-  canvasCtx.beginPath();
-  canvasCtx.moveTo(0, canvasY);
-  canvasCtx.lineTo(canvasWidth, canvasY);
-  canvasCtx.stroke();
+  drawLines();
 
   canvasCtx.restore();
 }
