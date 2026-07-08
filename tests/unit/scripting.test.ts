@@ -17,6 +17,7 @@ import {
   type SelectionAPI,
   type ScaffoldAPI,
   type StateAPI,
+  type NavAPI,
 } from '../../src/scripting/ScriptExecutor';
 import type { AppState, ContigInfo, MapData } from '../../src/core/State';
 import type { Scaffold } from '../../src/curation/ScaffoldManager';
@@ -105,6 +106,9 @@ function createMockContext(): {
     deleteScaffold: [],
     paintContigs: [],
     echo: [],
+    zoomToContigRange: [],
+    resetView: [],
+    goto: [],
   };
 
   const stateApi: StateAPI = {
@@ -174,11 +178,18 @@ function createMockContext(): {
 
   const echoMessages: string[] = [];
 
+  const nav: NavAPI = {
+    zoomToContigRange: (start, end) => { calls.zoomToContigRange.push([start, end]); },
+    resetView: () => { calls.resetView.push([]); },
+    goto: (x, y) => { calls.goto.push([x, y]); },
+  };
+
   const ctx: ScriptContext = {
     curation,
     selection,
     scaffold,
     state: stateApi,
+    nav,
     onEcho: (msg) => {
       calls.echo.push([msg]);
       echoMessages.push(msg);
@@ -1103,8 +1114,8 @@ describe('ScriptExecutor', () => {
   // executeCommand - zoom / goto
   // -----------------------------------------------------------------------
   describe('executeCommand - zoom', () => {
-    it('should update camera state for zoom to contig', () => {
-      const { ctx, appState } = createMockContext();
+    it('should frame the target contig by its normalized span via the nav interface', () => {
+      const { ctx, calls } = createMockContext();
       const cmd: ScriptCommand = {
         type: 'zoom',
         args: { contig: { kind: 'name', value: 'chr2' } },
@@ -1112,15 +1123,17 @@ describe('ScriptExecutor', () => {
       };
       const result = executeCommand(cmd, ctx);
       expect(result.success).toBe(true);
-      // chr2 is 100 pixels, textureSize is 1024, so zoom = 1024/100 = 10.24
-      expect(appState.camera.zoom).toBeCloseTo(10.24);
+      // chr2 spans pixels [100, 200] of a 1024px map.
+      expect(calls.zoomToContigRange).toHaveLength(1);
+      const [start, end] = calls.zoomToContigRange[0];
+      expect(start).toBeCloseTo(100 / 1024);
+      expect(end).toBeCloseTo(200 / 1024);
     });
   });
 
   describe('executeCommand - zoom_reset', () => {
-    it('should reset camera to default', () => {
-      const { ctx, appState } = createMockContext();
-      appState.camera = { x: 50, y: 50, zoom: 5 };
+    it('should reset the view via the nav interface', () => {
+      const { ctx, calls } = createMockContext();
       const cmd: ScriptCommand = {
         type: 'zoom_reset',
         args: {},
@@ -1128,13 +1141,13 @@ describe('ScriptExecutor', () => {
       };
       const result = executeCommand(cmd, ctx);
       expect(result.success).toBe(true);
-      expect(appState.camera).toEqual({ x: 0, y: 0, zoom: 1 });
+      expect(calls.resetView).toHaveLength(1);
     });
   });
 
   describe('executeCommand - goto', () => {
-    it('should update camera x and y', () => {
-      const { ctx, appState } = createMockContext();
+    it('should move the view center via the nav interface', () => {
+      const { ctx, calls } = createMockContext();
       const cmd: ScriptCommand = {
         type: 'goto',
         args: { x: 100, y: 200 },
@@ -1142,20 +1155,19 @@ describe('ScriptExecutor', () => {
       };
       const result = executeCommand(cmd, ctx);
       expect(result.success).toBe(true);
-      expect(appState.camera.x).toBe(100);
-      expect(appState.camera.y).toBe(200);
+      expect(calls.goto).toEqual([[100, 200]]);
     });
 
-    it('should preserve zoom when navigating', () => {
-      const { ctx, appState } = createMockContext();
-      appState.camera.zoom = 5;
+    it('should be a safe no-op (still succeeds) when no nav is provided', () => {
+      const { ctx } = createMockContext();
+      const headless: ScriptContext = { ...ctx, nav: undefined };
       const cmd: ScriptCommand = {
         type: 'goto',
         args: { x: 10, y: 20 },
         line: 1,
       };
-      executeCommand(cmd, ctx);
-      expect(appState.camera.zoom).toBe(5);
+      expect(() => executeCommand(cmd, headless)).not.toThrow();
+      expect(executeCommand(cmd, headless).success).toBe(true);
     });
   });
 

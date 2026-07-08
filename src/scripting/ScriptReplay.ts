@@ -77,7 +77,7 @@ export function operationsToScript(
     if (dsl !== null) {
       lines.push(dsl);
     } else {
-      lines.push(`# (unsupported operation: ${op.type}) ${op.description}`);
+      lines.push(unsupportedComment(op.type, op.description));
     }
     lines.push('');
   }
@@ -185,7 +185,7 @@ export function logEntriesToScript(
     if (dsl !== null) {
       lines.push(dsl);
     } else {
-      lines.push(`# (could not parse) ${entry.description}`);
+      lines.push(unsupportedComment(entry.type, entry.description));
     }
     lines.push('');
   }
@@ -246,10 +246,15 @@ export function descriptionToDSL(type: string, description: string): string | nu
     case 'scaffold_paint': {
       // Painted N contig(s) with scaffold ID
       // This one is harder — the description doesn't include which contigs
-      // or the scaffold name, only the count and ID.
-      const match = description.match(/^Painted (\d+) contig\(s\) with scaffold (\d+)$/);
-      if (match) {
-        return `# scaffold paint: ${match[1]} contig(s) → scaffold ${match[2]} (manual reconstruction needed)`;
+      // or the scaffold name, only the count and ID. Emit an informative,
+      // actionable comment rather than a silent drop.
+      const paintMatch = description.match(/^Painted (\d+) contig\(s\) with scaffold (\d+)$/);
+      if (paintMatch) {
+        return `# scaffold paint: ${paintMatch[1]} contig(s) into scaffold ${paintMatch[2]} (contig indices not in session log - re-apply manually)`;
+      }
+      const unpaintMatch = description.match(/^Unpainted (\d+) contig\(s\)$/);
+      if (unpaintMatch) {
+        return `# scaffold unpaint: ${unpaintMatch[1]} contig(s) (contig indices not in session log - re-apply manually)`;
       }
       return null;
     }
@@ -262,6 +267,19 @@ export function descriptionToDSL(type: string, description: string): string | nu
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Build an informative, actionable comment for an operation that has no DSL
+ * equivalent (a genuinely unknown/future operation type, or a session-log
+ * entry whose description could not be parsed). This names the operation and
+ * carries its human-readable description so a person reading the generated
+ * script knows exactly what was skipped and that it must be redone by hand,
+ * instead of the old opaque "unsupported operation" / "could not parse" text.
+ */
+function unsupportedComment(type: string, description: string): string {
+  const detail = description && description.trim().length > 0 ? `: ${description.trim()}` : '';
+  return `# unsupported operation "${type}"${detail} (no DSL equivalent - re-apply manually)`;
+}
 
 /**
  * Wrap a contig name in double quotes if it contains spaces or special chars.

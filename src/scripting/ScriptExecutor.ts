@@ -79,6 +79,21 @@ export interface BatchAPI {
 }
 
 /**
+ * Abstraction over view navigation (the live Camera). The executor computes
+ * normalized coordinates and delegates the actual view movement here so it
+ * stays decoupled from the renderer. Optional: in headless contexts (tests,
+ * replay without a view) navigation commands become no-ops.
+ */
+export interface NavAPI {
+  /** Frame a contig spanning the normalized range [startNorm, endNorm] (0..1 of the map). */
+  zoomToContigRange(startNorm: number, endNorm: number): void;
+  /** Reset the view to the full map. */
+  resetView(): void;
+  /** Move the view center to normalized coordinates (0..1). */
+  goto(x: number, y: number): void;
+}
+
+/**
  * The execution context provides all the dependencies a command needs.
  */
 export interface ScriptContext {
@@ -87,6 +102,7 @@ export interface ScriptContext {
   scaffold: ScaffoldAPI;
   state: StateAPI;
   batch?: BatchAPI;
+  nav?: NavAPI;
   /** Optional callback for echo messages. Defaults to console.log. */
   onEcho?: (message: string) => void;
 }
@@ -368,18 +384,10 @@ export function executeCommand(cmd: ScriptCommand, ctx: ScriptContext): ScriptRe
         const contigPixelLength = contig.pixelEnd - contig.pixelStart;
         const textureSize = s.map!.textureSize;
 
-        // Center on the contig and zoom to fit
-        const centerPixel = cumulativePixels + contigPixelLength / 2;
-        const normalizedCenter = centerPixel / textureSize;
-        const zoom = textureSize / contigPixelLength;
-
-        ctx.state.update({
-          camera: {
-            x: 0,
-            y: 0,
-            zoom: Math.min(zoom, 100), // cap zoom to avoid extreme values
-          },
-        });
+        // Frame the contig by its normalized span in the current order.
+        const startNorm = cumulativePixels / textureSize;
+        const endNorm = (cumulativePixels + contigPixelLength) / textureSize;
+        ctx.nav?.zoomToContigRange(startNorm, endNorm);
         return {
           success: true,
           message: `Zoomed to contig '${contig.name}'`,
@@ -389,9 +397,7 @@ export function executeCommand(cmd: ScriptCommand, ctx: ScriptContext): ScriptRe
 
       // ----- zoom reset -----
       case 'zoom_reset': {
-        ctx.state.update({
-          camera: { x: 0, y: 0, zoom: 1 },
-        });
+        ctx.nav?.resetView();
         return {
           success: true,
           message: 'Reset zoom to full view',
@@ -403,10 +409,7 @@ export function executeCommand(cmd: ScriptCommand, ctx: ScriptContext): ScriptRe
       case 'goto': {
         const x = cmd.args.x as number;
         const y = cmd.args.y as number;
-        const s = ctx.state.get();
-        ctx.state.update({
-          camera: { ...s.camera, x, y },
-        });
+        ctx.nav?.goto(x, y);
         return {
           success: true,
           message: `Navigated to (${x}, ${y})`,

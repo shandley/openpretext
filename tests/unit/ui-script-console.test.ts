@@ -531,6 +531,60 @@ describe('ScriptConsole', () => {
       expect(elements['script-output'].innerHTML).toContain('script-output-info');
     });
 
+    it('should escape HTML in result messages so contig names cannot inject markup', () => {
+      elements['script-input'].value = 'invert evil';
+      mockParseScript.mockReturnValue({
+        commands: [{ type: 'invert', args: {}, line: 1 }],
+        errors: [],
+      });
+      // A contig name from a .pretext file could contain markup.
+      mockExecuteScript.mockReturnValue([
+        { success: true, message: `Inverted contig '<img src=x onerror=alert(1)>'`, line: 1 },
+      ]);
+      const ctx = createMockCtx();
+
+      runScript(ctx);
+
+      const output = elements['script-output'].innerHTML;
+      // The raw tag must not survive; it should be entity-escaped.
+      expect(output).not.toContain('<img');
+      expect(output).toContain('&lt;img');
+    });
+
+    it('should escape HTML in echo output', () => {
+      elements['script-input'].value = 'echo x';
+      mockParseScript.mockReturnValue({
+        commands: [{ type: 'echo', args: { message: 'x' }, line: 1 }],
+        errors: [],
+      });
+      mockExecuteScript.mockImplementation((_commands: any, scriptCtx: any) => {
+        scriptCtx.onEcho?.('<script>bad()</script>');
+        return [{ success: true, message: 'x', line: 1 }];
+      });
+      const ctx = createMockCtx();
+
+      runScript(ctx);
+
+      const output = elements['script-output'].innerHTML;
+      expect(output).not.toContain('<script>');
+      expect(output).toContain('&lt;script&gt;');
+    });
+
+    it('should escape HTML in parse-error messages', () => {
+      elements['script-input'].value = 'bogus <b>';
+      mockParseScript.mockReturnValue({
+        commands: [],
+        errors: [{ line: 1, message: "Unknown command '<b>'" }],
+      });
+      const ctx = createMockCtx();
+
+      runScript(ctx);
+
+      const output = elements['script-output'].innerHTML;
+      expect(output).not.toContain('<b>');
+      expect(output).toContain('&lt;b&gt;');
+    });
+
     it('should handle both parse errors and successful commands together', () => {
       elements['script-input'].value = 'bad line\necho ok';
       mockParseScript.mockReturnValue({

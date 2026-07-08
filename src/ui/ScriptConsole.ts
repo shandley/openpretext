@@ -15,6 +15,18 @@ import { autoSortContigs, autoCutContigs } from '../curation/BatchOperations';
 
 let scriptConsoleVisible = false;
 
+/**
+ * Escape a string for safe insertion as text content in the output pane's
+ * innerHTML. Output lines embed contig names (from the loaded .pretext file)
+ * and raw echo/error text, so they must never be treated as markup. These
+ * strings only ever land between tags (never inside an attribute), so escaping
+ * &, <, and > is sufficient to neutralize tag/entity injection while keeping
+ * names with quotes readable.
+ */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] as string);
+}
+
 export function isScriptConsoleVisible(): boolean {
   return scriptConsoleVisible;
 }
@@ -110,6 +122,11 @@ export function runScript(ctx: AppContext): void {
     scaffold: ctx.scaffoldManager,
     state: state,
     batch: { autoCutContigs, autoSortContigs },
+    nav: {
+      zoomToContigRange: (start, end) => ctx.camera.zoomToRegion(start, start, end, end),
+      resetView: () => ctx.camera.resetView(),
+      goto: (x, y) => ctx.camera.animateTo({ x, y }),
+    },
     onEcho: (msg) => echoMessages.push(msg),
   };
 
@@ -117,7 +134,7 @@ export function runScript(ctx: AppContext): void {
   let html = '';
   if (parseResult.errors.length > 0) {
     for (const err of parseResult.errors) {
-      html += `<div class="script-output-error">Parse error (line ${err.line}): ${err.message}</div>`;
+      html += `<div class="script-output-error">Parse error (line ${err.line}): ${escapeHtml(err.message)}</div>`;
     }
   }
 
@@ -133,12 +150,12 @@ export function runScript(ctx: AppContext): void {
     }
     for (const result of results) {
       const cls = result.success ? 'script-output-success' : 'script-output-error';
-      html += `<div class="${cls}">Line ${result.line}: ${result.message}</div>`;
+      html += `<div class="${cls}">Line ${result.line}: ${escapeHtml(result.message)}</div>`;
     }
 
     // Show echo output
     for (const msg of echoMessages) {
-      html += `<div class="script-output-info">${msg}</div>`;
+      html += `<div class="script-output-info">${escapeHtml(msg)}</div>`;
     }
 
     // Refresh UI after script execution

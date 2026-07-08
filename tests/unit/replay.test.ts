@@ -270,7 +270,7 @@ describe('ScriptReplay', () => {
       expect(script).toBe('\n');
     });
 
-    it('should comment out unknown operation types', () => {
+    it('should emit an informative comment for unknown operation types', () => {
       const ops: CurationOperation[] = [
         {
           type: 'unknown_type' as any,
@@ -283,7 +283,12 @@ describe('ScriptReplay', () => {
         includeTimestamps: false,
         includeHeader: false,
       });
-      expect(script).toContain('# (unsupported operation: unknown_type)');
+      // Names the operation type, preserves the description, and tells the
+      // reader it has to be redone by hand — not the old opaque wording.
+      expect(script).toContain('unsupported operation "unknown_type"');
+      expect(script).toContain('Some unknown operation');
+      expect(script).toContain('re-apply manually');
+      expect(script).not.toContain('(unsupported operation:');
     });
   });
 
@@ -337,6 +342,15 @@ describe('ScriptReplay', () => {
       expect(result).not.toBeNull();
       expect(result).toContain('#');
       expect(result).toContain('scaffold');
+      expect(result).toContain('re-apply manually');
+    });
+
+    it('should handle scaffold unpaint description as an informative comment', () => {
+      const result = descriptionToDSL('scaffold_paint', 'Unpainted 3 contig(s)');
+      expect(result).not.toBeNull();
+      expect(result).toContain('scaffold unpaint');
+      expect(result).toContain('3 contig(s)');
+      expect(result).toContain('re-apply manually');
     });
 
     it('should return null for unrecognized cut description', () => {
@@ -423,7 +437,7 @@ describe('ScriptReplay', () => {
       expect(script).toContain('# 2024-01-01');
     });
 
-    it('should comment out unparseable entries', () => {
+    it('should emit an informative comment for unparseable entries', () => {
       const entries: SessionOperationLogEntry[] = [
         {
           type: 'unknown',
@@ -435,8 +449,13 @@ describe('ScriptReplay', () => {
         includeTimestamps: false,
         includeHeader: false,
       });
-      expect(script).toContain('# (could not parse)');
+      // A future/other-version session file can legitimately carry a type
+      // outside the known set (the field is a plain string). The fallback
+      // must name it and stay actionable, not the old opaque wording.
+      expect(script).toContain('unsupported operation "unknown"');
       expect(script).toContain('Did something mysterious');
+      expect(script).toContain('re-apply manually');
+      expect(script).not.toContain('(could not parse)');
     });
 
     it('should handle empty entries array', () => {
