@@ -4,11 +4,27 @@
 
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
-import { CurationEngine } from '../curation/CurationEngine';
+import { CurationEngine, undoBatch } from '../curation/CurationEngine';
 import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
 
 export function performUndo(ctx: AppContext): void {
+  // When the most recent operation belongs to a batch (a script run, autosort,
+  // autocut, ...), undo the whole batch as one action rather than one op.
+  const undoStack = state.get().undoStack ?? [];
+  const top = undoStack[undoStack.length - 1];
+  if (top?.batchId) {
+    ctx.suppressCurationRefresh = true;
+    let count = 0;
+    try {
+      count = undoBatch(top.batchId);
+    } finally {
+      ctx.suppressCurationRefresh = false;
+    }
+    ctx.refreshAfterCuration();
+    ctx.showToast(count > 1 ? `Undo (${count} operations)` : 'Undo');
+    return;
+  }
   if (CurationEngine.undo()) {
     ctx.showToast('Undo');
   }

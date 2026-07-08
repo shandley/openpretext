@@ -72,6 +72,20 @@ test.describe('Script console', () => {
     await expect(zoom).toHaveText('100%', { timeout: 5_000 });
   });
 
+  test('a multi-op script reverts with a single undo', async ({ page }) => {
+    await loadDemo(page);
+    await openConsole(page);
+    await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
+
+    // Two cuts add two contigs (14 total).
+    await runScript(page, 'cut #0 20\ncut #1 20');
+    await expect(page.locator('#status-contigs')).toHaveText('14 contigs');
+
+    // A single undo action reverts the whole script batch back to 12.
+    await page.evaluate(() => document.getElementById('btn-undo')?.click());
+    await expect(page.locator('#status-contigs')).toHaveText('12 contigs');
+  });
+
   test('a malformed line reports a parse error', async ({ page }) => {
     await loadDemo(page);
     await openConsole(page);

@@ -13,6 +13,7 @@ vi.mock('../../src/curation/CurationEngine', () => ({
     join: vi.fn(),
     move: vi.fn(),
   },
+  undoBatch: vi.fn(() => 0),
 }));
 
 vi.mock('../../src/curation/SelectionManager', () => ({
@@ -36,6 +37,7 @@ vi.mock('../../src/core/State', () => ({
       map: null,
       contigOrder: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
       selectedContigs: new Set(),
+      undoStack: [],
     })),
   },
 }));
@@ -49,7 +51,7 @@ import {
   toggleContigExclusion,
 } from '../../src/ui/CurationActions';
 
-import { CurationEngine } from '../../src/curation/CurationEngine';
+import { CurationEngine, undoBatch } from '../../src/curation/CurationEngine';
 import { SelectionManager } from '../../src/curation/SelectionManager';
 import { contigExclusion } from '../../src/curation/ContigExclusion';
 import { state } from '../../src/core/State';
@@ -131,6 +133,24 @@ describe('CurationActions', () => {
 
       expect(CurationEngine.undo).toHaveBeenCalled();
       expect(ctx.showToast).not.toHaveBeenCalled();
+    });
+
+    it('should undo the whole batch (not one op) when the top operation is batched', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        map: null,
+        contigOrder: [0, 1, 2],
+        selectedContigs: new Set(),
+        undoStack: [{ type: 'invert', batchId: 'script-1' }],
+      });
+      (undoBatch as ReturnType<typeof vi.fn>).mockReturnValue(3);
+      const ctx = createMockCtx();
+
+      performUndo(ctx);
+
+      expect(undoBatch).toHaveBeenCalledWith('script-1');
+      expect(CurationEngine.undo).not.toHaveBeenCalled();
+      expect(ctx.refreshAfterCuration).toHaveBeenCalled();
+      expect(ctx.showToast).toHaveBeenCalledWith('Undo (3 operations)');
     });
   });
 

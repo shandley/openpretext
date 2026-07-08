@@ -973,3 +973,59 @@ describe('SelectionManager', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Batch grouping: assignBatchId + undoBatch (script-as-one-undo primitive)
+// ---------------------------------------------------------------------------
+
+describe('batch grouping (assignBatchId + undoBatch)', () => {
+  beforeEach(() => {
+    state.reset();
+  });
+
+  it('stamps trailing operations with a shared batchId, overwriting inner ids', () => {
+    setupStandardState();
+    CurationEngine.invert(0);
+    CurationEngine.invert(1);
+    CurationEngine.invert(2);
+    expect(state.get().undoStack.length).toBe(3);
+
+    state.assignBatchId(0, 'script-1');
+
+    const stack = state.get().undoStack;
+    expect(stack.every((op) => op.batchId === 'script-1')).toBe(true);
+  });
+
+  it('undoes the whole stamped batch in one undoBatch call', () => {
+    setupStandardState();
+    CurationEngine.invert(0);
+    CurationEngine.invert(1);
+    CurationEngine.invert(2);
+    state.assignBatchId(0, 'script-1');
+
+    const count = CurationEngine.undoBatch('script-1');
+
+    expect(count).toBe(3);
+    expect(state.get().undoStack.length).toBe(0);
+    // All three contigs are back to their original (non-inverted) orientation.
+    const contigs = state.get().map!.contigs;
+    expect(contigs[0].inverted).toBe(false);
+    expect(contigs[1].inverted).toBe(false);
+    expect(contigs[2].inverted).toBe(false);
+  });
+
+  it('only stamps from the given index, leaving earlier operations ungrouped', () => {
+    setupStandardState();
+    CurationEngine.invert(0); // pre-existing op, index 0
+    const from = state.get().undoStack.length;
+    CurationEngine.invert(1);
+    CurationEngine.invert(2);
+
+    state.assignBatchId(from, 'script-2');
+
+    const stack = state.get().undoStack;
+    expect(stack[0].batchId).toBeUndefined();
+    expect(stack[1].batchId).toBe('script-2');
+    expect(stack[2].batchId).toBe('script-2');
+  });
+});

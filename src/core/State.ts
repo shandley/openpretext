@@ -281,6 +281,23 @@ class StateManager {
     this.batchContext = null;
   }
 
+  /**
+   * Stamp the trailing undo-stack operations (from index `from` to the end)
+   * with a shared batchId, so a multi-op action such as a script undoes as one
+   * unit. Overwrites any inner batchIds (e.g. an autosort run inside the script)
+   * so `undoBatch` pops the whole contiguous range. Post-hoc stamping is used
+   * instead of spanning `setBatchContext` because nested batch operations clear
+   * the context partway through.
+   */
+  assignBatchId(from: number, batchId: string): void {
+    if (from < 0 || from >= this.state.undoStack.length) return;
+    const undoStack = this.state.undoStack.map((op, i) =>
+      i >= from ? { ...op, batchId } : op
+    );
+    this.state = { ...this.state, undoStack };
+    this.notify();
+  }
+
   subscribe(listener: (state: AppState) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);

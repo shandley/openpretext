@@ -13,6 +13,9 @@ import { autoSortContigs, autoCutContigs } from '../curation/BatchOperations';
 import { parseScript, type ParseError } from '../scripting/ScriptParser';
 import { executeScript, type ScriptContext, type ScriptResult } from '../scripting/ScriptExecutor';
 
+/** Monotonic per-session counter for unique script batch ids. */
+let scriptRunSeq = 0;
+
 export interface DSLRunOutcome {
   /** Errors from parsing (one per malformed line). */
   parseErrors: ParseError[];
@@ -66,12 +69,20 @@ export function runDSL(
 
   if (!halt && parseResult.commands.length > 0) {
     const scriptCtx = buildScriptContext(ctx, (msg) => echoMessages.push(msg));
+    const undoDepthBefore = state.get().undoStack.length;
     // Suppress per-op UI refresh during the script; refresh once at the end.
     ctx.suppressCurationRefresh = true;
     try {
       results = executeScript(parseResult.commands, scriptCtx);
     } finally {
       ctx.suppressCurationRefresh = false;
+    }
+    // Group the script's curation operations into one undo unit so a single
+    // Ctrl+Z reverts the whole script (stamped before the refresh so the undo
+    // history panel shows the batch). One op needs no grouping.
+    const undoDepthAfter = state.get().undoStack.length;
+    if (undoDepthAfter - undoDepthBefore >= 2) {
+      state.assignBatchId(undoDepthBefore, `script-${++scriptRunSeq}`);
     }
     ctx.refreshAfterCuration();
     ctx.updateSidebarScaffoldList();
