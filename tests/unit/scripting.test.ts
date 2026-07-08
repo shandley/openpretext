@@ -58,28 +58,28 @@ function makeTestMap(contigs: ContigInfo[]): MapData {
 }
 
 /**
- * Build a mock ScriptContext with 4 contigs: chr1, chr2, chr3, chr4.
+ * Build a mock ScriptContext. Defaults to 4 contigs: chr1, chr2, chr3, chr4.
+ * Pass `names` to build a map with custom (e.g. mixed-case) contig names.
  * Records all calls to the curation/selection/scaffold APIs for assertions.
  */
-function createMockContext(): {
+function createMockContext(
+  names: string[] = ['chr1', 'chr2', 'chr3', 'chr4']
+): {
   ctx: ScriptContext;
   calls: Record<string, any[][]>;
   scaffolds: Scaffold[];
   appState: AppState;
 } {
-  const contigs = [
-    makeContig('chr1', 0, 0, 100, 10000),
-    makeContig('chr2', 1, 100, 200, 8000),
-    makeContig('chr3', 2, 200, 300, 6000),
-    makeContig('chr4', 3, 300, 400, 4000),
-  ];
+  const contigs = names.map((name, i) =>
+    makeContig(name, i, i * 100, (i + 1) * 100, 10000 - i * 2000)
+  );
 
   const scaffolds: Scaffold[] = [];
   let nextScaffoldId = 1;
 
   const appState: AppState = {
     map: makeTestMap(contigs),
-    contigOrder: [0, 1, 2, 3],
+    contigOrder: contigs.map((_, i) => i),
     mode: 'navigate',
     showGrid: true,
     showTooltip: true,
@@ -753,6 +753,31 @@ describe('ScriptExecutor', () => {
       const { ctx } = createMockContext();
       const ref: ContigRef = { kind: 'name', value: 'chrX' };
       expect(() => resolveContigRef(ref, ctx.state)).toThrow("not found");
+    });
+
+    it('should resolve a differently-cased name via case-insensitive fallback', () => {
+      // Contigs are lowercase chr1..chr4; 'CHR2' has no exact match but
+      // matches chr2 case-insensitively.
+      const { ctx } = createMockContext();
+      const ref: ContigRef = { kind: 'name', value: 'CHR2' };
+      expect(resolveContigRef(ref, ctx.state)).toBe(1);
+    });
+
+    it('should prefer an exact-case match over a differently-cased candidate', () => {
+      // chr2 at index 1, CHR2 at index 2. An exact 'CHR2' must resolve to
+      // index 2 (its own slot), not index 1 (the earlier case-insensitive
+      // match) — this discriminates exact-first from case-insensitive-first.
+      const { ctx } = createMockContext(['chr1', 'chr2', 'CHR2', 'chr4']);
+      expect(resolveContigRef({ kind: 'name', value: 'CHR2' }, ctx.state)).toBe(2);
+      // Companion: the lowercase exact match still lands on its own slot.
+      expect(resolveContigRef({ kind: 'name', value: 'chr2' }, ctx.state)).toBe(1);
+    });
+
+    it('should throw an ambiguity error when case-insensitive fallback hits multiple contigs', () => {
+      // 'Chr2' matches neither exactly but both chr2 and CHR2 insensitively.
+      const { ctx } = createMockContext(['chr1', 'chr2', 'CHR2', 'chr4']);
+      const ref: ContigRef = { kind: 'name', value: 'Chr2' };
+      expect(() => resolveContigRef(ref, ctx.state)).toThrow('ambiguous');
     });
 
     it('should throw when no map is loaded', () => {

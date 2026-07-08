@@ -115,8 +115,10 @@ export interface ScriptContext {
  * Resolve a ContigRef to a 0-based order index.
  *
  * For index references (`#N`), the value is used directly after bounds
- * checking. For name references, the contig order is searched for a
- * contig whose name matches (case-sensitive).
+ * checking. For name references, an exact case-sensitive match is tried
+ * first; if none is found, a case-insensitive match is used as a fallback
+ * (consistent with scaffold-name lookup). A case-insensitive fallback that
+ * hits more than one contig is reported as ambiguous rather than guessed.
  *
  * @param ref - The contig reference to resolve.
  * @param stateApi - State accessor.
@@ -139,13 +141,33 @@ export function resolveContigRef(ref: ContigRef, stateApi: StateAPI): number {
     return idx;
   }
 
-  // Name lookup
+  // Name lookup.
+  // 1. Exact case-sensitive match wins (preserves prior behavior, avoids
+  //    surprises when two contigs differ only by case).
   const name = ref.value as string;
   for (let i = 0; i < s.contigOrder.length; i++) {
     const contigId = s.contigOrder[i];
     if (s.map.contigs[contigId].name === name) {
       return i;
     }
+  }
+
+  // 2. Case-insensitive fallback (consistent with findScaffoldByName).
+  const lowerName = name.toLowerCase();
+  const ciMatches: number[] = [];
+  for (let i = 0; i < s.contigOrder.length; i++) {
+    const contigId = s.contigOrder[i];
+    if (s.map.contigs[contigId].name.toLowerCase() === lowerName) {
+      ciMatches.push(i);
+    }
+  }
+  if (ciMatches.length === 1) {
+    return ciMatches[0];
+  }
+  if (ciMatches.length > 1) {
+    throw new Error(
+      `Contig name '${name}' is ambiguous (case-insensitive match hits multiple contigs); use #index`
+    );
   }
 
   throw new Error(`Contig '${name}' not found`);

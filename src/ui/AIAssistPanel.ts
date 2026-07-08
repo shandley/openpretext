@@ -10,11 +10,7 @@
 
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
-import { CurationEngine } from '../curation/CurationEngine';
-import { SelectionManager } from '../curation/SelectionManager';
-import { parseScript } from '../scripting/ScriptParser';
-import { executeScript, type ScriptContext } from '../scripting/ScriptExecutor';
-import { autoSortContigs, autoCutContigs } from '../curation/BatchOperations';
+import { runDSL } from './DSLRunner';
 import { captureDataURL } from '../export/SnapshotExporter';
 import { AIClient, AIAuthError, AIRateLimitError } from '../ai/AIClient';
 import { buildAnalysisContext } from '../ai/AIContext';
@@ -68,41 +64,24 @@ export function parseAIResponse(text: string): Array<{ type: 'prose' | 'dsl'; co
 }
 
 function runDSLBlock(ctx: AppContext, dsl: string): void {
-  const parseResult = parseScript(dsl);
+  // A malformed AI block should never be applied partially, so halt on any
+  // parse error. Runs through the shared DSLRunner, so it gets the same view
+  // navigation wiring as the console.
+  const outcome = runDSL(ctx, dsl, { haltOnParseError: true });
 
-  const scriptCtx: ScriptContext = {
-    curation: CurationEngine,
-    selection: SelectionManager,
-    scaffold: ctx.scaffoldManager,
-    state: state,
-    batch: { autoCutContigs, autoSortContigs },
-    onEcho: () => {},
-  };
-
-  if (parseResult.errors.length > 0) {
-    const errMsg = parseResult.errors.map((e) => `Line ${e.line}: ${e.message}`).join('\n');
+  if (outcome.parseErrors.length > 0) {
+    const errMsg = outcome.parseErrors.map((e) => `Line ${e.line}: ${e.message}`).join('\n');
     ctx.showToast(`Parse errors:\n${errMsg}`, 5000);
     return;
   }
 
-  if (parseResult.commands.length === 0) {
+  if (outcome.commandCount === 0) {
     ctx.showToast('No commands to execute', 3000);
     return;
   }
 
-  // Suppress per-op UI refresh during the script; refresh once at the end.
-  ctx.suppressCurationRefresh = true;
-  let results;
-  try {
-    results = executeScript(parseResult.commands, scriptCtx);
-  } finally {
-    ctx.suppressCurationRefresh = false;
-  }
-  ctx.refreshAfterCuration();
-  ctx.updateSidebarScaffoldList();
-
-  const successCount = results.filter((r) => r.success).length;
-  const failCount = results.filter((r) => !r.success).length;
+  const successCount = outcome.results.filter((r) => r.success).length;
+  const failCount = outcome.results.filter((r) => !r.success).length;
   ctx.showToast(`Executed: ${successCount} succeeded, ${failCount} failed`, 3000);
 }
 

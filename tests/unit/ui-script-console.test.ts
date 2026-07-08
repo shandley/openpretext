@@ -508,27 +508,20 @@ describe('ScriptConsole', () => {
       expect(mockParseScript).toHaveBeenCalledWith('echo hello world');
     });
 
-    it('should display echo messages from script context', () => {
+    it('should render echo output in execution order via the result line', () => {
       elements['script-input'].value = 'echo msg';
       mockParseScript.mockReturnValue({
         commands: [{ type: 'echo', args: { message: 'msg' }, line: 1 }],
         errors: [],
       });
-      // The executeScript mock needs to invoke the onEcho callback
-      // provided in the ScriptContext. We capture the scriptCtx to
-      // trigger onEcho ourselves.
-      mockExecuteScript.mockImplementation((commands: any, scriptCtx: any) => {
-        if (scriptCtx.onEcho) {
-          scriptCtx.onEcho('Echo output here');
-        }
-        return [{ success: true, message: 'msg', line: 1 }];
-      });
+      // The echo command returns its text as the result message; the console
+      // renders results in order, so echoes need no separate (out-of-order) pass.
+      mockExecuteScript.mockReturnValue([{ success: true, message: 'Echo output here', line: 1 }]);
       const ctx = createMockCtx();
 
       runScript(ctx);
 
       expect(elements['script-output'].innerHTML).toContain('Echo output here');
-      expect(elements['script-output'].innerHTML).toContain('script-output-info');
     });
 
     it('should escape HTML in result messages so contig names cannot inject markup', () => {
@@ -551,16 +544,14 @@ describe('ScriptConsole', () => {
       expect(output).toContain('&lt;img');
     });
 
-    it('should escape HTML in echo output', () => {
+    it('should escape HTML in echo text (surfaced as a result line)', () => {
       elements['script-input'].value = 'echo x';
       mockParseScript.mockReturnValue({
         commands: [{ type: 'echo', args: { message: 'x' }, line: 1 }],
         errors: [],
       });
-      mockExecuteScript.mockImplementation((_commands: any, scriptCtx: any) => {
-        scriptCtx.onEcho?.('<script>bad()</script>');
-        return [{ success: true, message: 'x', line: 1 }];
-      });
+      // echo returns the echoed text as its result message; that text is user input.
+      mockExecuteScript.mockReturnValue([{ success: true, message: '<script>bad()</script>', line: 1 }]);
       const ctx = createMockCtx();
 
       runScript(ctx);
@@ -583,6 +574,69 @@ describe('ScriptConsole', () => {
       const output = elements['script-output'].innerHTML;
       expect(output).not.toContain('<b>');
       expect(output).toContain('&lt;b&gt;');
+    });
+
+    it('should show the DSL reference (and not execute) when the input is "help"', () => {
+      elements['script-input'].value = 'help';
+      const ctx = createMockCtx();
+
+      runScript(ctx);
+
+      const out = elements['script-output'].innerHTML;
+      expect(out).toContain('script-help-cat');
+      expect(out).toContain('Curation');
+      // help is intercepted before parsing/execution
+      expect(mockParseScript).not.toHaveBeenCalled();
+    });
+
+    it('should report a halt when execution stops before all commands run', () => {
+      elements['script-input'].value = 'invert a\ninvert b\ninvert c';
+      mockParseScript.mockReturnValue({
+        commands: [
+          { type: 'invert', args: {}, line: 1 },
+          { type: 'invert', args: {}, line: 2 },
+          { type: 'invert', args: {}, line: 3 },
+        ],
+        errors: [],
+      });
+      // Execution halts after line 2 fails: only 2 results for 3 parsed commands.
+      mockExecuteScript.mockReturnValue([
+        { success: true, message: 'ok', line: 1 },
+        { success: false, message: 'boom', line: 2 },
+      ]);
+      const ctx = createMockCtx();
+
+      runScript(ctx);
+
+      const out = elements['script-output'].innerHTML;
+      expect(out).toContain('stopped at line 2');
+      expect(out).toContain('1 of 3 not run');
+    });
+
+    it('recalls the previously run script with ArrowUp', () => {
+      const ctx = createMockCtx();
+      setupScriptConsole(ctx);
+      const inputEl = elements['script-input'];
+
+      // Run a unique script to push it into history.
+      inputEl.value = 'echo history_probe';
+      mockParseScript.mockReturnValue({
+        commands: [{ type: 'echo', args: { message: 'history_probe' }, line: 1 }],
+        errors: [],
+      });
+      mockExecuteScript.mockReturnValue([{ success: true, message: 'history_probe', line: 1 }]);
+      runScript(ctx);
+
+      // Clear the input, then ArrowUp at caret 0 recalls the last run script.
+      inputEl.value = '';
+      inputEl.selectionStart = 0;
+      inputEl.selectionEnd = 0;
+      const keydownHandler = inputEl.addEventListener.mock.calls.find(
+        (c: any[]) => c[0] === 'keydown',
+      )![1] as (e: any) => void;
+      keydownHandler({ key: 'ArrowUp', preventDefault: vi.fn(), ctrlKey: false, metaKey: false });
+
+      expect(inputEl.value).toBe('echo history_probe');
     });
 
     it('should handle both parse errors and successful commands together', () => {

@@ -1512,6 +1512,26 @@
     .script-output-success { color: #4caf50; }
     .script-output-error { color: var(--danger-text); }
     .script-output-info { color: var(--text-secondary); }
+    .script-help-cat {
+      color: var(--accent);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 8px 0 2px;
+    }
+    .script-help-row {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      padding: 1px 0;
+    }
+    .script-help-row code {
+      color: var(--text-primary);
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-width: 190px;
+    }
+    .script-help-summary { color: var(--text-secondary); }
 
     /* AI Assist panel */
     #ai-assist-panel {
@@ -2972,6 +2992,7 @@
       <div class="script-header">
         <span>Script Console</span>
         <div style="display:flex;gap:6px;align-items:center;">
+          <button id="btn-help-script" style="background:var(--bg-surface);">Help</button>
           <button id="btn-generate-from-log" style="background:var(--bg-surface);">From Log</button>
           <button id="btn-run-script">Run (Ctrl+Enter)</button>
           <button id="btn-clear-script" style="background:var(--bg-surface);">Clear</button>
