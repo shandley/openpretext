@@ -233,6 +233,46 @@
   .reality-txt p + p { margin-top: 1rem; }
   .reality-txt strong { color: var(--ink); font-weight: 700; }
 
+  /* Reading the analysis */
+  .readouts { margin-top: 2.6rem; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .readout { display: grid; grid-template-columns: 15rem 1fr; gap: 1.4rem 2.2rem;
+    padding: clamp(1.3rem, 3vw, 1.7rem); background: var(--surface); align-items: start; }
+  .readout + .readout { border-top: 1px solid var(--line); }
+  @media (max-width: 720px) { .readout { grid-template-columns: 1fr; gap: 1rem; } }
+  .rd-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.88rem;
+    padding: 0.5rem 0.7rem; background: var(--ground); border: 1px solid var(--line); border-radius: 3px; }
+  .rd-row .k { color: var(--ink-soft); }
+  .rd-row .v { font-weight: 700; color: var(--data-ink); }
+  .rd-row .v.ok { color: var(--good); }
+  .range { margin-top: 0.8rem; }
+  .range-track { position: relative; height: 7px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); }
+  .range-good { position: absolute; top: -1px; bottom: -1px; background: var(--good-wash); border: 1px solid var(--good); border-radius: 4px; }
+  .range-mark { position: absolute; top: -3px; width: 2px; height: 13px; background: var(--data); border-radius: 1px; }
+  .range-ends { display: flex; justify-content: space-between; margin-top: 0.35rem;
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.66rem; color: var(--ink-faint); letter-spacing: 0.02em; }
+  .rd-parts { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.8rem; }
+  .rd-part { font-family: ui-monospace, Menlo, monospace; font-size: 0.68rem; letter-spacing: 0.02em;
+    padding: 0.25rem 0.5rem; background: var(--ground); border: 1px solid var(--line); border-radius: 3px; color: var(--ink-soft); }
+  .rd-part b { color: var(--ink-faint); font-weight: 600; }
+  .rd-body h3 { margin-bottom: 0.4rem; }
+  .rd-body p { color: var(--ink-soft); font-size: 0.96rem; }
+  .rd-body p + p { margin-top: 0.6rem; }
+  .rd-read { display: block; margin-top: 0.65rem; font-size: 0.87rem; color: var(--ink-faint); line-height: 1.5; }
+  .rd-read b { color: var(--ink-soft); font-weight: 600; }
+  .ml { margin-top: 2.4rem; padding-top: 2.2rem; border-top: 2px solid var(--line-strong); }
+  .ml-head { max-width: 42rem; }
+  .ml-head .eyebrow { color: var(--ink-faint); }
+  .ml-head h3 { margin: 0.5rem 0 0.7rem; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.015em; }
+  .ml-head p { color: var(--ink-soft); }
+  .ml-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1.6rem 2.2rem; margin-top: 1.9rem; }
+  .ml-item .k { font-family: ui-monospace, Menlo, monospace; font-size: 0.68rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--data-ink); }
+  .ml-item h4 { margin: 0.45rem 0 0.35rem; font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; }
+  .ml-item p { color: var(--ink-soft); font-size: 0.93rem; line-height: 1.55; }
+  .ml-caveat { margin-top: 2rem; color: var(--ink-soft); font-size: 0.98rem; }
+  .ml-caveat strong { color: var(--ink); font-weight: 700; }
+
   /* CTA */
   .final { text-align: center; border-top: 1px solid var(--line); }
   .final .wrap { max-width: 44rem; }
@@ -281,6 +321,7 @@
       <a href="#read">Read the map</a>
       <a href="#guide">Field guide</a>
       <a href="#flow">Workflow</a>
+      <a href="#analysis">Analysis</a>
       <a class="ghlink" href="https://github.com/shandley/openpretext" target="_blank" rel="noopener">GitHub</a>
       <a class="cta-sm" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open the app</a>
     </nav>
@@ -538,6 +579,7 @@
           <span class="eyebrow">Emerging science</span>
           <h3>3D genomics, in the browser</h3>
           <p>Three readouts, straight from the map with no extra experiments: insulation scores (where chromosome neighborhoods begin and end), P(s) decay (how tightly the genome is packed), and A and B compartments (active versus quiet regions). A window into how the genome folds, and concepts you will meet again as you go deeper.</p>
+          <p style="margin-top:0.7rem;"><a href="#analysis">How to read these numbers &rarr;</a></p>
         </div>
         <div class="panel">
           <span class="eyebrow">Community</span>
@@ -545,6 +587,130 @@
           <p>OpenPretext's AI assistant runs on prompt strategies that curators write and share, tuned for inversions, fragmented assemblies, micro-chromosomes, and more. Use them, or contribute your own.</p>
           <p style="margin-top:0.7rem;"><a href="https://github.com/shandley/openpretext-strategies" target="_blank" rel="noopener">Browse community strategies →</a></p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="analysis" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Reading the analysis</span>
+        <h2>What the numbers in the panel mean</h2>
+        <p>Open the 3D Analysis panel and it fills with slopes, scores, and plots. Here is how to read each one, and what a healthy value looks like, so the panel becomes a second opinion instead of a wall of statistics.</p>
+      </div>
+
+      <div class="readouts">
+        <div class="readout">
+          <div>
+            <div class="rd-row"><span class="k">P(s) exponent</span><span class="v">&minus;1.23</span></div>
+            <div class="range">
+              <div class="range-track">
+                <div class="range-good" style="left:50%; right:25%;"></div>
+                <div class="range-mark" style="left:61.5%;"></div>
+              </div>
+              <div class="range-ends"><span>0</span><span>healthy &minus;1.0 to &minus;1.5</span><span>&minus;2</span></div>
+            </div>
+          </div>
+          <div class="rd-body">
+            <h3>Contact decay, P(s)</h3>
+            <p>How fast contact frequency falls as two points move apart along a chromosome, measured as the slope of the decay on a log-log plot. A well-packed genome sits between &minus;1.0 and &minus;1.5.</p>
+            <span class="rd-read"><b>When to worry:</b> a slope near 0 means contacts barely fade with distance, which points to poor compaction or a misassembly stitching distant regions together. A slope past &minus;2 usually means the data has been over-corrected.</span>
+          </div>
+        </div>
+
+        <div class="readout">
+          <div>
+            <div class="rd-row"><span class="k">P(s) R&sup2;</span><span class="v">0.63</span></div>
+            <div class="range">
+              <div class="range-track">
+                <div class="range-good" style="left:90%; right:0;"></div>
+                <div class="range-mark" style="left:63%;"></div>
+              </div>
+              <div class="range-ends"><span>0</span><span>tight fit &gt; 0.9</span><span>1</span></div>
+            </div>
+          </div>
+          <div class="rd-body">
+            <h3>Fit quality, R&sup2;</h3>
+            <p>How closely the decay follows a single clean power law. Above 0.9 the curve is tight. A low value means the points scatter, often because contigs of different quality are mixed together.</p>
+            <span class="rd-read"><b>Look closer:</b> the per-chromosome list breaks this down, so you can see which chromosomes fit cleanly and which are worth inspecting. A whole-genome R&sup2; can look modest while individual chromosomes fit well.</span>
+          </div>
+        </div>
+
+        <div class="readout">
+          <div>
+            <div class="rd-row"><span class="k">Health Score</span><span class="v ok">72</span></div>
+            <div class="rd-parts">
+              <span class="rd-part"><b>N50</b> 20%</span>
+              <span class="rd-part"><b>P(s)</b> 25%</span>
+              <span class="rd-part"><b>Int</b> 20%</span>
+              <span class="rd-part"><b>A/B</b> 15%</span>
+              <span class="rd-part"><b>Lib</b> 20%</span>
+            </div>
+          </div>
+          <div class="rd-body">
+            <h3>The composite health score</h3>
+            <p>One number from 0 to 100 that folds five measurements together: contiguity (N50), decay quality (P(s)), integrity (fewer misassembly flags), compartment strength (A/B), and library quality (the cis to trans ratio, which needs scaffolds assigned). Above 70 is a well-assembled genome.</p>
+            <span class="rd-read"><b>Read it as a trend, not a grade:</b> a fresh assembly scores low on integrity and library before you have cut and scaffolded anything. Watch the number climb as you work. That climb is the point.</span>
+          </div>
+        </div>
+
+        <div class="readout">
+          <div>
+            <div class="rd-row"><span class="k">TAD boundaries</span><span class="v">214</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>Insulation and boundaries</h3>
+            <p>The insulation score dips wherever a region is walled off from its neighbors. The deepest dips mark boundaries between chromosome neighborhoods, drawn as red markers along the map. In a clean, well-ordered assembly the strongest boundaries line up with real structure, not with the joins between contigs.</p>
+            <span class="rd-read"><b>When to worry:</b> a boundary sitting exactly on a contig edge, with the map continuous across it, is a seam in the assembly rather than biology.</span>
+          </div>
+        </div>
+
+        <div class="readout">
+          <div>
+            <div class="rd-row"><span class="k">Compartment strength</span><span class="v">1.8</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>A/B compartments and the saddle plot</h3>
+            <p>Chromatin sorts into two compartments: A, gene-rich and active, and B, quiet and dense. On the map they show as a checkerboard, where A talks to A and B talks to B across long distances. The saddle plot distills that checkerboard into one square: bins sorted from most B to most A, then averaged, so strong corners with a weak middle mean the two compartments are cleanly separated. The strength number puts a figure on that contrast.</p>
+          </div>
+        </div>
+
+        <div class="readout">
+          <div>
+            <div class="rd-row"><span class="k">Virtual 4C</span><span class="v">bin 512</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>Virtual 4C</h3>
+            <p>Alt-click any point on the map to pull out that single locus's contact profile across the whole genome, the way a 4C experiment would. It turns a two-dimensional map into one readable track anchored at one place.</p>
+            <span class="rd-read"><b>When to worry:</b> a sharp spike far from the diagonal but on the same chromosome is worth a look. It is either a wrong join pulling distant sequence together, or a real long-range contact.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ml">
+        <div class="ml-head">
+          <span class="eyebrow">Prediction, not measurement</span>
+          <h3>What a model can add: Evo2HiC</h3>
+          <p>OpenPretext can run predictions from a companion model alongside your real data. These do not measure your genome. They estimate what a model expects and lay it beside the map so you can compare. They need the local server running, and the full effect needs real model weights; the default mode does a light smoothing so you can see the wiring.</p>
+        </div>
+        <div class="ml-items">
+          <div class="ml-item">
+            <span class="k">Enhance</span>
+            <h4>Sharpen a sparse map</h4>
+            <p>Denoise and upscale a thin contact map so faint structure is easier to see, without touching the values you actually curate against.</p>
+          </div>
+          <div class="ml-item">
+            <span class="k">Predict</span>
+            <h4>Epigenomic tracks from sequence</h4>
+            <p>Estimate signals such as accessibility or histone marks straight from the assembled sequence, shown as extra tracks along the map.</p>
+          </div>
+          <div class="ml-item">
+            <span class="k">Seq2HiC</span>
+            <h4>A map from sequence alone</h4>
+            <p>Predict a contact map from sequence with no experiment, a reference for what the folding should look like when the real map is noisy or incomplete.</p>
+          </div>
+        </div>
+        <p class="ml-caveat"><strong>Treat every prediction as a hypothesis to check against the real map, never as a replacement for it.</strong> The measured contacts are the ground truth; the model is a second pair of eyes.</p>
       </div>
     </div>
   </section>
