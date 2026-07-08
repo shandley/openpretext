@@ -9,6 +9,7 @@ import { state } from '../core/State';
 import { operationsToScript } from '../scripting/ScriptReplay';
 import { DSL_REFERENCE, type DSLCommandDoc } from '../scripting/DSLReference';
 import { runDSL, dryRunValidate, previewEffects, type DSLRunOutcome } from './DSLRunner';
+import { setupMacroRecorder } from './MacroRecorder';
 
 let scriptConsoleVisible = false;
 
@@ -240,6 +241,9 @@ export function setupScriptConsole(ctx: AppContext): void {
       input.selectionStart = input.selectionEnd = start + 2;
     }
   });
+
+  // Macro recorder: a Record toggle that captures manual curation into DSL.
+  setupMacroRecorder(ctx);
 }
 
 /** Set the textarea value and place the caret at the end (used by history recall). */

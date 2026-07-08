@@ -1464,6 +1464,12 @@
       background: var(--accent-hover);
     }
 
+    #btn-record-macro.recording,
+    #btn-record-macro.recording:hover {
+      background: #D55E00;
+      color: #fff;
+    }
+
     .script-header .btn-close-console {
       background: none;
       color: var(--text-secondary);
@@ -2994,6 +3000,7 @@
         <div style="display:flex;gap:6px;align-items:center;">
           <button id="btn-help-script" style="background:var(--bg-surface);">Help</button>
           <button id="btn-generate-from-log" style="background:var(--bg-surface);">From Log</button>
+          <button id="btn-record-macro" style="background:var(--bg-surface);" title="Record manual curation actions (cut/join/invert/move, scaffold paint) into this script">Record</button>
           <button id="btn-preview-script" style="background:var(--bg-surface);" title="Validate the script against the current assembly without applying it">Preview</button>
           <button id="btn-preview-effects" style="background:var(--bg-surface);" title="Run then revert to preview the resulting contig count and N50 (briefly mutates state)">Preview effects</button>
           <button id="btn-run-script">Run (Ctrl+Enter)</button>
