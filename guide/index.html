@@ -67,7 +67,7 @@
   }
 
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; scroll-padding-top: 4rem; }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   body {
     margin: 0;
@@ -104,14 +104,27 @@
     backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--line);
   }
-  .bar-in { display: flex; align-items: center; justify-content: space-between; height: 3.4rem; }
+  .bar-in { display: flex; align-items: center; gap: 1.4rem; height: 3.4rem; }
   .brand { display: flex; align-items: center; gap: 0.55rem; font-weight: 800; letter-spacing: -0.01em; }
   .brand svg { display: block; }
-  .bar-links { display: flex; align-items: center; gap: 1.4rem; }
-  .bar-links a { color: var(--ink-soft); text-decoration: none; font-size: 0.92rem; font-weight: 550; }
+  .bar-links { display: flex; align-items: center; gap: 1.4rem; margin-left: auto; }
+  .bar-links a { position: relative; color: var(--ink-soft); text-decoration: none; font-size: 0.92rem; font-weight: 550; padding-block: 0.15rem; transition: color 0.15s; }
   .bar-links a:hover { color: var(--ink); }
-  .bar-links a.ghlink { color: var(--ink-faint); }
-  @media (max-width: 560px) { .bar-links a:not(.cta-sm) { display: none; } }
+  .bar-links a.active { color: var(--data-ink); }
+  .bar-links a.active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -0.3rem; height: 2px; background: var(--data); border-radius: 2px; }
+  .ghlink { color: var(--ink-faint); text-decoration: none; font-size: 0.92rem; font-weight: 550; }
+  .ghlink:hover { color: var(--ink-soft); }
+  @media (max-width: 560px) {
+    .bar-in { flex-wrap: wrap; height: auto; padding-block: 0.4rem; column-gap: 1rem; row-gap: 0.3rem; }
+    .brand { order: 1; }
+    .cta-sm { order: 2; margin-left: auto; }
+    .ghlink { display: none; }
+    .bar-links { order: 3; width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; gap: 1.25rem; padding-bottom: 0.15rem; scrollbar-width: none; }
+    .bar-links::-webkit-scrollbar { display: none; }
+    .bar-links a { flex: 0 0 auto; white-space: nowrap; }
+    .bar-links a.active::after { bottom: 0; }
+    html { scroll-padding-top: 5.75rem; }
+  }
   .cta-sm {
     background: var(--cta-bg); color: var(--cta-fg) !important; padding: 0.4rem 0.85rem;
     border-radius: 2px; font-weight: 650 !important; font-size: 0.86rem !important;
@@ -236,7 +249,7 @@
   /* Reading the analysis */
   .readouts { margin-top: 2.6rem; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .readout { display: grid; grid-template-columns: 15rem 1fr; gap: 1.4rem 2.2rem;
-    padding: clamp(1.3rem, 3vw, 1.7rem); background: var(--surface); align-items: start; scroll-margin-top: 4.5rem; }
+    padding: clamp(1.3rem, 3vw, 1.7rem); background: var(--surface); align-items: start; }
   .readout + .readout { border-top: 1px solid var(--line); }
   @media (max-width: 720px) { .readout { grid-template-columns: 1fr; gap: 1rem; } }
   .rd-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
@@ -260,7 +273,7 @@
   .rd-body p + p { margin-top: 0.6rem; }
   .rd-read { display: block; margin-top: 0.65rem; font-size: 0.87rem; color: var(--ink-faint); line-height: 1.5; }
   .rd-read b { color: var(--ink-soft); font-weight: 600; }
-  .ml { margin-top: 2.4rem; padding-top: 2.2rem; border-top: 2px solid var(--line-strong); scroll-margin-top: 4.5rem; }
+  .ml { margin-top: 2.4rem; padding-top: 2.2rem; border-top: 2px solid var(--line-strong); }
   .ml-head { max-width: 42rem; }
   .ml-head .eyebrow { color: var(--ink-faint); }
   .ml-head h3 { margin: 0.5rem 0 0.7rem; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.015em; }
@@ -317,14 +330,14 @@
       </svg>
       OpenPretext
     </span>
-    <nav class="bar-links">
+    <nav class="bar-links" aria-label="Page sections">
       <a href="#read">Read the map</a>
       <a href="#guide">Field guide</a>
       <a href="#flow">Workflow</a>
       <a href="#analysis">Analysis</a>
-      <a class="ghlink" href="https://github.com/shandley/openpretext" target="_blank" rel="noopener">GitHub</a>
-      <a class="cta-sm" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open the app</a>
     </nav>
+    <a class="ghlink" href="https://github.com/shandley/openpretext" target="_blank" rel="noopener">GitHub</a>
+    <a class="cta-sm" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open the app</a>
   </div>
 </header>
 
@@ -751,6 +764,45 @@
       entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
     }, { threshold: 0.12 });
     document.querySelectorAll('.reveal').forEach(function (e) { io.observe(e); });
+  })();
+
+  // Keep the anchor scroll offset in sync with the actual (variable-height) header.
+  var bar = document.querySelector('header.bar');
+  if (bar) {
+    var syncOffset = function () {
+      document.documentElement.style.scrollPaddingTop = (bar.offsetHeight + 8) + 'px';
+    };
+    window.addEventListener('resize', syncOffset, { passive: true });
+    if (window.ResizeObserver) { new ResizeObserver(syncOffset).observe(bar); }
+    syncOffset();
+  }
+
+  // Scrollspy: mark the nav link for the section currently under the header.
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.bar-links a[href^="#"]'));
+    var items = links.map(function (a) {
+      return { a: a, sec: document.getElementById(a.getAttribute('href').slice(1)) };
+    }).filter(function (m) { return m.sec; });
+    if (!items.length) return;
+    var bar = document.querySelector('header.bar');
+    function docTop(el) { return el.getBoundingClientRect().top + window.pageYOffset; }
+    function update() {
+      var barH = bar ? bar.offsetHeight : 56;
+      var probe = window.pageYOffset + barH + 12;
+      var current = null;
+      for (var i = 0; i < items.length; i++) {
+        if (docTop(items[i].sec) <= probe) current = items[i];
+      }
+      links.forEach(function (a) { a.classList.remove('active'); a.removeAttribute('aria-current'); });
+      if (current) { current.a.classList.add('active'); current.a.setAttribute('aria-current', 'true'); }
+    }
+    var ticking = false;
+    function onScroll() {
+      if (!ticking) { ticking = true; requestAnimationFrame(function () { update(); ticking = false; }); }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    update();
   })();
 </script>
 
