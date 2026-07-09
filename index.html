@@ -2123,6 +2123,43 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* Deep links into the field guide "Reading the analysis" section */
+    .guide-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 13px;
+      height: 13px;
+      margin-left: 4px;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--text-secondary);
+      text-decoration: none;
+      vertical-align: middle;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .guide-link:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .results-help {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 8px;
+      font-size: 11px;
+    }
+    .results-help a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .results-help a:hover {
+      text-decoration: underline;
+    }
+
     /* Analysis panel tabs */
     .analysis-tabs {
       display: flex;

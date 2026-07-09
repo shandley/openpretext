@@ -338,8 +338,11 @@ export function computeDecayByScaffold(
 
 /**
  * Format the decay result as HTML for the stats panel.
+ *
+ * `helpHtml` is optional pre-built markup (e.g. a field-guide link) appended to
+ * the "P(s) exponent" label. Passing it keeps this module free of UI imports.
  */
-export function formatDecayStats(result: ContactDecayResult): string {
+export function formatDecayStats(result: ContactDecayResult, helpHtml = ''): string {
   if (result.distances.length === 0) {
     return '<div class="stats-row"><span>P(s) decay</span><span>—</span></div>';
   }
@@ -353,7 +356,7 @@ export function formatDecayStats(result: ContactDecayResult): string {
   const color = fitted ? (inRange ? '#4caf50' : '#f39c12') : 'var(--text-secondary)';
 
   let html = '';
-  html += `<div class="stats-row"><span>P(s) exponent</span>`;
+  html += `<div class="stats-row"><span>P(s) exponent${helpHtml}</span>`;
   html += `<span style="color:${color};">${fitted ? exp.toFixed(2) : '\u2014'}</span></div>`;
   html += `<div class="stats-row"><span>P(s) R\u00B2</span>`;
   html += `<span>${Number.isFinite(r2) ? r2.toFixed(3) : '\u2014'}</span></div>`;

@@ -72,6 +72,23 @@ import type { CheckerboardResult } from '../analysis/CheckerboardScore';
 import { detectCentromeres, centromereToTracks, type CentromereResult } from '../analysis/CentromereDetector';
 
 // ---------------------------------------------------------------------------
+// Field guide deep links
+// ---------------------------------------------------------------------------
+
+/** Base URL of the "Reading the analysis" section of the field guide. */
+const GUIDE_ANALYSIS_URL = 'https://openpretext-guide.vercel.app/#analysis';
+
+/**
+ * A small "?" affordance that opens the field guide explanation for a metric.
+ * `anchor` is a readout id in the guide (e.g. "analysis-decay"); omit to link
+ * to the top of the section.
+ */
+function guideLink(anchor?: string, label = 'How to read this'): string {
+  const href = anchor ? `https://openpretext-guide.vercel.app/#${anchor}` : GUIDE_ANALYSIS_URL;
+  return `<a class="guide-link" href="${href}" target="_blank" rel="noopener" title="${label}" aria-label="${label}">?</a>`;
+}
+
+// ---------------------------------------------------------------------------
 // Cached state
 // ---------------------------------------------------------------------------
 
@@ -1016,7 +1033,7 @@ function renderHealthScoreCard(score: HealthScoreResult): string {
   const sparkline = renderSparkline(healthScoreHistory);
   return `<div class="health-score-card">
     <div class="health-score-value" style="color:${color}">${score.overall}</div>
-    <div class="health-score-label">Health Score</div>
+    <div class="health-score-label">Health Score ${guideLink('analysis-health')}</div>
     ${sparkline}
     <div class="health-score-breakdown">
       <span title="Contiguity (N50)">N50: ${Math.round(c.contiguity)}</span>
@@ -1036,6 +1053,9 @@ function updateResultsDisplay(ctx: AppContext): void {
 
   // Recomputing indicator (hidden by default, shown during auto-recompute)
   html += '<div id="analysis-recomputing" class="analysis-recomputing" style="display:none;"><span class="recomputing-dot"></span> Updating analysis...</div>';
+
+  // Deep link to the field guide explanation of these metrics
+  html += `<div class="results-help"><a href="${GUIDE_ANALYSIS_URL}" target="_blank" rel="noopener">Reading the analysis ↗</a></div>`;
 
   // Health score card (top of results)
   const healthScore = buildHealthScore(ctx);
@@ -1069,7 +1089,7 @@ function updateResultsDisplay(ctx: AppContext): void {
   }
 
   if (cachedDecay) {
-    html += formatDecayStats(cachedDecay);
+    html += formatDecayStats(cachedDecay, guideLink('analysis-decay'));
 
     // Baseline comparison stats (when baseline differs from current)
     const hasBaseline = baselineDecay != null && baselineDecay !== cachedDecay;
@@ -1113,10 +1133,10 @@ function updateResultsDisplay(ctx: AppContext): void {
 
   // Virtual 4C status
   if (cachedV4C) {
-    html += `<div class="stats-row"><span>Virtual 4C</span><span style="color:#ff8c32;">Bin ${cachedV4C.viewpoint}</span></div>`;
+    html += `<div class="stats-row"><span>Virtual 4C${guideLink('analysis-v4c')}</span><span style="color:#ff8c32;">Bin ${cachedV4C.viewpoint}</span></div>`;
     html += `<button class="analysis-btn" id="btn-clear-v4c" style="width:100%;margin:2px 0;">Clear V4C</button>`;
   } else {
-    html += `<div style="color:var(--text-secondary);font-size:10px;margin:2px 0;">Alt+click map for Virtual 4C</div>`;
+    html += `<div style="color:var(--text-secondary);font-size:10px;margin:2px 0;">Alt+click map for Virtual 4C ${guideLink('analysis-v4c')}</div>`;
   }
 
   // Saddle plot (after compartments computed)
@@ -1124,6 +1144,7 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += `<button class="analysis-btn" id="btn-compute-saddle" style="width:100%;margin:4px 0;background:#00b894;color:#fff;">Compute Saddle Plot</button>`;
   }
   if (cachedSaddle) {
+    html += `<div class="stats-row"><span>Saddle plot${guideLink('analysis-compartments')}</span></div>`;
     html += `<div class="saddle-container">${renderSaddleSVG(cachedSaddle)}</div>`;
   }
 
@@ -2134,7 +2155,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (Sinkhorn-Knopp)</button>
       <div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;">
         <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
-          <label for="ml-backend" style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">ML backend</label>
+          <label for="ml-backend" style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">ML backend ${guideLink('analysis-evo2')}</label>
           <select id="ml-backend" style="flex:1;min-width:0;">
             <option value="evo2hic">Evo2HiC (sequence-aware)</option>
             <option value="hicfoundation">HiCFoundation (Hi-C-only)</option>

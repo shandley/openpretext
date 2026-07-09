@@ -236,7 +236,7 @@
   /* Reading the analysis */
   .readouts { margin-top: 2.6rem; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .readout { display: grid; grid-template-columns: 15rem 1fr; gap: 1.4rem 2.2rem;
-    padding: clamp(1.3rem, 3vw, 1.7rem); background: var(--surface); align-items: start; }
+    padding: clamp(1.3rem, 3vw, 1.7rem); background: var(--surface); align-items: start; scroll-margin-top: 4.5rem; }
   .readout + .readout { border-top: 1px solid var(--line); }
   @media (max-width: 720px) { .readout { grid-template-columns: 1fr; gap: 1rem; } }
   .rd-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
@@ -260,7 +260,7 @@
   .rd-body p + p { margin-top: 0.6rem; }
   .rd-read { display: block; margin-top: 0.65rem; font-size: 0.87rem; color: var(--ink-faint); line-height: 1.5; }
   .rd-read b { color: var(--ink-soft); font-weight: 600; }
-  .ml { margin-top: 2.4rem; padding-top: 2.2rem; border-top: 2px solid var(--line-strong); }
+  .ml { margin-top: 2.4rem; padding-top: 2.2rem; border-top: 2px solid var(--line-strong); scroll-margin-top: 4.5rem; }
   .ml-head { max-width: 42rem; }
   .ml-head .eyebrow { color: var(--ink-faint); }
   .ml-head h3 { margin: 0.5rem 0 0.7rem; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.015em; }
@@ -600,7 +600,7 @@
       </div>
 
       <div class="readouts">
-        <div class="readout">
+        <div class="readout" id="analysis-decay">
           <div>
             <div class="rd-row"><span class="k">P(s) exponent</span><span class="v">&minus;1.23</span></div>
             <div class="range">
@@ -618,7 +618,7 @@
           </div>
         </div>
 
-        <div class="readout">
+        <div class="readout" id="analysis-fit">
           <div>
             <div class="rd-row"><span class="k">P(s) R&sup2;</span><span class="v">0.63</span></div>
             <div class="range">
@@ -636,7 +636,7 @@
           </div>
         </div>
 
-        <div class="readout">
+        <div class="readout" id="analysis-health">
           <div>
             <div class="rd-row"><span class="k">Health Score</span><span class="v ok">72</span></div>
             <div class="rd-parts">
@@ -654,7 +654,7 @@
           </div>
         </div>
 
-        <div class="readout">
+        <div class="readout" id="analysis-insulation">
           <div>
             <div class="rd-row"><span class="k">TAD boundaries</span><span class="v">214</span></div>
           </div>
@@ -665,7 +665,7 @@
           </div>
         </div>
 
-        <div class="readout">
+        <div class="readout" id="analysis-compartments">
           <div>
             <div class="rd-row"><span class="k">Compartment strength</span><span class="v">1.8</span></div>
           </div>
@@ -675,7 +675,7 @@
           </div>
         </div>
 
-        <div class="readout">
+        <div class="readout" id="analysis-v4c">
           <div>
             <div class="rd-row"><span class="k">Virtual 4C</span><span class="v">bin 512</span></div>
           </div>
@@ -687,7 +687,7 @@
         </div>
       </div>
 
-      <div class="ml">
+      <div class="ml" id="analysis-evo2">
         <div class="ml-head">
           <span class="eyebrow">Prediction, not measurement</span>
           <h3>What a model can add: Evo2HiC</h3>
