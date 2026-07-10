@@ -469,6 +469,21 @@ const undoHandlers: Record<CurationOperation['type'], (op: CurationOperation) =>
       scaffoldManager.undoPaint(op);
     }
   },
+  scaffold_create: (op) => {
+    if (scaffoldManager) {
+      scaffoldManager.undoCreate(op);
+    }
+  },
+  scaffold_delete: (op) => {
+    if (scaffoldManager) {
+      scaffoldManager.undoDelete(op);
+    }
+  },
+  scaffold_bulk: (op) => {
+    if (scaffoldManager) {
+      scaffoldManager.undoBulk(op);
+    }
+  },
 };
 
 /**
@@ -530,6 +545,21 @@ export function redo(): boolean {
     case 'scaffold_paint':
       if (scaffoldManager) {
         scaffoldManager.reapplyPaint(op);
+      }
+      break;
+    case 'scaffold_create':
+      if (scaffoldManager) {
+        scaffoldManager.reapplyCreate(op);
+      }
+      break;
+    case 'scaffold_delete':
+      if (scaffoldManager) {
+        scaffoldManager.reapplyDelete(op);
+      }
+      break;
+    case 'scaffold_bulk':
+      if (scaffoldManager) {
+        scaffoldManager.reapplyBulk(op);
       }
       break;
     default:

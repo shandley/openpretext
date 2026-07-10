@@ -112,7 +112,7 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     // Restore scaffolds
     for (const sc of session.scaffolds) {
       if (!ctx.scaffoldManager.getScaffold(sc.id)) {
-        ctx.scaffoldManager.createScaffold(sc.name);
+        ctx.scaffoldManager.createScaffold(sc.name, { record: false });
       }
     }
 

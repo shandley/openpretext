@@ -200,11 +200,6 @@ export function autoAssignScaffolds(ctx: AppContext): void {
     return;
   }
 
-  // Clear existing scaffolds
-  for (const sc of ctx.scaffoldManager.getAllScaffolds()) {
-    ctx.scaffoldManager.deleteScaffold(sc.id);
-  }
-
   // Sort blocks by total pixel span (largest first) for naming
   const sorted = [...result.blocks].sort((a, b) => {
     let spanA = 0;
@@ -220,17 +215,22 @@ export function autoAssignScaffolds(ctx: AppContext): void {
     return spanB - spanA;
   });
 
-  // Create scaffolds and paint contigs
-  for (let i = 0; i < sorted.length; i++) {
-    const block = sorted[i];
-    const name = `Chr${i + 1}`;
-    const id = ctx.scaffoldManager.createScaffold(name);
-    const orderIndices: number[] = [];
-    for (let j = block.startIndex; j <= block.endIndex; j++) {
-      orderIndices.push(j);
+  // Replace the whole scaffold set as ONE undoable operation. Recording this
+  // as a single before/after snapshot (rather than one op per scaffold) keeps
+  // it undoable even on fragmented genomes with hundreds of blocks, which would
+  // otherwise overflow the undo-stack depth cap and leave orphans on undo.
+  ctx.scaffoldManager.bulkOperation('Auto-assign scaffolds', () => {
+    ctx.scaffoldManager.resetScaffolds();
+    for (let i = 0; i < sorted.length; i++) {
+      const block = sorted[i];
+      const id = ctx.scaffoldManager.createScaffold(`Chr${i + 1}`, { record: false });
+      const orderIndices: number[] = [];
+      for (let j = block.startIndex; j <= block.endIndex; j++) {
+        orderIndices.push(j);
+      }
+      ctx.scaffoldManager.paintContigs(orderIndices, id, { record: false });
     }
-    ctx.scaffoldManager.paintContigs(orderIndices, id);
-  }
+  });
 
   ctx.updateSidebarScaffoldList();
   ctx.updateSidebarContigList();

@@ -543,8 +543,9 @@ describe('ExportSession', () => {
 
       await loadSession(ctx, file);
 
-      expect(ctx.scaffoldManager.createScaffold).toHaveBeenCalledWith('scaffold_1');
-      expect(ctx.scaffoldManager.createScaffold).toHaveBeenCalledWith('scaffold_2');
+      // Session restore must not record undo entries for the scaffolds it recreates.
+      expect(ctx.scaffoldManager.createScaffold).toHaveBeenCalledWith('scaffold_1', { record: false });
+      expect(ctx.scaffoldManager.createScaffold).toHaveBeenCalledWith('scaffold_2', { record: false });
     });
 
     it('should not create scaffold if it already exists', async () => {

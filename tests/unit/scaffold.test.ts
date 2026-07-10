@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { state, ContigInfo, MapData } from '../../src/core/State';
 import { events } from '../../src/core/EventBus';
 import { ScaffoldManager } from '../../src/curation/ScaffoldManager';
+import { undo, redo, undoBatch, setScaffoldManager } from '../../src/curation/CurationEngine';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -298,7 +299,7 @@ describe('ScaffoldManager', () => {
 
     it('should push a scaffold_paint operation onto the undo stack', () => {
       setupStandardState();
-      const id = mgr.createScaffold();
+      const id = mgr.createScaffold(undefined, { record: false });
 
       mgr.paintContigs([0], id);
 
@@ -322,7 +323,7 @@ describe('ScaffoldManager', () => {
     });
 
     it('should not paint if no map is loaded', () => {
-      const id = mgr.createScaffold();
+      const id = mgr.createScaffold(undefined, { record: false });
       mgr.paintContigs([0], id);
 
       const s = state.get();
@@ -340,7 +341,7 @@ describe('ScaffoldManager', () => {
 
     it('should skip invalid contig indices gracefully', () => {
       setupStandardState();
-      const id = mgr.createScaffold();
+      const id = mgr.createScaffold(undefined, { record: false });
 
       mgr.paintContigs([-1, 0, 99], id);
 
@@ -352,7 +353,7 @@ describe('ScaffoldManager', () => {
 
     it('should do nothing with an empty contig list', () => {
       setupStandardState();
-      const id = mgr.createScaffold();
+      const id = mgr.createScaffold(undefined, { record: false });
 
       mgr.paintContigs([], id);
 
@@ -555,7 +556,7 @@ describe('ScaffoldManager', () => {
 
     it('should handle painting same contig multiple times', () => {
       setupStandardState();
-      const id = mgr.createScaffold();
+      const id = mgr.createScaffold(undefined, { record: false });
 
       mgr.paintContigs([0], id);
       mgr.paintContigs([0], id); // paint again with same scaffold
@@ -564,5 +565,160 @@ describe('ScaffoldManager', () => {
       expect(s.map!.contigs[0].scaffoldId).toBe(id);
       expect(s.undoStack.length).toBe(2); // Both operations recorded
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scaffold create/delete undo/redo
+// ---------------------------------------------------------------------------
+
+describe('scaffold create/delete undo', () => {
+  let mgr: ScaffoldManager;
+
+  beforeEach(() => {
+    state.reset();
+    setupStandardState();
+    mgr = new ScaffoldManager();
+    setScaffoldManager(mgr);
+  });
+
+  it('reverts a scaffold created inside a script batch (no orphan)', () => {
+    // Reproduce the real script path: DSLRunner records ops, stamps them with
+    // a batchId via assignBatchId, and undoes the whole batch via undoBatch.
+    const undoBefore = state.get().undoStack.length;
+    const id = mgr.createScaffold('Chr1');
+    mgr.paintContigs([0, 1], id); // assign contigs 0 and 1
+
+    state.assignBatchId(undoBefore, 'script-1');
+    undoBatch('script-1');
+
+    // The whole batch must revert: no orphan scaffold left behind, and the
+    // contig assignments undone too.
+    expect(mgr.getAllScaffolds()).toHaveLength(0);
+    const s = state.get();
+    expect(s.map!.contigs[0].scaffoldId).toBeNull();
+    expect(s.map!.contigs[1].scaffoldId).toBeNull();
+  });
+
+  it('round-trips a single create through undo and redo (same id)', () => {
+    const id = mgr.createScaffold('Chr1');
+    expect(mgr.getScaffold(id)).toBeDefined();
+
+    undo();
+    expect(mgr.getAllScaffolds()).toHaveLength(0);
+
+    redo();
+    const restored = mgr.getScaffold(id);
+    expect(restored).toBeDefined();
+    expect(restored!.name).toBe('Chr1');
+  });
+
+  it('undoing a delete restores the scaffold and its contig assignments', () => {
+    const id = mgr.createScaffold('Chr1');
+    const color = mgr.getScaffold(id)!.color;
+    mgr.paintContigs([0, 1], id);
+
+    mgr.deleteScaffold(id);
+    expect(mgr.getScaffold(id)).toBeUndefined();
+    expect(state.get().map!.contigs[0].scaffoldId).toBeNull();
+
+    undo(); // undo the delete
+    const restored = mgr.getScaffold(id);
+    expect(restored).toBeDefined();
+    expect(restored!.name).toBe('Chr1');
+    expect(restored!.color).toBe(color);
+    const s = state.get();
+    expect(s.map!.contigs[0].scaffoldId).toBe(id);
+    expect(s.map!.contigs[1].scaffoldId).toBe(id);
+  });
+
+  it('does not record an undo entry when creating without recording', () => {
+    const before = state.get().undoStack.length;
+    mgr.createScaffold('imported', { record: false });
+    expect(state.get().undoStack.length).toBe(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bulk scaffold operations (auto-assign undo)
+// ---------------------------------------------------------------------------
+
+describe('scaffold bulk operations', () => {
+  let mgr: ScaffoldManager;
+
+  beforeEach(() => {
+    state.reset();
+    setupStandardState();
+    mgr = new ScaffoldManager();
+    setScaffoldManager(mgr);
+  });
+
+  it('records a whole scaffold replacement as a single undoable operation', () => {
+    mgr.bulkOperation('Auto-assign', () => {
+      mgr.resetScaffolds();
+      const a = mgr.createScaffold('Chr1', { record: false });
+      mgr.paintContigs([0, 1], a, { record: false });
+      const b = mgr.createScaffold('Chr2', { record: false });
+      mgr.paintContigs([2, 3], b, { record: false });
+    });
+
+    expect(state.get().undoStack).toHaveLength(1);
+    expect(state.get().undoStack[0].type).toBe('scaffold_bulk');
+    expect(mgr.getAllScaffolds()).toHaveLength(2);
+  });
+
+  it('undo restores the prior state; redo restores the assignment', () => {
+    mgr.bulkOperation('Auto-assign', () => {
+      mgr.resetScaffolds();
+      const a = mgr.createScaffold('Chr1', { record: false });
+      mgr.paintContigs([0, 1], a, { record: false });
+    });
+
+    undo();
+    expect(mgr.getAllScaffolds()).toHaveLength(0);
+    expect(state.get().map!.contigs[0].scaffoldId).toBeNull();
+
+    redo();
+    expect(mgr.getAllScaffolds()).toHaveLength(1);
+    expect(state.get().map!.contigs[0].scaffoldId).not.toBeNull();
+  });
+
+  it('undoes fully no matter how many scaffolds the bulk creates (cap-immune)', () => {
+    // Far more scaffolds than MAX_UNDO_DEPTH (200), yet still one undo op. This
+    // is the fragmented-genome case that a per-op batch would leave orphaned.
+    mgr.bulkOperation('Auto-assign', () => {
+      mgr.resetScaffolds();
+      for (let i = 0; i < 300; i++) {
+        mgr.createScaffold(`s${i}`, { record: false });
+      }
+    });
+
+    expect(mgr.getAllScaffolds()).toHaveLength(300);
+    expect(state.get().undoStack).toHaveLength(1);
+
+    undo();
+    expect(mgr.getAllScaffolds()).toHaveLength(0); // no orphans left behind
+  });
+
+  it('undoing a re-assignment restores the previous scaffold set', () => {
+    mgr.bulkOperation('first', () => {
+      mgr.resetScaffolds();
+      const a = mgr.createScaffold('Old', { record: false });
+      mgr.paintContigs([0], a, { record: false });
+    });
+    const firstId = mgr.getAllScaffolds()[0].id;
+
+    mgr.bulkOperation('second', () => {
+      mgr.resetScaffolds();
+      const b = mgr.createScaffold('New', { record: false });
+      mgr.paintContigs([2, 3], b, { record: false });
+    });
+
+    undo(); // undo the second replacement
+    const scafs = mgr.getAllScaffolds();
+    expect(scafs).toHaveLength(1);
+    expect(scafs[0].name).toBe('Old');
+    expect(scafs[0].id).toBe(firstId);
+    expect(state.get().map!.contigs[0].scaffoldId).toBe(firstId);
   });
 });

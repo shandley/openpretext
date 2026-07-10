@@ -56,7 +56,7 @@ export interface ContigInfo {
 }
 
 export interface CurationOperation {
-  type: 'cut' | 'invert' | 'move' | 'join' | 'scaffold_paint';
+  type: 'cut' | 'invert' | 'move' | 'join' | 'scaffold_paint' | 'scaffold_create' | 'scaffold_delete' | 'scaffold_bulk';
   timestamp: number;
   description: string;
   // Operation-specific data for undo

@@ -86,6 +86,7 @@ export function refreshAfterCuration(ctx: AppContext): void {
   rebuildContigBoundaries(ctx);
   reorderAndUploadContactMap(ctx);
   ctx.updateSidebarContigList();
+  ctx.updateSidebarScaffoldList();
   const s = state.get();
   document.getElementById('status-contigs')!.textContent = `${s.contigOrder.length} contigs`;
   // Snapshot quality metrics
