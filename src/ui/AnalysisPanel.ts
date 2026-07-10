@@ -75,16 +75,16 @@ import { detectCentromeres, centromereToTracks, type CentromereResult } from '..
 // Field guide deep links
 // ---------------------------------------------------------------------------
 
-/** Base URL of the "Reading the analysis" section of the field guide. */
-const GUIDE_ANALYSIS_URL = 'https://openpretext-guide.vercel.app/#analysis';
+/** The field guide's "Reading the analysis" page. */
+const GUIDE_ANALYSIS_URL = 'https://openpretext-guide.vercel.app/reading-the-analysis';
 
 /**
  * A small "?" affordance that opens the field guide explanation for a metric.
- * `anchor` is a readout id in the guide (e.g. "analysis-decay"); omit to link
- * to the top of the section.
+ * `anchor` is a readout id on the analysis page (e.g. "analysis-decay"); omit to
+ * link to the top of the page.
  */
 function guideLink(anchor?: string, label = 'How to read this'): string {
-  const href = anchor ? `https://openpretext-guide.vercel.app/#${anchor}` : GUIDE_ANALYSIS_URL;
+  const href = anchor ? `${GUIDE_ANALYSIS_URL}#${anchor}` : GUIDE_ANALYSIS_URL;
   return `<a class="guide-link" href="${href}" target="_blank" rel="noopener" title="${label}" aria-label="${label}">?</a>`;
 }
 

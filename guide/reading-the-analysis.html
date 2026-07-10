@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Reading the Hi-C analysis: what the P(s) exponent, health score, A/B compartments, saddle plot, and misassembly signatures mean, with interactive demos. Part of the OpenPretext field guide.">
+<meta property="og:title" content="Reading the analysis · OpenPretext field guide">
+<meta property="og:description" content="What the numbers in the 3D Analysis panel mean, with interactive demos for contact decay, compartments, and misassembly signatures.">
+<meta name="theme-color" content="#f4f5f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#20242c" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect x='1' y='1' width='18' height='18' rx='3' fill='none' stroke='%23c0392b' stroke-width='2'/%3E%3Cline x1='3' y1='17' x2='17' y2='3' stroke='%23c0392b' stroke-width='2.4'/%3E%3C/svg%3E">
+<title>Reading the analysis · OpenPretext field guide</title>
+<link rel="stylesheet" href="guide.css">
+<noscript><style>.reveal{opacity:1 !important;transform:none !important}</style></noscript>
+</head>
+<body>
+<header class="bar">
+  <div class="wrap bar-in">
+    <span class="brand">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="1" y="1" width="18" height="18" rx="2" fill="none" stroke="var(--data)" stroke-width="1.4"/>
+        <line x1="3" y1="17" x2="17" y2="3" stroke="var(--data)" stroke-width="1.8"/>
+        <rect x="4" y="10" width="4" height="4" fill="var(--data-wash)"/>
+        <rect x="11" y="3" width="5" height="5" fill="var(--data-wash)"/>
+      </svg>
+      OpenPretext
+    </span>
+    <nav class="bar-links" aria-label="Page sections">
+      <a href="#analysis">Decay</a>
+      <a href="#compartments">Compartments</a>
+      <a href="#misassembly">Misassembly</a>
+      <a href="#predictions">Predictions</a>
+    </nav>
+    <a class="ghlink" href="/">Field guide</a>
+    <a class="cta-sm" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open the app</a>
+  </div>
+</header>
+
+<main>
+  <section class="ra-hero">
+    <div class="wrap">
+      <span class="eyebrow">Field guide · deeper</span>
+      <h1>Reading the analysis</h1>
+      <p class="lede">Once your assembly is clean, OpenPretext turns the contact map into measurements: contact decay, compartments, misassembly signatures, and model predictions. This page explains what each readout means and lets you build the intuition by hand. New to curation? Start with the <a href="/">field guide</a>.</p>
+    </div>
+  </section>
+  <section id="analysis" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Reading the analysis</span>
+        <h2>What the numbers in the panel mean</h2>
+        <p>Open the 3D Analysis panel and it fills with slopes, scores, and plots. Here is how to read each one, and what a healthy value looks like, so the panel becomes a second opinion instead of a wall of statistics.</p>
+      </div>
+
+      <div class="psdemo" id="ps-demo">
+        <div class="psdemo-head">
+          <span class="eyebrow">Try it</span>
+          <h3>See what the exponent means</h3>
+          <p>Drag the slider. The contact map repacks and the decay curve changes slope at the same time. The green band, on the slider and between the dashed lines, is the healthy range.</p>
+        </div>
+        <div class="psdemo-figs">
+          <figure class="psdemo-fig">
+            <canvas id="ps-map" width="140" height="140" aria-hidden="true"></canvas>
+            <figcaption>Contact map</figcaption>
+          </figure>
+          <figure class="psdemo-fig">
+            <svg id="ps-plot" viewBox="0 0 200 140" role="img" aria-label="P(s) decay on log-log axes" preserveAspectRatio="xMidYMid meet">
+              <line class="ps-frame" x1="24" y1="16" x2="24" y2="128"/>
+              <line class="ps-frame" x1="24" y1="128" x2="190" y2="128"/>
+              <line id="ps-guide-a" class="ps-guide" x1="24" y1="16" x2="190" y2="72"/>
+              <line id="ps-guide-b" class="ps-guide" x1="24" y1="16" x2="190" y2="100"/>
+              <g id="ps-dots"></g>
+              <line id="ps-line" class="ps-line" x1="24" y1="16" x2="190" y2="83"/>
+              <text class="ps-axl" x="26" y="13">log P(s)</text>
+              <text class="ps-axl" x="188" y="138" text-anchor="end">log distance</text>
+            </svg>
+            <figcaption>P(s) decay (log-log)</figcaption>
+          </figure>
+        </div>
+        <div class="psdemo-control">
+          <div class="psdemo-slider">
+            <div class="psdemo-band"></div>
+            <input type="range" class="demo-range" id="ps-exp" min="-2" max="-0.2" step="0.02" value="-1.2" aria-label="Contact decay exponent">
+          </div>
+          <div class="psdemo-scale"><span>steep</span><span>healthy</span><span>shallow</span></div>
+        </div>
+        <div class="psdemo-readout">
+          <span class="psdemo-val" id="ps-val">&minus;1.20</span>
+          <span class="psdemo-msg" id="ps-msg" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div class="readouts">
+        <div class="readout" id="analysis-decay">
+          <div>
+            <div class="rd-row"><span class="k">P(s) exponent</span><span class="v">&minus;1.23</span></div>
+            <div class="range">
+              <div class="range-track">
+                <div class="range-good" style="left:50%; right:25%;"></div>
+                <div class="range-mark" style="left:61.5%;"></div>
+              </div>
+              <div class="range-ends"><span>0</span><span>healthy &minus;1.0 to &minus;1.5</span><span>&minus;2</span></div>
+            </div>
+          </div>
+          <div class="rd-body">
+            <h3>Contact decay, P(s)</h3>
+            <p>How fast contact frequency falls as two points move apart along a chromosome, measured as the slope of the decay on a log-log plot. A well-packed genome sits between &minus;1.0 and &minus;1.5.</p>
+            <span class="rd-read"><b>When to worry:</b> a slope near 0 means contacts barely fade with distance, which points to poor compaction or a misassembly stitching distant regions together. A slope past &minus;2 usually means the data has been over-corrected.</span>
+          </div>
+        </div>
+
+        <div class="readout" id="analysis-fit">
+          <div>
+            <div class="rd-row"><span class="k">P(s) R&sup2;</span><span class="v">0.63</span></div>
+            <div class="range">
+              <div class="range-track">
+                <div class="range-good" style="left:90%; right:0;"></div>
+                <div class="range-mark" style="left:63%;"></div>
+              </div>
+              <div class="range-ends"><span>0</span><span>tight fit &gt; 0.9</span><span>1</span></div>
+            </div>
+          </div>
+          <div class="rd-body">
+            <h3>Fit quality, R&sup2;</h3>
+            <p>How closely the decay follows a single clean power law. Above 0.9 the curve is tight. A low value means the points scatter, often because contigs of different quality are mixed together.</p>
+            <span class="rd-read"><b>Look closer:</b> the per-chromosome list breaks this down, so you can see which chromosomes fit cleanly and which are worth inspecting. A whole-genome R&sup2; can look modest while individual chromosomes fit well.</span>
+          </div>
+        </div>
+
+        <div class="readout" id="analysis-health">
+          <div>
+            <div class="rd-row"><span class="k">Health Score</span><span class="v ok">72</span></div>
+            <div class="rd-parts">
+              <span class="rd-part"><b>N50</b> 20%</span>
+              <span class="rd-part"><b>P(s)</b> 25%</span>
+              <span class="rd-part"><b>Int</b> 20%</span>
+              <span class="rd-part"><b>A/B</b> 15%</span>
+              <span class="rd-part"><b>Lib</b> 20%</span>
+            </div>
+          </div>
+          <div class="rd-body">
+            <h3>The composite health score</h3>
+            <p>One number from 0 to 100 that folds five measurements together: contiguity (N50), decay quality (P(s)), integrity (fewer misassembly flags), compartment strength (A/B), and library quality (the cis to trans ratio, which needs scaffolds assigned). Above 70 is a well-assembled genome.</p>
+            <span class="rd-read"><b>Read it as a trend, not a grade:</b> a fresh assembly scores low on integrity and library before you have cut and scaffolded anything. Watch the number climb as you work. That climb is the point.</span>
+          </div>
+        </div>
+
+        <div class="readout" id="analysis-insulation">
+          <div>
+            <div class="rd-row"><span class="k">TAD boundaries</span><span class="v">214</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>Insulation and boundaries</h3>
+            <p>The insulation score dips wherever a region is walled off from its neighbors. The deepest dips mark boundaries between chromosome neighborhoods, drawn as red markers along the map. In a clean, well-ordered assembly the strongest boundaries line up with real structure, not with the joins between contigs.</p>
+            <span class="rd-read"><b>When to worry:</b> a boundary sitting exactly on a contig edge, with the map continuous across it, is a seam in the assembly rather than biology.</span>
+          </div>
+        </div>
+
+        <div class="readout" id="analysis-compartments">
+          <div>
+            <div class="rd-row"><span class="k">Compartment strength</span><span class="v">1.8</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>A/B compartments and the saddle plot</h3>
+            <p>Chromatin sorts into two compartments: A, gene-rich and active, and B, quiet and dense. On the map they show as a checkerboard, where A talks to A and B talks to B across long distances. The saddle plot distills that checkerboard into one square: bins sorted from most B to most A, then averaged, so strong corners with a weak middle mean the two compartments are cleanly separated. The strength number puts a figure on that contrast.</p>
+          </div>
+        </div>
+
+        <div class="readout" id="analysis-v4c">
+          <div>
+            <div class="rd-row"><span class="k">Virtual 4C</span><span class="v">bin 512</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>Virtual 4C</h3>
+            <p>Alt-click any point on the map to pull out that single locus's contact profile across the whole genome, the way a 4C experiment would. It turns a two-dimensional map into one readable track anchored at one place.</p>
+            <span class="rd-read"><b>When to worry:</b> a sharp spike far from the diagonal but on the same chromosome is worth a look. It is either a wrong join pulling distant sequence together, or a real long-range contact.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="compartments" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Compartments</span>
+        <h2>A and B, and the saddle plot</h2>
+        <p>Chromatin sorts into two compartments: A, gene-rich and active, and B, quiet and dense. On the map they show as a checkerboard; the saddle plot distills that checkerboard into one square so you can read the separation at a glance.</p>
+      </div>
+      <div class="cpdemo psdemo" id="cp-demo">
+        <div class="psdemo-head">
+          <span class="eyebrow">Try it</span>
+          <h3>Turn the compartments up and down</h3>
+          <p>Slide the strength. The checkerboard on the map sharpens and the saddle plot's corners pull apart. Strong AA and BB corners with a weak middle mean the two compartments are cleanly separated.</p>
+        </div>
+        <div class="psdemo-figs">
+          <figure class="psdemo-fig"><canvas id="cp-map" width="140" height="140" aria-hidden="true"></canvas><figcaption>Contact map (checkerboard)</figcaption></figure>
+          <figure class="psdemo-fig"><canvas id="cp-saddle" width="120" height="120" aria-hidden="true"></canvas><figcaption>Saddle plot (B &rarr; A)</figcaption></figure>
+        </div>
+        <div class="psdemo-control">
+          <div class="psdemo-slider"><input type="range" class="demo-range" id="cp-str" min="0" max="1" step="0.02" value="0.5" aria-label="Compartment strength"></div>
+          <div class="psdemo-scale"><span>none</span><span>typical</span><span>strong</span></div>
+        </div>
+        <div class="psdemo-readout"><span class="psdemo-val" id="cp-val">0.50</span><span class="psdemo-msg" id="cp-msg" aria-live="polite"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="misassembly" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Misassembly</span>
+        <h2>The four signatures</h2>
+        <p>Most assembly errors leave a shape on the contact map. Learn the four and you can spot them at a glance, then fix them with a cut, a join, or a flip.</p>
+      </div>
+      <div class="msdemo" id="ms-demo">
+        <div class="psdemo-head">
+          <span class="eyebrow">Try it</span>
+          <h3>Pick a signature</h3>
+          <p>Each button draws the pattern that error makes on the map. The note says what you are seeing and what to do about it.</p>
+        </div>
+        <div class="ms-tabs" role="tablist" aria-label="Misassembly signatures">
+          <button class="ms-tab is-active" data-kind="inversion" type="button">Inversion</button>
+          <button class="ms-tab" data-kind="wrongjoin" type="button">Wrong join</button>
+          <button class="ms-tab" data-kind="chimera" type="button">Chimera</button>
+          <button class="ms-tab" data-kind="fragmented" type="button">Fragmented</button>
+        </div>
+        <div class="ms-body">
+          <figure class="psdemo-fig"><canvas id="ms-map" width="140" height="140" aria-hidden="true"></canvas><figcaption id="ms-cap">Inversion</figcaption></figure>
+          <div class="ms-info">
+            <h4 id="ms-title">Inversion</h4>
+            <p id="ms-see"></p>
+            <p class="ms-do"><span class="ms-do-lab">What to do</span><span id="ms-do"></span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="predictions" class="reveal">
+    <div class="wrap">
+      <div class="ml" id="analysis-evo2" style="border-top:none;margin-top:0;padding-top:0;">
+        <div class="ml-head">
+          <span class="eyebrow">Prediction, not measurement</span>
+          <h3>What a model can add: Evo2HiC</h3>
+          <p>OpenPretext can run predictions from a companion model alongside your real data. These do not measure your genome. They estimate what a model expects and lay it beside the map so you can compare. They need the local server running, and the full effect needs real model weights; the default mode does a light smoothing so you can see the wiring.</p>
+        </div>
+        <div class="ml-items">
+          <div class="ml-item">
+            <span class="k">Enhance</span>
+            <h4>Sharpen a sparse map</h4>
+            <p>Denoise and upscale a thin contact map so faint structure is easier to see, without touching the values you actually curate against.</p>
+          </div>
+          <div class="ml-item">
+            <span class="k">Predict</span>
+            <h4>Epigenomic tracks from sequence</h4>
+            <p>Estimate signals such as accessibility or histone marks straight from the assembled sequence, shown as extra tracks along the map.</p>
+          </div>
+          <div class="ml-item">
+            <span class="k">Seq2HiC</span>
+            <h4>A map from sequence alone</h4>
+            <p>Predict a contact map from sequence with no experiment, a reference for what the folding should look like when the real map is noisy or incomplete.</p>
+          </div>
+        </div>
+        <p class="ml-caveat"><strong>Treat every prediction as a hypothesis to check against the real map, never as a replacement for it.</strong> The measured contacts are the ground truth; the model is a second pair of eyes.</p>
+      </div>
+    </div>
+  </section>
+  <section class="final reveal">
+    <div class="wrap">
+      <span class="eyebrow">Put it to work</span>
+      <h2 style="margin-top:0.8rem;">Open a real genome and read its numbers</h2>
+      <p>Every readout here appears in the app's 3D Analysis panel. Load an assembly, compute the analyses, and the panel links back to these explanations.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open OpenPretext
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a class="btn btn-ghost" href="/">Back to the field guide</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <span>OpenPretext · a browser based Hi-C contact map viewer and genome curation tool</span>
+    <span>
+      <a href="/">Field guide</a> ·
+      <a href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">App</a> ·
+      <a href="https://github.com/shandley/openpretext" target="_blank" rel="noopener">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+<script src="guide.js"></script>
+</body>
+</html>
