@@ -613,6 +613,20 @@ async function runDirectionality(ctx: AppContext): Promise<void> {
 // Misassembly detection
 // ---------------------------------------------------------------------------
 
+/** Show the weak-join count on the toolbar Tracks button (hidden when zero). */
+function updateWeakJoinsBadge(count: number): void {
+  if (typeof document === 'undefined') return;
+  const badge = document.getElementById('weak-joins-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = String(count);
+    badge.title = `${count} weak join${count === 1 ? '' : 's'}`;
+    badge.removeAttribute('hidden');
+  } else {
+    badge.setAttribute('hidden', '');
+  }
+}
+
 /**
  * Score each contig junction by how well the Hi-C signal supports it, and mark
  * the suspect ones. Runs directly on the display-order overview so junctions
@@ -629,6 +643,7 @@ export function runJoinSupport(ctx: AppContext): void {
   // has no junctions.
   if (overviewSize < 4 || ranges.length < 2) {
     cachedJoinSupport = null;
+    updateWeakJoinsBadge(0);
     return;
   }
 
@@ -637,6 +652,7 @@ export function runJoinSupport(ctx: AppContext): void {
   // scaffolds are intentional chromosome boundaries and are not scored.
   const scaffoldIds = s.contigOrder.map((id) => s.map!.contigs[id].scaffoldId);
   cachedJoinSupport = computeJoinSupport(matrix, overviewSize, ranges, undefined, scaffoldIds);
+  updateWeakJoinsBadge(cachedJoinSupport.flaggedCount);
 
   if (cachedJoinSupport.flaggedCount > 0) {
     const ts = s.map!.textureSize;
@@ -2731,6 +2747,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedDecay = null;
   baselineDecay = null;
   cachedJoinSupport = null;
+  updateWeakJoinsBadge(0);
   cachedInsulation = null;
   cachedCompartments = null;
   cachedSuggestions = null;

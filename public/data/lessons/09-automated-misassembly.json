@@ -17,7 +17,7 @@
     {
       "id": "review-flags",
       "title": "Review Misassembly Flags",
-      "instruction": "After analysis completes, look at the contig list in the sidebar. Some contigs now show orange **MIS** badges: these are potential misassemblies detected by the algorithm.\n\nThe detector finds contigs where TAD boundaries or compartment switches fall well inside the contig (not at the edges, which would be normal chromosome boundaries). The number of flagged contigs is shown in the analysis panel.\n\nScroll through the contig list and note which contigs are flagged.",
+      "instruction": "After analysis completes, look at the contig list in the sidebar. Some contigs now show orange **MIS** badges: these are potential misassemblies detected by the algorithm.\n\nThe detector finds contigs where TAD boundaries or compartment switches fall well inside the contig (not at the edges, which would be normal chromosome boundaries). The number of flagged contigs is shown in the analysis panel.\n\nScroll through the contig list and note which contigs are flagged.\n\nWhile the Results panel is open, also read the **Join support** row and toggle tracks (X) to see the red **Weak joins** markers: they flag contig junctions the Hi-C signal does not support, an automated second read on misjoins and misorders alongside the MIS flags.",
       "expectedAction": { "type": "observe" },
       "hint": "MIS badges appear next to the contig size. More flagged contigs means more potential misassemblies to review."
     },

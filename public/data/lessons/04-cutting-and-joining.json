@@ -42,7 +42,7 @@
     {
       "id": "understand-join",
       "title": "Understanding the Join Tool",
-      "instruction": "The Join tool does the opposite: it merges two adjacent contigs into a single contig. Use this when the assembler incorrectly split a continuous sequence.\n\nTo join contigs, in Edit mode:\n1. Click a contig to select it, then Shift+click the adjacent contig\n2. Press the J key\n\nThe two contigs become one, and the boundary between them disappears. Selecting a single contig and pressing J joins it with its right-hand neighbor.",
+      "instruction": "The Join tool does the opposite: it merges two adjacent contigs into a single contig. Use this when the assembler incorrectly split a continuous sequence.\n\nTo join contigs, in Edit mode:\n1. Click a contig to select it, then Shift+click the adjacent contig\n2. Press the J key\n\nThe two contigs become one, and the boundary between them disappears. Selecting a single contig and pressing J joins it with its right-hand neighbor.\n\nAfter a join, the **Weak joins** marker in the 3D Analysis panel flags the new junction if the Hi-C signal does not support the merge, immediate feedback on whether it was right.",
       "expectedAction": {
         "type": "observe"
       },

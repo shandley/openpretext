@@ -59,7 +59,7 @@
     {
       "id": "review-assignments",
       "title": "Review Your Scaffold Assignments",
-      "instruction": "Take a moment to review your scaffold assignments:\n\n• Check the scaffold panel to see which contigs are assigned\n• Look at the colored bands on the contact map\n• Verify that each scaffold contains contigs from a single chromosome block\n\nYou can create multiple scaffolds and assign different chromosome blocks to each one. This organizational structure is what gets exported when you save the curated assembly.",
+      "instruction": "Take a moment to review your scaffold assignments:\n\n• Check the scaffold panel to see which contigs are assigned\n• Look at the colored bands on the contact map\n• Verify that each scaffold contains contigs from a single chromosome block\n\nYou can create multiple scaffolds and assign different chromosome blocks to each one. This organizational structure is what gets exported when you save the curated assembly.\n\nOne nuance: the Weak joins detector treats a junction between two different scaffolds as an intended chromosome boundary and does not flag it, so once contigs are assigned to scaffolds those boundaries stop showing up as weak.",
       "expectedAction": {
         "type": "observe"
       },

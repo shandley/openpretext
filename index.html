@@ -124,6 +124,22 @@
       margin-left: 4px;
     }
 
+    .toolbar-badge {
+      display: inline-block;
+      margin-left: 5px;
+      min-width: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: #ff3b30;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 16px;
+      text-align: center;
+      vertical-align: middle;
+    }
+    .toolbar-badge[hidden] { display: none; }
+
     .toolbar-title {
       font-weight: 600;
       font-size: 14px;
@@ -2843,7 +2859,7 @@
       <div class="toolbar-group">
         <button class="toolbar-btn" id="btn-minimap">Map <kbd>M</kbd></button>
         <button class="toolbar-btn" id="btn-grid">Grid <kbd>L</kbd></button>
-        <button class="toolbar-btn" id="btn-tracks">Tracks <kbd>X</kbd></button>
+        <button class="toolbar-btn" id="btn-tracks">Tracks <kbd>X</kbd><span id="weak-joins-badge" class="toolbar-badge" hidden></span></button>
         <button class="toolbar-btn" id="btn-sidebar">Info <kbd>I</kbd></button>
         <button class="toolbar-btn" id="btn-console">Console <kbd>`</kbd></button>
         <button class="toolbar-btn" id="btn-ai-assist">AI Assist</button>
