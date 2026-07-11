@@ -16,7 +16,7 @@
     {
       "id": "select-contig",
       "title": "Select a Contig to Tag",
-      "instruction": "Let's practice tagging a contig. In the sidebar contig list, click on one of the smaller contigs to select it. In a real curation session, you would identify candidates by looking at:\n\n\u2022 Off-diagonal mirror patterns (haplotigs)\n\u2022 Weak or absent diagonal signal (contaminants)\n\u2022 Small isolated contigs with no clear chromosome assignment (unlocalised)\n\u2022 Distinctively sized chromosomes with unusual contact patterns (sex chromosomes)\n\nFor now, select any contig to practice the workflow.",
+      "instruction": "Let's practice tagging a contig. In the sidebar contig list, click on one of the smaller contigs to select it. In a real curation session, you would identify candidates by looking at:\n\n\u2022 Off-diagonal mirror patterns (haplotigs)\n\u2022 Weak or absent diagonal signal (contaminants)\n\u2022 Small isolated contigs with no clear chromosome assignment (unlocalised)\n\u2022 Distinctively sized chromosomes with unusual contact patterns (sex chromosomes)\n\nOpenPretext can find the haplotig candidates for you: run Compute All in the analysis panel and it flags contigs with the tell-tale off-diagonal block, marks the ones that half coverage confirms, and offers a button to tag them in one step. Learn the manual workflow here, then let the detector take the first pass.\n\nFor now, select any contig to practice the workflow.",
       "expectedAction": { "type": "select-contig" },
       "hint": "Click a contig name in the sidebar list. Selected contigs are highlighted."
     },

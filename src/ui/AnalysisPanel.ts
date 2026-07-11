@@ -1419,7 +1419,7 @@ function updateResultsDisplay(ctx: AppContext): void {
       ? `${confirmed} confirmed / ${total}`
       : `${total} unconfirmed (no coverage)`;
     const color = confirmed > 0 ? '#9b59b6' : 'var(--text-secondary)';
-    html += `<div class="stats-row"><span>Haplotigs</span><span style="color:${color};">${detail}</span></div>`;
+    html += `<div class="stats-row"><span>Haplotigs${guideLink('analysis-haplotigs')}</span><span style="color:${color};">${detail}</span></div>`;
     if (confirmed > 0) {
       html += `<button class="analysis-btn" id="btn-tag-haplotigs" style="background:#9b59b6;color:#fff;width:100%;margin:4px 0;">Tag ${confirmed} Haplotig${confirmed === 1 ? '' : 's'}</button>`;
     }

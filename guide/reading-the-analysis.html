@@ -168,6 +168,17 @@
           </div>
         </div>
 
+        <div class="readout" id="analysis-haplotigs">
+          <div>
+            <div class="rd-row"><span class="k">Haplotigs</span><span class="v">2 confirmed</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>Haplotigs: the alternate haplotype left behind</h3>
+            <p>A retained haplotig is a piece of the second haplotype that was never merged into the primary assembly, so the same region ends up represented twice. It leaves two marks. In the contact map it shows a bright off-diagonal block against its one homologous primary, because Hi-C reads from the alternate haplotype map to both copies. In read depth it sits near half the assembly's coverage, because the reads split across the two haplotypes. OpenPretext uses the contact block to find candidates and coverage to confirm them, then lets you tag the confirmed ones so they drop out of the primary set.</p>
+            <span class="rd-read"><b>Confirmed against unconfirmed:</b> a bright block on its own is not proof. Segmental duplications and repeats make the same pattern. Only when the block and half coverage agree is a contig reported as a confirmed haplotig. Without a coverage track, candidates stay unconfirmed, so load coverage before you trust the call.</span>
+          </div>
+        </div>
+
         <div class="readout" id="analysis-compartments">
           <div>
             <div class="rd-row"><span class="k">Compartment strength</span><span class="v">1.8</span></div>
@@ -175,6 +186,7 @@
           <div class="rd-body">
             <h3>A/B compartments and the saddle plot</h3>
             <p>Chromatin sorts into two compartments: A, gene-rich and active, and B, quiet and dense. On the map they show as a checkerboard, where A talks to A and B talks to B across long distances. The saddle plot distills that checkerboard into one square: bins sorted from most B to most A, then averaged, so strong corners with a weak middle mean the two compartments are cleanly separated. The strength number puts a figure on that contrast.</p>
+            <span class="rd-read"><b>Which side is A:</b> Hi-C alone splits the two compartments but cannot say which is the active one, since the sign of the split is arbitrary. OpenPretext settles it with GC content when you load a reference FASTA, labeling the gene-rich, GC-rich side as A. Without a FASTA the split is still real but the A and B labels are left unoriented.</span>
           </div>
         </div>
 
