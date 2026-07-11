@@ -68,6 +68,7 @@ import { Evo2HiCClient, getStoredServerUrl as getEvoUrl, setStoredServerUrl as s
 import { HiCFoundationClient, getStoredServerUrl as getHicfUrl, setStoredServerUrl as setHicfUrl } from '../analysis/HiCFoundationClient';
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
+import { computeJoinSupport, type JoinSupportResult } from '../analysis/JoinSupport';
 import type { CheckerboardResult } from '../analysis/CheckerboardScore';
 import { detectCentromeres, centromereToTracks, type CentromereResult } from '../analysis/CentromereDetector';
 
@@ -94,6 +95,7 @@ function guideLink(anchor?: string, label = 'How to read this'): string {
 
 let cachedDecay: ContactDecayResult | null = null;
 let baselineDecay: ContactDecayResult | null = null;
+let cachedJoinSupport: JoinSupportResult | null = null;
 let cachedInsulation: InsulationResult | null = null;
 let cachedCompartments: CompartmentResult | null = null;
 let cachedSuggestions: CutSuggestion[] | null = null;
@@ -610,6 +612,45 @@ async function runDirectionality(ctx: AppContext): Promise<void> {
 // ---------------------------------------------------------------------------
 // Misassembly detection
 // ---------------------------------------------------------------------------
+
+/**
+ * Score each contig junction by how well the Hi-C signal supports it, and mark
+ * the suspect ones. Runs directly on the display-order overview so junctions
+ * are between adjacent bins.
+ */
+export function runJoinSupport(ctx: AppContext): void {
+  const s = state.get();
+  const original = s.map?.originalContactMap;
+  if (!original) return;
+  const overviewSize = getOverviewSize();
+  const ranges = buildContigRanges();
+  ctx.trackRenderer.removeTrack('Weak joins');
+  // Below ~4 bins the geometry is too coarse to score, and fewer than 2 contigs
+  // has no junctions.
+  if (overviewSize < 4 || ranges.length < 2) {
+    cachedJoinSupport = null;
+    return;
+  }
+
+  const matrix = reorderContactMap(original, s.map!.contigs, s.contigOrder, overviewSize);
+  // Scaffold membership in display order: junctions between different assigned
+  // scaffolds are intentional chromosome boundaries and are not scored.
+  const scaffoldIds = s.contigOrder.map((id) => s.map!.contigs[id].scaffoldId);
+  cachedJoinSupport = computeJoinSupport(matrix, overviewSize, ranges, undefined, scaffoldIds);
+
+  if (cachedJoinSupport.flaggedCount > 0) {
+    const ts = s.map!.textureSize;
+    const data = new Float32Array(ts);
+    for (const j of cachedJoinSupport.junctions) {
+      if (!j.flagged) continue;
+      const px = Math.min(ts - 1, Math.max(0, Math.round((j.binPosition / overviewSize) * ts)));
+      data[px] = 1;
+    }
+    ctx.trackRenderer.addTrack({
+      name: 'Weak joins', type: 'marker', data, color: '#ff3b30', height: 14, visible: true,
+    });
+  }
+}
 
 export function runMisassemblyDetection(ctx: AppContext): void {
   if (!cachedInsulation || !cachedCompartments) return;
@@ -1191,6 +1232,14 @@ function updateResultsDisplay(ctx: AppContext): void {
   // Auto-assign scaffolds button (when P(s) computed but no scaffolds)
   if (cachedDecay && ctx.scaffoldManager.getAllScaffolds().length === 0) {
     html += `<button class="analysis-btn" id="btn-auto-scaffold-analysis" style="width:100%;margin:4px 0;">Auto-assign Scaffolds</button>`;
+  }
+
+  // Join-support summary: weak contig junctions
+  if (cachedJoinSupport && cachedJoinSupport.junctions.length > 0) {
+    const jf = cachedJoinSupport.flaggedCount;
+    const color = jf > 0 ? '#ff3b30' : '#4caf50';
+    const label = jf > 0 ? `${jf} weak` : 'all supported';
+    html += `<div class="stats-row"><span>Join support</span><span style="color:${color};">${label}</span></div>`;
   }
 
   // Misassembly summary + suggest cuts
@@ -2259,6 +2308,9 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       ]).finally(() => {
         computing = false;
         setButtonsDisabled(false);
+        runMisassemblyDetection(ctx);
+        runJoinSupport(ctx);
+        updateResultsDisplay(ctx);
         drainPendingRecompute(ctx);
       });
     }
@@ -2604,6 +2656,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     computing = false;
     setButtonsDisabled(false);
     runMisassemblyDetection(ctx);
+    runJoinSupport(ctx);
     // Capture baseline P(s) on initial computation
     if (cachedDecay && !baselineDecay) {
       baselineDecay = cachedDecay;
@@ -2626,6 +2679,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
 
   cachedDecay = null;
   baselineDecay = null;
+  cachedJoinSupport = null;
   cachedInsulation = null;
   cachedCompartments = null;
   cachedSuggestions = null;
@@ -2664,6 +2718,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   ctx.trackRenderer.removeTrack('TAD Boundaries');
   ctx.trackRenderer.removeTrack('A/B Compartments');
   ctx.trackRenderer.removeTrack('Misassembly Flags');
+  ctx.trackRenderer.removeTrack('Weak joins');
   ctx.trackRenderer.removeTrack('ICE Bias');
   ctx.trackRenderer.removeTrack('SK Bias');
   ctx.trackRenderer.removeTrack('Directionality Index');
@@ -2734,6 +2789,7 @@ async function triggerAutoRecompute(ctx: AppContext): Promise<void> {
     if (hadInsulation && cachedInsulation && cachedCompartments && misassemblyActive) {
       runMisassemblyDetection(ctx);
     }
+    if (cachedJoinSupport) runJoinSupport(ctx);
     updateResultsDisplay(ctx);
 
     computing = false;
