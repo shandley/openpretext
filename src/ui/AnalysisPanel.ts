@@ -69,6 +69,7 @@ import { HiCFoundationClient, getStoredServerUrl as getHicfUrl, setStoredServerU
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
 import { computeJoinSupport, type JoinSupportResult, type JunctionSupport } from '../analysis/JoinSupport';
+import { computeBinGC, orientEigenvectorByGC } from '../analysis/GCContent';
 import type { CheckerboardResult } from '../analysis/CheckerboardScore';
 import { detectCentromeres, centromereToTracks, type CentromereResult } from '../analysis/CentromereDetector';
 
@@ -96,6 +97,7 @@ function guideLink(anchor?: string, label = 'How to read this'): string {
 let cachedDecay: ContactDecayResult | null = null;
 let baselineDecay: ContactDecayResult | null = null;
 let cachedJoinSupport: JoinSupportResult | null = null;
+let compartmentsOriented = false;
 let cachedInsulation: InsulationResult | null = null;
 let cachedCompartments: CompartmentResult | null = null;
 let cachedSuggestions: CutSuggestion[] | null = null;
@@ -435,12 +437,25 @@ async function runCompartments(ctx: AppContext): Promise<void> {
     overviewSize,
   );
   cachedCompartments = result;
+
+  // Orient A/B via GC content when a reference FASTA is loaded: flip the
+  // eigenvector so the positive (A) lobe is the higher-GC one. Without a FASTA
+  // the sign stays arbitrary and A/B is reported as unoriented.
+  compartmentsOriented = false;
+  if (ctx.referenceSequences && ctx.referenceSequences.size > 0) {
+    const gc = computeBinGC(s.map, ctx.referenceSequences, overviewSize);
+    compartmentsOriented = orientEigenvectorByGC(result.eigenvector, gc);
+  }
+
   const track = compartmentToTrack(result, overviewSize, s.map.textureSize);
 
   ctx.trackRenderer.addTrack(track);
   ctx.tracksVisible = true;
   ctx.updateTrackConfigPanel();
-  ctx.showToast(`Compartments: ${result.iterations} iterations, eigenvalue ${result.eigenvalue.toFixed(2)}`);
+  ctx.showToast(
+    `Compartments: ${result.iterations} iterations, eigenvalue ${result.eigenvalue.toFixed(2)}`
+    + (compartmentsOriented ? ' (A/B oriented by GC)' : ' (A/B unoriented, load a FASTA)'),
+  );
   runMisassemblyDetection(ctx);
   updateResultsDisplay(ctx);
 }
@@ -1186,7 +1201,8 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += `<div class="stats-row"><span>ICE Normalization</span><span style="color:#6c5ce7;">${cachedICE.iterations} iters, ${cachedICE.maskedBins.length} masked</span></div>`;
   }
 
-  // KR normalization status
+  // Sinkhorn-Knopp normalization status (the internal 'kr' key/module name is
+  // kept only for session-file back-compat; this is not Knight-Ruiz).
   if (cachedKR) {
     html += `<div class="stats-row"><span>Sinkhorn-Knopp</span><span style="color:#ff7675;">${cachedKR.iterations} iters, ${cachedKR.maskedBins.length} masked</span></div>`;
   }
@@ -1245,6 +1261,13 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += `<button class="analysis-btn" id="btn-clear-v4c" style="width:100%;margin:2px 0;">Clear V4C</button>`;
   } else {
     html += `<div style="color:var(--text-secondary);font-size:10px;margin:2px 0;">Alt+click map for Virtual 4C ${guideLink('analysis-v4c')}</div>`;
+  }
+
+  // A/B compartment orientation: only meaningful when oriented by GC.
+  if (cachedCompartments) {
+    const oc = compartmentsOriented ? '#4caf50' : 'var(--text-secondary)';
+    const ot = compartmentsOriented ? 'A/B by GC' : 'unoriented (load FASTA)';
+    html += `<div class="stats-row"><span>A/B compartments${guideLink('analysis-compartments')}</span><span style="color:${oc};">${ot}</span></div>`;
   }
 
   // Saddle plot (after compartments computed)
@@ -2750,6 +2773,7 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   updateWeakJoinsBadge(0);
   cachedInsulation = null;
   cachedCompartments = null;
+  compartmentsOriented = false;
   cachedSuggestions = null;
   cachedScaffoldDecay = null;
   cachedPatterns = null;
