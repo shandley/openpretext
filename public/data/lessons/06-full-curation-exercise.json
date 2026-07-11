@@ -71,11 +71,11 @@
     {
       "id": "check-work",
       "title": "Final Quality Check",
-      "instruction": "Before completing this lesson, do a final quality check:\n\n• Zoom out and view the entire genome\n• Each chromosome should be a clean, bright square block\n• The diagonal should be strong and continuous\n• Off-diagonal signal should be minimal except at centromeres\n• Open the stats panel to see assembly metrics (N50, L50, etc.)\n\nWhen you're satisfied that the assembly meets these criteria, complete the lesson.",
+      "instruction": "Before completing this lesson, do a final quality check:\n\n• Zoom out and view the entire genome\n• Each chromosome should be a clean, bright square block\n• The diagonal should be strong and continuous\n• Off-diagonal signal should be minimal except at centromeres\n• Open the stats panel to see assembly metrics (N50, L50, etc.)\n• Open the 3D Analysis Results panel and find the 'Join support' row. It reads 'N weak' or 'all supported'. After the auto-sort and auto-join you just did, any remaining weak junctions are worth a second look.\n• Toggle tracks (X) to show the red 'Weak joins' markers, then navigate to each flagged junction and re-examine it. A real chromosome join has contact continuing across the boundary; a weak one shows a dark off-diagonal square and may need another cut or reorder.\n\nWhen you're satisfied that the assembly meets these criteria, complete the lesson.",
       "expectedAction": {
         "type": "observe"
       },
-      "hint": "A good chromosome-level assembly has: clear boundaries, strong diagonal signal, minimal artifacts, and high N50/L50 values."
+      "hint": "A good chromosome-level assembly has: clear boundaries, strong diagonal signal, minimal artifacts, high N50/L50 values, and 'all supported' (or only intentional chromosome boundaries) on the Join support row. Use the red Weak joins markers to jump straight to any suspect junction."
     }
   ],
   "assessment": null

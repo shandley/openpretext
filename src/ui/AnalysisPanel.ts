@@ -68,7 +68,7 @@ import { Evo2HiCClient, getStoredServerUrl as getEvoUrl, setStoredServerUrl as s
 import { HiCFoundationClient, getStoredServerUrl as getHicfUrl, setStoredServerUrl as setHicfUrl } from '../analysis/HiCFoundationClient';
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
-import { computeJoinSupport, type JoinSupportResult } from '../analysis/JoinSupport';
+import { computeJoinSupport, type JoinSupportResult, type JunctionSupport } from '../analysis/JoinSupport';
 import type { CheckerboardResult } from '../analysis/CheckerboardScore';
 import { detectCentromeres, centromereToTracks, type CentromereResult } from '../analysis/CentromereDetector';
 
@@ -650,6 +650,57 @@ export function runJoinSupport(ctx: AppContext): void {
       name: 'Weak joins', type: 'marker', data, color: '#ff3b30', height: 14, visible: true,
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Weak-join navigation
+// ---------------------------------------------------------------------------
+
+/** Cursor into the flagged-junction list for Next/Previous navigation. */
+let weakJoinNavIndex = -1;
+
+/** Flagged (suspect) junctions from the last join-support computation. */
+export function getFlaggedJunctions(): JunctionSupport[] {
+  return cachedJoinSupport ? cachedJoinSupport.junctions.filter((j) => j.flagged) : [];
+}
+
+/**
+ * Animate the camera to the next/previous flagged junction and toast its
+ * position. Junctions sit on the diagonal at their boundary bin; the camera
+ * uses normalized [0,1] map coordinates, so the diagonal point is simply
+ * binPosition/overviewSize. Cycles through the list, keeping a module-local
+ * cursor. Reuses the waypoint navigation convention (animateTo, preserve zoom).
+ */
+function navigateWeakJoin(ctx: AppContext, delta: 1 | -1): void {
+  const flagged = getFlaggedJunctions();
+  if (flagged.length === 0) {
+    ctx.showToast('No weak joins flagged');
+    return;
+  }
+
+  const s = state.get();
+  const overviewSize = getOverviewSize();
+  const ts = s.map?.textureSize ?? 0;
+  if (overviewSize <= 0 || ts <= 0) return;
+
+  const n = flagged.length;
+  weakJoinNavIndex = ((weakJoinNavIndex + delta) % n + n) % n;
+  const j = flagged[weakJoinNavIndex];
+
+  const mapPixel = Math.round((j.binPosition / overviewSize) * ts);
+  const norm = mapPixel / ts;
+  ctx.camera.animateTo({ x: norm, y: norm }, 250);
+  ctx.showToast(`Weak join ${weakJoinNavIndex + 1}/${n} (support ${j.support.toFixed(2)})`);
+}
+
+/** Jump the camera to the next flagged weak junction. */
+export function nextWeakJoin(ctx: AppContext): void {
+  navigateWeakJoin(ctx, 1);
+}
+
+/** Jump the camera to the previous flagged weak junction. */
+export function prevWeakJoin(ctx: AppContext): void {
+  navigateWeakJoin(ctx, -1);
 }
 
 export function runMisassemblyDetection(ctx: AppContext): void {

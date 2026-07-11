@@ -17,7 +17,7 @@ import { toggleScriptConsole } from './ScriptConsole';
 import { toggleShortcutsModal } from './ShortcutsModal';
 import { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoin, runBatchInvert, runSortByLength, runAutoSort, runAutoCut, undoLastBatch } from './BatchActions';
 import { togglePatternGallery } from './PatternGallery';
-import { exportAnalysisByKey } from './AnalysisPanel';
+import { exportAnalysisByKey, nextWeakJoin, prevWeakJoin } from './AnalysisPanel';
 import { toggleWorkflowGuide } from './WorkflowGuide';
 
 import type { SpecimenEntry } from '../data/SpecimenCatalog';
@@ -135,6 +135,8 @@ function getCommands(ctx: AppContext) {
     { name: 'Pattern Gallery', shortcut: '', action: () => togglePatternGallery(ctx) },
     { name: 'Workflow Guide', shortcut: '', action: () => toggleWorkflowGuide() },
     { name: 'AI: Analyze Contact Map', shortcut: '', action: () => ctx.openAIAssist() },
+    { name: 'Next weak join', shortcut: 'B', action: () => nextWeakJoin(ctx) },
+    { name: 'Previous weak join', shortcut: '⇧B', action: () => prevWeakJoin(ctx) },
     { name: 'Export Insulation BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'insulation') },
     { name: 'Export P(s) TSV', shortcut: '', action: () => exportAnalysisByKey(ctx, 'decay') },
     { name: 'Export Compartments BedGraph', shortcut: '', action: () => exportAnalysisByKey(ctx, 'compartments') },

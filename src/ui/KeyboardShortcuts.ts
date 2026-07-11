@@ -13,6 +13,7 @@ import { toggleScriptConsole } from './ScriptConsole';
 import { toggleShortcutsModal } from './ShortcutsModal';
 import { isCommandPaletteVisible, toggleCommandPalette } from './CommandPalette';
 import { runAutoSort, runAutoCut } from './BatchActions';
+import { nextWeakJoin, prevWeakJoin } from './AnalysisPanel';
 
 export function setupKeyboardShortcuts(ctx: AppContext): void {
   window.addEventListener('keydown', (e) => {
@@ -147,6 +148,14 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
         document.getElementById('undo-history-content')?.scrollIntoView({ behavior: 'smooth' });
         break;
       }
+
+      case 'b':
+        // Next / Previous weak (flagged) contig join. Global, any mode.
+        if (!cmd) {
+          if (e.shiftKey) prevWeakJoin(ctx);
+          else nextWeakJoin(ctx);
+        }
+        break;
 
       case 'x':
         ctx.tracksVisible = !ctx.tracksVisible;
