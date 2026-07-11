@@ -65,6 +65,9 @@ export interface AppContext {
   currentWaypointId: number | null;
   animFrameId: number;
   referenceSequences: Map<string, string> | null;
+  /** Curator track data computed from the reference FASTA (gaps, telomeres),
+   *  in file order, keyed by classifiable name. Null until a FASTA is loaded. */
+  fastaTrackData: Map<string, Int32Array> | null;
   comparisonSnapshot: number[] | null;
   comparisonInvertedSnapshot: Map<number, boolean> | null;
   comparisonVisible: boolean;

@@ -10,6 +10,8 @@ import { downloadBED } from '../export/BEDWriter';
 import { downloadFASTA } from '../export/FASTAWriter';
 import { parseFASTA, parseFASTAStream } from '../formats/FASTAParser';
 import { parseBedGraph, bedGraphToTrack } from '../formats/BedGraphParser';
+import { computeFastaTrackData } from '../analysis/FastaTracks';
+import { refreshCuratorTracks } from './CuratorTracks';
 import { downloadSnapshot } from '../export/SnapshotExporter';
 import { exportSession, importSession, downloadSession } from '../io/SessionManager';
 import type { SessionData } from '../io/SessionManager';
@@ -262,6 +264,14 @@ export async function loadReferenceFasta(ctx: AppContext, file: File): Promise<v
       ctx.referenceSequences = new Map(records.map(r => [r.name, r.sequence]));
       ctx.showToast(`Loaded ${records.length} reference sequences`);
       updateFastaHint(ctx);
+
+      // Derive curator tracks (gaps, telomeres) from the sequence for files
+      // that don't carry them embedded, then surface them.
+      const s = state.get();
+      if (s.map) {
+        ctx.fastaTrackData = computeFastaTrackData(s.map, ctx.referenceSequences);
+        refreshCuratorTracks(ctx);
+      }
     }
   } catch (err) {
     console.error('FASTA parse error:', err);

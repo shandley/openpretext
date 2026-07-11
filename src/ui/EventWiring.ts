@@ -15,7 +15,7 @@ import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateP
 import { updateComparisonSummary } from './ComparisonMode';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
 import { syncOverviewModeSelect } from './ColorMapControls';
-import { refreshEmbeddedTracks } from './CuratorTracks';
+import { refreshCuratorTracks } from './CuratorTracks';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -42,6 +42,9 @@ export function setupEventListeners(ctx: AppContext): void {
       ctx.comparisonVisible = false;
       contigExclusion.clearAll();
       metaTags.clearAll();
+      // A newly loaded file has no FASTA-derived tracks yet; clear any from the
+      // previous file so they aren't reused against the new assembly.
+      ctx.fastaTrackData = null;
       // Set progress reference to initial contig order
       ctx.progressReference = [...s.contigOrder];
       ctx.previousProgress = null;
@@ -54,7 +57,7 @@ export function setupEventListeners(ctx: AppContext): void {
 
     // Surface the curator tracks (coverage, gaps, telomeres, ...) embedded in
     // the .pretext file, if any.
-    refreshEmbeddedTracks(ctx);
+    refreshCuratorTracks(ctx);
 
     // Show orientation toast for first-time guidance
     setTimeout(() => {
@@ -90,7 +93,7 @@ function flashContig(ctx: AppContext, contigIndex?: number): void {
 export function refreshAfterCuration(ctx: AppContext): void {
   rebuildContigBoundaries(ctx);
   reorderAndUploadContactMap(ctx);
-  refreshEmbeddedTracks(ctx);
+  refreshCuratorTracks(ctx);
   ctx.updateSidebarContigList();
   ctx.updateSidebarScaffoldList();
   const s = state.get();

@@ -120,37 +120,48 @@ export function reorderTrackData(
 // Public API
 // ---------------------------------------------------------------------------
 
+/** The display label a given extension name maps to. */
+export function labelForExtension(name: string): string {
+  return classify(name).label;
+}
+
+/**
+ * Build one overlay track from a per-pixel extension array (file order),
+ * classifying and normalizing it by name and permuting it into display order.
+ * Returns null when the array length does not match the 1-D pixel count (it
+ * cannot be aligned to the map). Shared by embedded (file) and computed
+ * (FASTA-derived) tracks so both normalize and reorder identically.
+ */
+export function buildTrackFromExtension(
+  name: string,
+  data: Int32Array,
+  contigs: ContigInfo[],
+  contigOrder: number[],
+  textureSize: number,
+): TrackConfig | null {
+  if (data.length !== textureSize) {
+    console.warn(`Track "${name}" skipped: length ${data.length} != textureSize ${textureSize}`);
+    return null;
+  }
+  const spec = classify(name);
+  const normFile =
+    spec.kind === 'marker' ? binarize(data) : percentileClipToUnit(data, spec.kind === 'coverage');
+  const display = reorderTrackData(normFile, contigs, contigOrder, textureSize);
+  const type: TrackType = spec.kind === 'marker' ? 'marker' : 'line';
+  return { name: spec.label, type, data: display, color: spec.color, height: spec.height, visible: true };
+}
+
 /**
  * Build renderable overlay tracks from a map's embedded graph extensions, in
  * the given display order. Returns an empty array when the file carries no
- * extensions. Extensions whose length does not match the 1-D pixel count are
- * skipped (a track cannot be aligned to the map without a matching length).
+ * extensions.
  */
 export function buildEmbeddedTracks(map: MapData, contigOrder: number[]): TrackConfig[] {
   const tracks: TrackConfig[] = [];
-  if (!map.extensions || map.extensions.size === 0) return tracks;
-  const ts = map.textureSize;
-
+  if (!map.extensions) return tracks;
   for (const [name, data] of map.extensions) {
-    if (data.length !== ts) {
-      console.warn(`Embedded track "${name}" skipped: length ${data.length} != textureSize ${ts}`);
-      continue;
-    }
-    const spec = classify(name);
-    const normFile =
-      spec.kind === 'marker'
-        ? binarize(data)
-        : percentileClipToUnit(data, spec.kind === 'coverage');
-    const display = reorderTrackData(normFile, map.contigs, contigOrder, ts);
-    const type: TrackType = spec.kind === 'marker' ? 'marker' : 'line';
-    tracks.push({
-      name: spec.label,
-      type,
-      data: display,
-      color: spec.color,
-      height: spec.height,
-      visible: true,
-    });
+    const track = buildTrackFromExtension(name, data, map.contigs, contigOrder, map.textureSize);
+    if (track) tracks.push(track);
   }
   return tracks;
 }
