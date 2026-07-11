@@ -15,6 +15,7 @@ import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateP
 import { updateComparisonSummary } from './ComparisonMode';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
 import { syncOverviewModeSelect } from './ColorMapControls';
+import { refreshEmbeddedTracks } from './CuratorTracks';
 
 /**
  * Subscribe to all relevant EventBus events and wire them to the
@@ -51,6 +52,10 @@ export function setupEventListeners(ctx: AppContext): void {
     clearAnalysisTracks(ctx);
     runAllAnalyses(ctx);
 
+    // Surface the curator tracks (coverage, gaps, telomeres, ...) embedded in
+    // the .pretext file, if any.
+    refreshEmbeddedTracks(ctx);
+
     // Show orientation toast for first-time guidance
     setTimeout(() => {
       ctx.showToast('Scroll to zoom \u2022 Drag to pan \u2022 Press E for edit mode \u2022 \u2318K for commands', 5000);
@@ -85,6 +90,7 @@ function flashContig(ctx: AppContext, contigIndex?: number): void {
 export function refreshAfterCuration(ctx: AppContext): void {
   rebuildContigBoundaries(ctx);
   reorderAndUploadContactMap(ctx);
+  refreshEmbeddedTracks(ctx);
   ctx.updateSidebarContigList();
   ctx.updateSidebarScaffoldList();
   const s = state.get();
