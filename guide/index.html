@@ -88,7 +88,7 @@
       <div class="sec-head">
         <span class="eyebrow">The one idea</span>
         <h2>How to read a contact map</h2>
-        <p>Everything in curation follows from a single fact about Hi-C: sequences that are physically close in the cell make more contacts, so they light up brighter. Learn to see three things and the rest is pattern recognition.</p>
+        <p>Everything in curation follows from a single fact about Hi-C: sequences that are physically close in the cell make more contacts, so they light up brighter. Learn to see four things and the rest is pattern recognition.</p>
       </div>
       <div class="read-grid">
         <figure>
@@ -118,6 +118,10 @@
           <div class="fact">
             <span class="k">03 falloff</span>
             <div><h3>Signal fades away from the diagonal</h3><p>The farther apart two positions are, the fewer contacts they share. Bright signal far from the diagonal is a red flag: something is in the wrong place.</p></div>
+          </div>
+          <div class="fact">
+            <span class="k">04 tracks</span>
+            <div><h3>Tracks along the edges are your aids</h3><p>Coverage, gaps, telomere density, and repeat density run as tracks down the sides of the map, read from the file or a loaded reference. A coverage dip or a gap marks where to look; telomere and repeat peaks mark real biology, not errors. Press <kbd>X</kbd> to toggle them.</p></div>
           </div>
         </div>
       </div>
@@ -251,7 +255,7 @@
         <p>Curation is a loop you repeat until the map is clean. OpenPretext gives you a tool for each step, plus automated help and a score that tells you when you are done.</p>
       </div>
       <div class="flow">
-        <div class="step"><h3>Inspect</h3><p>Scan the whole genome and mark the signatures: inversions, wrong joins, chimeras, scattered pieces.</p><span class="why">Diagnosis comes before treatment.</span></div>
+        <div class="step"><h3>Inspect</h3><p>Scan the whole genome and mark the signatures: inversions, wrong joins, chimeras, scattered pieces. Turn on the overlay tracks (coverage, gaps, telomeres) as you scan; the app also flags contig junctions the Hi-C signal does not support, a second opinion built in.</p><span class="why">Diagnosis comes before treatment.</span></div>
         <div class="step"><h3>Cut and join</h3><p>Split chimeric contigs at the break; merge pieces that belong together.</p><span class="why"><kbd>C</kbd> to cut, <kbd>J</kbd> to join.</span></div>
         <div class="step"><h3>Flip and order</h3><p>Reverse backward pieces and drag contigs into the right sequence so the diagonal strengthens.</p><span class="why"><kbd>F</kbd> to flip.</span></div>
         <div class="step"><h3>Assign scaffolds</h3><p>Group the ordered pieces into chromosomes. Let auto-sort and auto-detect do the heavy lifting first.</p><span class="why">The tools substitute for years of practice.</span></div>
@@ -269,7 +273,7 @@
           <span class="eyebrow" style="color:var(--ink-faint);">Judgment</span>
           <h3 style="margin-top:0.5rem;">Not every oddity is a mistake</h3>
           <p>The hardest part of curation is knowing when to leave something alone. Centromeres, telomeres, and repeat regions look unusual but are real biology. A faint band inside a clean chromosome is almost always a centromere, not an error.</p>
-          <p>When you are unsure, zoom in and let the signal decide, lean on the automated detection as a second opinion, and watch the health score: a change that helps the assembly usually moves it up.</p>
+          <p>When you are unsure, zoom in and let the signal decide, lean on the automated detection as a second opinion (the telomere and repeat tracks are part of it), and watch the health score: a change that helps the assembly usually moves it up.</p>
         </div>
       </div>
     </div>
