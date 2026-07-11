@@ -19,7 +19,7 @@
     "bench:extract-ground-truth": "npx tsx bench/extract-lesson-ground-truth.ts"
   },
   "dependencies": {
-    "pako": "^2.1.0"
+    "pako": "^3.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
