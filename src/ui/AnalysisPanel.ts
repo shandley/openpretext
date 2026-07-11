@@ -69,6 +69,8 @@ import { HiCFoundationClient, getStoredServerUrl as getHicfUrl, setStoredServerU
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
 import { computeJoinSupport, type JoinSupportResult, type JunctionSupport } from '../analysis/JoinSupport';
+import { computeContigCoverageRatios, detectHaplotigs, type HaplotigResult } from '../analysis/HaplotigDetector';
+import { metaTags } from '../curation/MetaTagManager';
 import { computeBinGC, orientEigenvectorByGC } from '../analysis/GCContent';
 import type { CheckerboardResult } from '../analysis/CheckerboardScore';
 import { detectCentromeres, centromereToTracks, type CentromereResult } from '../analysis/CentromereDetector';
@@ -97,6 +99,7 @@ function guideLink(anchor?: string, label = 'How to read this'): string {
 let cachedDecay: ContactDecayResult | null = null;
 let baselineDecay: ContactDecayResult | null = null;
 let cachedJoinSupport: JoinSupportResult | null = null;
+let cachedHaplotigs: HaplotigResult | null = null;
 let compartmentsOriented = false;
 let cachedInsulation: InsulationResult | null = null;
 let cachedCompartments: CompartmentResult | null = null;
@@ -734,6 +737,82 @@ export function prevWeakJoin(ctx: AppContext): void {
   navigateWeakJoin(ctx, -1);
 }
 
+/**
+ * Flag contigs that look like retained haplotigs. Contact enrichment (a bright
+ * off-diagonal block against one homologous primary) is the always-available
+ * trigger; coverage (near half the assembly median) is the discriminator that
+ * confirms a haplotig over an ordinary duplicate. Runs on the display-order
+ * overview; coverage, when a track is present, is read at full pixel resolution.
+ */
+export function runHaplotigDetection(ctx: AppContext): void {
+  const s = state.get();
+  const original = s.map?.originalContactMap;
+  ctx.trackRenderer.removeTrack('Haplotigs');
+  if (!original) {
+    cachedHaplotigs = null;
+    return;
+  }
+  const overviewSize = getOverviewSize();
+  const ranges = buildContigRanges();
+  if (overviewSize < 4 || ranges.length < 2) {
+    cachedHaplotigs = null;
+    return;
+  }
+
+  const matrix = reorderContactMap(original, s.map!.contigs, s.contigOrder, overviewSize);
+
+  // Coverage is in file order; align it to display order (contigOrder maps
+  // display index -> original index), the documented originalIndex/order footgun.
+  const ratiosByOriginal = computeContigCoverageRatios(s.map!);
+  let coverageRatioByOrder: Float32Array | null = null;
+  if (ratiosByOriginal) {
+    coverageRatioByOrder = new Float32Array(s.contigOrder.length);
+    for (let i = 0; i < s.contigOrder.length; i++) {
+      coverageRatioByOrder[i] = ratiosByOriginal[s.contigOrder[i]] ?? NaN;
+    }
+  }
+  const originalIndexByOrder = Int32Array.from(s.contigOrder);
+
+  cachedHaplotigs = detectHaplotigs(matrix, overviewSize, ranges, {
+    coverageRatioByOrder,
+    originalIndexByOrder,
+  });
+
+  if (cachedHaplotigs.flaggedCount > 0) {
+    const ts = s.map!.textureSize;
+    const data = new Float32Array(ts);
+    for (const c of cachedHaplotigs.candidates) {
+      const r = ranges[c.orderIndex];
+      const midBin = (r.start + r.end) / 2;
+      const px = Math.min(ts - 1, Math.max(0, Math.round((midBin / overviewSize) * ts)));
+      data[px] = 1;
+    }
+    ctx.trackRenderer.addTrack({
+      name: 'Haplotigs', type: 'marker', data, color: '#9b59b6', height: 14, visible: true,
+    });
+  }
+}
+
+/** Tag the flagged haplotig candidates with the 'haplotig' meta tag. */
+export function tagHaplotigCandidates(ctx: AppContext, confirmedOnly: boolean): void {
+  if (!cachedHaplotigs || cachedHaplotigs.flaggedCount === 0) {
+    ctx.showToast('No haplotig candidates flagged');
+    return;
+  }
+  const picked = cachedHaplotigs.candidates.filter(
+    (c) => !confirmedOnly || c.coverageConfirmed,
+  );
+  if (picked.length === 0) {
+    ctx.showToast('No coverage-confirmed haplotigs to tag');
+    return;
+  }
+  // MetaTagManager is keyed by original contig index (see Sidebar tagging).
+  metaTags.setMany(picked.map((c) => c.originalIndex), 'haplotig');
+  ctx.updateSidebarContigList();
+  updateResultsDisplay(ctx);
+  ctx.showToast(`Tagged ${picked.length} contig${picked.length === 1 ? '' : 's'} as haplotig`);
+}
+
 export function runMisassemblyDetection(ctx: AppContext): void {
   if (!cachedInsulation || !cachedCompartments) return;
   const s = state.get();
@@ -1332,6 +1411,20 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += `<div class="stats-row"><span>Join support</span><span style="color:${color};">${label}</span></div>`;
   }
 
+  // Haplotig detector: candidate contigs, coverage-confirmed vs unconfirmed
+  if (cachedHaplotigs && cachedHaplotigs.flaggedCount > 0) {
+    const confirmed = cachedHaplotigs.candidates.filter((c) => c.coverageConfirmed).length;
+    const total = cachedHaplotigs.flaggedCount;
+    const detail = cachedHaplotigs.coverageAvailable
+      ? `${confirmed} confirmed / ${total}`
+      : `${total} unconfirmed (no coverage)`;
+    const color = confirmed > 0 ? '#9b59b6' : 'var(--text-secondary)';
+    html += `<div class="stats-row"><span>Haplotigs</span><span style="color:${color};">${detail}</span></div>`;
+    if (confirmed > 0) {
+      html += `<button class="analysis-btn" id="btn-tag-haplotigs" style="background:#9b59b6;color:#fff;width:100%;margin:4px 0;">Tag ${confirmed} Haplotig${confirmed === 1 ? '' : 's'}</button>`;
+    }
+  }
+
   // Misassembly summary + suggest cuts
   const flagCount = misassemblyFlags.getFlaggedCount();
   if (flagCount > 0) {
@@ -1504,6 +1597,11 @@ function updateResultsDisplay(ctx: AppContext): void {
   // Wire auto-assign scaffolds button
   document.getElementById('btn-auto-scaffold-analysis')?.addEventListener('click', () => {
     autoAssignScaffolds(ctx);
+  });
+
+  // Wire tag-haplotigs button (coverage-confirmed candidates only)
+  document.getElementById('btn-tag-haplotigs')?.addEventListener('click', () => {
+    tagHaplotigCandidates(ctx, true);
   });
 
   // Wire baseline control buttons
@@ -2400,6 +2498,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
         setButtonsDisabled(false);
         runMisassemblyDetection(ctx);
         runJoinSupport(ctx);
+        runHaplotigDetection(ctx);
         updateResultsDisplay(ctx);
         drainPendingRecompute(ctx);
       });
@@ -2747,6 +2846,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     setButtonsDisabled(false);
     runMisassemblyDetection(ctx);
     runJoinSupport(ctx);
+    runHaplotigDetection(ctx);
     // Capture baseline P(s) on initial computation
     if (cachedDecay && !baselineDecay) {
       baselineDecay = cachedDecay;
@@ -2771,6 +2871,8 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   baselineDecay = null;
   cachedJoinSupport = null;
   updateWeakJoinsBadge(0);
+  cachedHaplotigs = null;
+  ctx.trackRenderer.removeTrack('Haplotigs');
   cachedInsulation = null;
   cachedCompartments = null;
   compartmentsOriented = false;
@@ -2882,6 +2984,7 @@ async function triggerAutoRecompute(ctx: AppContext): Promise<void> {
       runMisassemblyDetection(ctx);
     }
     if (cachedJoinSupport) runJoinSupport(ctx);
+    if (cachedHaplotigs) runHaplotigDetection(ctx);
     updateResultsDisplay(ctx);
 
     computing = false;
