@@ -13,6 +13,7 @@ import { performUndo, performRedo, invertSelectedContigs, cutAtCursorPosition, j
 import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession } from './ExportSession';
 import { cycleColorMap } from './ColorMapControls';
 import { toggleComparisonMode } from './ComparisonMode';
+import { openBeforeAfterMap } from './BeforeAfterMap';
 import { toggleScriptConsole } from './ScriptConsole';
 import { toggleShortcutsModal } from './ShortcutsModal';
 import { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoin, runBatchInvert, runSortByLength, runAutoSort, runAutoCut, undoLastBatch } from './BatchActions';
@@ -101,6 +102,7 @@ function getCommands(ctx: AppContext) {
     { name: 'Load BedGraph track', shortcut: '', action: () => document.getElementById('track-file-input')?.click() },
     { name: 'Toggle contig exclusion', shortcut: 'H', action: () => toggleContigExclusion(ctx) },
     { name: 'Toggle comparison mode', shortcut: 'P', action: () => toggleComparisonMode(ctx) },
+    { name: 'Before/After map', shortcut: '', action: () => openBeforeAfterMap(ctx) },
     { name: 'Show undo history', shortcut: 'U', action: () => {
       const sidebar = document.getElementById('sidebar');
       if (sidebar && !sidebar.classList.contains('visible')) {

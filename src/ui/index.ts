@@ -33,6 +33,7 @@ export { setMode } from './ModeManager';
 
 // ComparisonMode
 export { toggleComparisonMode, renderComparisonOverlay, updateComparisonSummary, computeDiff, exportDiffReport } from './ComparisonMode';
+export { openBeforeAfterMap, describeCuration } from './BeforeAfterMap';
 
 // Tooltip
 export { updateTooltip, hideTooltip } from './Tooltip';
