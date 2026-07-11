@@ -29,6 +29,7 @@
       <a href="#analysis">Decay</a>
       <a href="#compartments">Compartments</a>
       <a href="#misassembly">Misassembly</a>
+      <a href="#joins">Joins</a>
       <a href="#predictions">Predictions</a>
     </nav>
     <a class="ghlink" href="/">Field guide</a>
@@ -156,6 +157,17 @@
           </div>
         </div>
 
+        <div class="readout" id="analysis-joins">
+          <div>
+            <div class="rd-row"><span class="k">Join support</span><span class="v">3 weak</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>Join support at every junction</h3>
+            <p>For each contig junction, OpenPretext checks whether contact keeps flowing across the boundary. A correct join carries contact over the seam about as strongly as it holds inside each contig. A wrong join or a misorder shows the opposite: contact drops away across the boundary, a dark square opens up off the diagonal, and the junction is flagged as a weak join with a red marker on the map. The check is scaffold aware, so a junction between two contigs you have assigned to different scaffolds counts as an intended chromosome boundary and is left alone.</p>
+            <span class="rd-read"><b>When to worry:</b> a weak join inside a single scaffold, where two pieces meant to be one chromosome barely touch across the seam. That is usually a cut waiting to happen, or two contigs that need reordering before they will join cleanly.</span>
+          </div>
+        </div>
+
         <div class="readout" id="analysis-compartments">
           <div>
             <div class="rd-row"><span class="k">Compartment strength</span><span class="v">1.8</span></div>
@@ -234,6 +246,33 @@
             <p class="ms-do"><span class="ms-do-lab">What to do</span><span id="ms-do"></span></p>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="joins" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Joins</span>
+        <h2>Join support across a junction</h2>
+        <p>A join is only as good as the contact that crosses it. OpenPretext scores every contig junction by how well Hi-C signal continues over the seam. Where the signal holds, the join is supported. Where it drops away, the junction is flagged so you can look before you trust it.</p>
+      </div>
+      <div class="joindemo psdemo" id="join-demo">
+        <div class="psdemo-head">
+          <span class="eyebrow">Try it</span>
+          <h3>Weaken a join and watch it get flagged</h3>
+          <p>Two contigs meet at the junction in the middle of the map. Slide the junction signal down and the contact across the boundary fades into a dark square. Below a threshold the junction is marked as a weak join, with a red marker where the two contigs meet.</p>
+        </div>
+        <div class="psdemo-figs">
+          <figure class="psdemo-fig"><canvas id="join-map" width="140" height="140" aria-hidden="true"></canvas><figcaption>Contact map (two contigs, one junction)</figcaption></figure>
+          <figure class="psdemo-fig"><canvas id="join-cross" width="140" height="140" aria-hidden="true"></canvas><figcaption>Contact across the boundary</figcaption></figure>
+        </div>
+        <div class="psdemo-control">
+          <div class="psdemo-slider"><input type="range" class="demo-range" id="join-sig" min="0" max="1" step="0.02" value="0.85" aria-label="Junction signal"></div>
+          <div class="psdemo-scale"><span>depleted</span><span>threshold</span><span>continuous</span></div>
+        </div>
+        <label class="join-toggle"><input type="checkbox" id="join-scaffold"> These contigs are on <b>different scaffolds</b> (an intended chromosome boundary)</label>
+        <div class="psdemo-readout"><span class="join-state" id="join-state" aria-live="polite">Supported</span><span class="psdemo-msg" id="join-msg"></span></div>
       </div>
     </div>
   </section>

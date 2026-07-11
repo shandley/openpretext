@@ -315,3 +315,145 @@
     if (mq.addEventListener) mq.addEventListener('change', onTheme);
     new MutationObserver(onTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   })();
+
+  // Join support demo: a slider weakens the contact across a junction; a threshold flags it,
+  // and a scaffold toggle turns the same depletion into an intended, unflagged boundary.
+  (function () {
+    var root = document.getElementById('join-demo');
+    if (!root) return;
+    var mapC = document.getElementById('join-map');
+    var crossC = document.getElementById('join-cross');
+    var slider = document.getElementById('join-sig');
+    var scaffold = document.getElementById('join-scaffold');
+    var stateEl = document.getElementById('join-state');
+    var msgEl = document.getElementById('join-msg');
+    if (!mapC || !mapC.getContext || !crossC || !crossC.getContext || !slider) return;
+    var mctx = mapC.getContext('2d');
+    var xctx = crossC.getContext('2d');
+    var N = mapC.width, h = N / 2;
+    var pc = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    var probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;left:-9999px;top:0;width:0;height:0;';
+    root.appendChild(probe);
+    function toRGB(str) { pc.fillStyle = '#888'; pc.fillStyle = str; pc.fillRect(0, 0, 1, 1); var d = pc.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2]]; }
+    function tok(expr) { probe.style.color = expr; return toRGB(getComputedStyle(probe).color); }
+    var cold, hot, faint, ground;
+    function readColors() { cold = tok('var(--ground)'); hot = tok('var(--data)'); faint = tok('var(--ink-faint)'); ground = tok('var(--ground)'); }
+    function mix(t, i) { return cold[i] + (hot[i] - cold[i]) * t; }
+    function rgb(a) { return 'rgb(' + Math.round(a[0]) + ',' + Math.round(a[1]) + ',' + Math.round(a[2]) + ')'; }
+
+    var THRESH = 0.35;
+    function crossFactor(sig) { return 0.04 + 0.96 * sig; }
+
+    var noise = new Float32Array(N * N);
+    for (var a = 0; a < N; a++) { for (var b = 0; b < N; b++) { var r = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; noise[a * N + b] = r - Math.floor(r); } }
+    var img = mctx.createImageData(N, N), data = img.data;
+
+    function drawMap(sig, flagged) {
+      var cf = crossFactor(sig);
+      for (var y = 0; y < N; y++) {
+        for (var x = 0; x < N; x++) {
+          var d = Math.abs(x - y);
+          var base = d === 0 ? 1 : Math.pow(d, -1.05);
+          var same = (x < h) === (y < h);
+          var t = same ? base : base * cf;
+          t = t * (0.85 + 0.3 * noise[y * N + x]);
+          if (t > 1) t = 1; else if (t < 0) t = 0;
+          t = Math.pow(t, 0.8);
+          var idx = (y * N + x) * 4;
+          data[idx] = mix(t, 0); data[idx + 1] = mix(t, 1); data[idx + 2] = mix(t, 2); data[idx + 3] = 255;
+        }
+      }
+      mctx.putImageData(img, 0, 0);
+      // Faint, always-visible boundary lines so a supported join still reads as a junction.
+      mctx.strokeStyle = 'rgba(' + Math.round(faint[0]) + ',' + Math.round(faint[1]) + ',' + Math.round(faint[2]) + ',0.55)';
+      mctx.lineWidth = 1;
+      mctx.beginPath(); mctx.moveTo(h + 0.5, 0); mctx.lineTo(h + 0.5, N); mctx.moveTo(0, h + 0.5); mctx.lineTo(N, h + 0.5); mctx.stroke();
+      if (flagged) drawFlag(mctx, h, h);
+    }
+
+    // Red marker at the junction, outlined in the ground colour so it reads on a dark square.
+    function drawFlag(ctx, cx, cy) {
+      var s = 7;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - s);
+      ctx.lineTo(cx + s, cy);
+      ctx.lineTo(cx, cy + s);
+      ctx.lineTo(cx - s, cy);
+      ctx.closePath();
+      ctx.fillStyle = rgb(hot);
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = rgb(ground);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Cross-boundary profile: contact from an anchor inside contig A as we move across the seam.
+    var anchor = h - 6, M = 14, plotH = N - 2 * M;
+    function drawCross(sig, flagged) {
+      var cf = crossFactor(sig);
+      xctx.clearRect(0, 0, N, N);
+      xctx.fillStyle = rgb(cold);
+      xctx.fillRect(0, 0, N, N);
+      // baseline + junction line
+      xctx.strokeStyle = 'rgba(' + Math.round(faint[0]) + ',' + Math.round(faint[1]) + ',' + Math.round(faint[2]) + ',0.5)';
+      xctx.lineWidth = 1;
+      xctx.beginPath(); xctx.moveTo(4, N - M + 0.5); xctx.lineTo(N - 4, N - M + 0.5);
+      xctx.moveTo(h + 0.5, M - 4); xctx.lineTo(h + 0.5, N - M + 4); xctx.stroke();
+      function vy(x) {
+        var d = Math.abs(x - anchor);
+        var v = d === 0 ? 1 : Math.pow(d, -1.05);
+        if (x >= h) v *= cf;
+        v = Math.pow(v < 0 ? 0 : (v > 1 ? 1 : v), 0.5);
+        return (N - M) - v * plotH;
+      }
+      // filled area under the curve
+      xctx.beginPath();
+      xctx.moveTo(4, N - M);
+      for (var x = 4; x <= N - 4; x++) { xctx.lineTo(x, vy(x)); }
+      xctx.lineTo(N - 4, N - M);
+      xctx.closePath();
+      xctx.fillStyle = 'rgba(' + Math.round(hot[0]) + ',' + Math.round(hot[1]) + ',' + Math.round(hot[2]) + ',0.16)';
+      xctx.fill();
+      // the curve
+      xctx.beginPath();
+      for (var x2 = 4; x2 <= N - 4; x2++) { if (x2 === 4) xctx.moveTo(x2, vy(x2)); else xctx.lineTo(x2, vy(x2)); }
+      xctx.strokeStyle = rgb(hot); xctx.lineWidth = 2.2; xctx.lineJoin = 'round'; xctx.stroke();
+      if (flagged) drawFlag(xctx, h, vy(h + 1));
+    }
+
+    var MSG = {
+      supported: 'Contact carries across the seam about as strongly as it holds inside each contig. The join looks real.',
+      weak: 'Contact falls away across the boundary, the dark square at the junction. Inside one scaffold that is a wrong join or a misorder, worth a cut or a reorder.',
+      boundary: 'These contigs are on different scaffolds, so the drop is expected. This is an intended chromosome boundary and stays unflagged even though contact is depleted across it.'
+    };
+    function render() {
+      var sig = parseFloat(slider.value);
+      var depleted = sig < THRESH;
+      var isBoundary = scaffold.checked;
+      var flagged = depleted && !isBoundary;
+      drawMap(sig, flagged);
+      drawCross(sig, flagged);
+      stateEl.classList.remove('is-supported', 'is-weak', 'is-boundary');
+      if (isBoundary) {
+        stateEl.classList.add('is-boundary');
+        stateEl.textContent = 'Intended boundary';
+        msgEl.textContent = MSG.boundary;
+      } else if (flagged) {
+        stateEl.classList.add('is-weak');
+        stateEl.textContent = 'Weak join flagged';
+        msgEl.textContent = MSG.weak;
+      } else {
+        stateEl.classList.add('is-supported');
+        stateEl.textContent = 'Supported';
+        msgEl.textContent = MSG.supported;
+      }
+    }
+    readColors(); render();
+    slider.addEventListener('input', render);
+    scaffold.addEventListener('change', render);
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    var onTheme = function () { readColors(); render(); };
+    if (mq.addEventListener) mq.addEventListener('change', onTheme);
+    new MutationObserver(onTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  })();

@@ -310,7 +310,7 @@
     color: var(--data-ink); font-variant-numeric: tabular-nums; }
   .psdemo.is-healthy .psdemo-val { color: var(--good); }
   .psdemo-msg { font-size: 0.98rem; color: var(--ink-soft); flex: 1 1 16rem; }
-  #cp-map, #cp-saddle, #ms-map { aspect-ratio: 1 / 1; }
+  #cp-map, #cp-saddle, #ms-map, #join-map, #join-cross { aspect-ratio: 1 / 1; }
 
   /* Misassembly signature demo */
   .msdemo { margin-top: 2.4rem; }
@@ -328,6 +328,18 @@
   .ms-do-lab { display: block; font-family: ui-monospace, Menlo, monospace; font-size: 0.66rem; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--ink-faint); margin-bottom: 0.2rem; }
   #ms-do { color: var(--ink); font-size: 0.96rem; }
+
+  /* Join support demo */
+  .join-toggle { display: flex; align-items: baseline; gap: 0.55rem; margin-top: 1.3rem;
+    font-size: 0.92rem; color: var(--ink-soft); cursor: pointer; }
+  .join-toggle input { flex: none; width: 15px; height: 15px; accent-color: var(--data); cursor: pointer; align-self: center; }
+  .join-toggle b { color: var(--ink); font-weight: 700; }
+  .join-state { font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; font-weight: 700;
+    letter-spacing: 0.02em; padding: 0.28rem 0.7rem; border-radius: 3px; border: 1px solid var(--line-strong);
+    color: var(--ink-soft); white-space: nowrap; }
+  .join-state.is-supported { color: var(--good); border-color: var(--good); background: var(--good-wash); }
+  .join-state.is-weak { color: var(--data-ink); border-color: var(--data); background: var(--data-wash); }
+  .join-state.is-boundary { color: var(--ink-faint); border-color: var(--line-strong); background: var(--surface-2); }
 
   /* CTA */
   .final { text-align: center; border-top: 1px solid var(--line); }
