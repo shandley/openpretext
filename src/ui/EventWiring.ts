@@ -12,6 +12,7 @@ import { contigExclusion } from '../curation/ContigExclusion';
 import { metaTags } from '../curation/MetaTagManager';
 import { getContigBoundaries } from '../core/DerivedState';
 import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel, clearEnhancedMap } from './AnalysisPanel';
+import { resetOEMap } from './OEMapToggle';
 import { updateComparisonSummary } from './ComparisonMode';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
 import { syncOverviewModeSelect } from './ColorMapControls';
@@ -26,6 +27,8 @@ export function setupEventListeners(ctx: AppContext): void {
     // Reset the view to fit so a newly loaded genome isn't shown at the
     // previous file's zoom/pan (which can leave the fresh map off-screen).
     ctx.camera?.resetViewImmediate();
+    // A new assembly replaces the overview texture; drop any O/E view.
+    resetOEMap(ctx);
 
     ctx.updateSidebarContigList();
     ctx.updateSidebarScaffoldList();
@@ -115,6 +118,8 @@ export function refreshAfterCuration(ctx: AppContext): void {
   updateComparisonSummary(ctx);
   // Clear enhanced map on curation (ordering changed, enhancement is stale)
   clearEnhancedMap();
+  // Curation re-uploaded the raw map above; drop O/E and restore the colour map.
+  resetOEMap(ctx);
   // Update curation progress panel
   updateProgressPanel(ctx);
   // Schedule debounced analysis recompute (insulation + P(s) only)

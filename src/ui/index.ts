@@ -34,6 +34,7 @@ export { setMode } from './ModeManager';
 // ComparisonMode
 export { toggleComparisonMode, renderComparisonOverlay, updateComparisonSummary, computeDiff, exportDiffReport } from './ComparisonMode';
 export { openBeforeAfterMap, describeCuration } from './BeforeAfterMap';
+export { setupOEToggle, toggleOEMap, resetOEMap, isOEActive, buildOEDisplay } from './OEMapToggle';
 
 // Tooltip
 export { updateTooltip, hideTooltip } from './Tooltip';

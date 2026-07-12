@@ -57,6 +57,7 @@ import {
   setupSpecimenPicker,
   setupAnalysisPanel,
   setupStatsPanel,
+  setupOEToggle,
 } from './ui';
 
 class OpenPretextApp {
@@ -211,6 +212,7 @@ class OpenPretextApp {
     setupZoomControls(ctx);
     setupAnalysisPanel(ctx);
     setupStatsPanel();
+    setupOEToggle(ctx);
 
     console.log('OpenPretext initialized');
   }
