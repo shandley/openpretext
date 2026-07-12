@@ -248,6 +248,28 @@
     </div>
   </section>
 
+  <section id="setup" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Before you start</span>
+        <h2>Getting your data into OpenPretext</h2>
+        <p>To follow the tutorials or explore the tool you need nothing of your own: <b>Load Example</b> downloads a real assembly, and the tutorials run on real data. To curate your own genome, OpenPretext opens a <span class="mono">.pretext</span> file, the same contact-map format PretextView reads. If you already have one, open it and start. If not, you build one from your draft assembly and its Hi-C reads in three steps.</p>
+      </div>
+      <div class="flow">
+        <div class="step"><h3>Align the reads</h3><p>Map the paired Hi-C reads against your draft assembly with a short-read aligner such as bwa-mem2, bwa mem, or a dedicated Hi-C mapping pipeline. This produces a BAM of alignments.</p><span class="why">In: assembly FASTA and Hi-C read pairs.</span></div>
+        <div class="step"><h3>Build the contact map</h3><p>Pipe the alignments through PretextMap, which bins the contacts and writes a compact <span class="mono">.pretext</span> file. Coverage, gap, and telomere tracks can be embedded afterward with PretextGraph.</p><span class="why">Out: one <span class="mono">.pretext</span> file.</span></div>
+        <div class="step terminal"><h3>Open it</h3><p>Drag the <span class="mono">.pretext</span> onto OpenPretext, or use <b>Open</b>. The loader reads the coarse overview first, so even a large map opens quickly in the browser.</p><span class="why">Ready to curate.</span></div>
+      </div>
+      <figure class="cmd-fig">
+        <pre class="cmd">samtools view -h aligned.bam | PretextMap -o assembly.pretext</pre>
+        <figcaption>Build a <span class="mono">.pretext</span> from a BAM. PretextMap reads SAM on standard input, so the header is passed with <span class="mono">samtools view -h</span>. It also takes options for contig sort order and a mapping-quality filter; see its documentation.</figcaption>
+      </figure>
+      <div class="prose" style="margin-top:1.6rem;">
+        <p>The Pretext tools come from the Wellcome Sanger Institute: <a href="https://github.com/sanger-tol/PretextMap" target="_blank" rel="noopener">PretextMap</a> builds the map and <a href="https://github.com/sanger-tol/PretextGraph" target="_blank" rel="noopener">PretextGraph</a> embeds the annotation tracks. For ready-made assemblies to practice on, <a href="https://www.genomeark.org/" target="_blank" rel="noopener">GenomeArk</a> hosts public genome data, including the Hi-C maps behind Load Example.</p>
+      </div>
+    </div>
+  </section>
+
   <section id="flow" class="reveal">
     <div class="wrap">
       <div class="sec-head">
