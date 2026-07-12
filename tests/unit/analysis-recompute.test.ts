@@ -113,6 +113,7 @@ vi.mock('../../src/curation/MisassemblyFlags', () => ({
 vi.mock('../../src/analysis/ContactDecay', () => ({
   formatDecayStats: vi.fn(() => ''),
   computeDecayByScaffold: vi.fn(() => []),
+  computeLocalSlope: vi.fn(() => new Float64Array()),
 }));
 
 vi.mock('../../src/analysis/HealthScore', () => ({

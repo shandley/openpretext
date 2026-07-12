@@ -333,6 +333,45 @@ export function computeDecayByScaffold(
 }
 
 // ---------------------------------------------------------------------------
+// Local slope (log-derivative)
+// ---------------------------------------------------------------------------
+
+/**
+ * Local slope of the P(s) curve at each point: the least-squares slope of
+ * log(contacts) vs log(distance) over a window of +/- `windowRadius` points.
+ *
+ * The single global exponent hides where the curve deviates from a power law
+ * (a short-range plateau, a long-range roll-off). This windowed derivative
+ * exposes that structure. A wider window smooths the inherently noisy log-log
+ * derivative; radius 2 (a 5-point window) is the default. For a perfect power
+ * law the slope equals the exponent at every point. Points with fewer than two
+ * finite neighbours in range are NaN.
+ */
+export function computeLocalSlope(
+  logDistances: Float64Array,
+  logContacts: Float64Array,
+  windowRadius = 2,
+): Float64Array {
+  const n = Math.min(logDistances.length, logContacts.length);
+  const out = new Float64Array(n).fill(NaN);
+  for (let i = 0; i < n; i++) {
+    const lo = Math.max(0, i - windowRadius);
+    const hi = Math.min(n - 1, i + windowRadius);
+    let cnt = 0, sX = 0, sY = 0, sXX = 0, sXY = 0;
+    for (let j = lo; j <= hi; j++) {
+      const x = logDistances[j], y = logContacts[j];
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      cnt++; sX += x; sY += y; sXX += x * x; sXY += x * y;
+    }
+    if (cnt < 2) continue;
+    const denom = cnt * sXX - sX * sX;
+    if (Math.abs(denom) < 1e-12) continue;
+    out[i] = (cnt * sXY - sX * sY) / denom;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Stats panel formatting
 // ---------------------------------------------------------------------------
 

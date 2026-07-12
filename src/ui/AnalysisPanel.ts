@@ -15,6 +15,7 @@ import { insulationToTracks, type InsulationResult } from '../analysis/Insulatio
 import {
   formatDecayStats,
   computeDecayByScaffold,
+  computeLocalSlope,
   type ContactDecayResult,
   type ScaffoldDecayResult,
   type ScaffoldGroup,
@@ -1058,20 +1059,33 @@ function renderDecayChart(
   svg += `<line x1="${m.left}" y1="${m.top + ph}" x2="${m.left + pw}" y2="${m.top + ph}" stroke="#a0a0b0" stroke-width="0.5"/>`;
   svg += `<line x1="${m.left}" y1="${m.top}" x2="${m.left}" y2="${m.top + ph}" stroke="#a0a0b0" stroke-width="0.5"/>`;
 
-  // X-axis ticks (3-4 nice values)
+  // X-axis ticks (3-4 nice values) with faint decade gridlines
   const xTicks = niceTickValues(xMin, xMax, 4);
   for (const tick of xTicks) {
     const x = sx(tick);
+    svg += `<line x1="${x}" y1="${m.top}" x2="${x}" y2="${m.top + ph}" stroke="#3a3a44" stroke-width="0.3"/>`;
     svg += `<line x1="${x}" y1="${m.top + ph}" x2="${x}" y2="${m.top + ph + 3}" stroke="#a0a0b0" stroke-width="0.5"/>`;
     svg += `<text x="${x}" y="${m.top + ph + 12}" text-anchor="middle" font-size="7" fill="#a0a0b0">${tick.toFixed(1)}</text>`;
   }
 
-  // Y-axis ticks
+  // Y-axis ticks with faint gridlines
   const yTicks = niceTickValues(yMin, yMax, 4);
   for (const tick of yTicks) {
     const y = sy(tick);
+    svg += `<line x1="${m.left}" y1="${y}" x2="${m.left + pw}" y2="${y}" stroke="#3a3a44" stroke-width="0.3"/>`;
     svg += `<line x1="${m.left - 3}" y1="${y}" x2="${m.left}" y2="${y}" stroke="#a0a0b0" stroke-width="0.5"/>`;
     svg += `<text x="${m.left - 5}" y="${y + 2.5}" text-anchor="end" font-size="7" fill="#a0a0b0">${tick.toFixed(1)}</text>`;
+  }
+
+  // Reference slope guides at -1.0 and -1.5 (the healthy P(s) band), anchored at
+  // the curve's first point so the reader sees whether the decay is steeper or
+  // shallower than expected.
+  {
+    const rx0 = xData[0], ry0 = yData[0], rx1 = xData[n - 1];
+    for (const refSlope of [-1.0, -1.5]) {
+      const ry1 = ry0 + refSlope * (rx1 - rx0);
+      svg += `<line x1="${sx(rx0)}" y1="${sy(ry0)}" x2="${sx(rx1)}" y2="${sy(ry1)}" stroke="#6a9fd8" stroke-width="0.6" stroke-dasharray="1,2" opacity="0.7"/>`;
+    }
   }
 
   // Axis labels
@@ -1114,10 +1128,10 @@ function renderDecayChart(
         svg += `<line x1="${sx(d.logDistances[0])}" y1="${sy(sLineY0)}" x2="${sx(d.logDistances[sn - 1])}" y2="${sy(sLineYn)}" stroke="${sr.color}" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.6"/>`;
       }
 
-      // Scaffold data points (colored, small)
-      for (let i = 0; i < sn; i++) {
-        svg += `<circle cx="${sx(d.logDistances[i])}" cy="${sy(d.logContacts[i])}" r="1" fill="${sr.color}" opacity="0.5"/>`;
-      }
+      // Scaffold P(s) curve (connect the points)
+      let spts = '';
+      for (let i = 0; i < sn; i++) spts += `${sx(d.logDistances[i]).toFixed(1)},${sy(d.logContacts[i]).toFixed(1)} `;
+      svg += `<polyline points="${spts.trim()}" fill="none" stroke="${sr.color}" stroke-width="0.8" opacity="0.55"/>`;
     }
   }
 
@@ -1129,9 +1143,14 @@ function renderDecayChart(
     svg += `<line x1="${sx(xData[0])}" y1="${sy(lineY0)}" x2="${sx(xData[n - 1])}" y2="${sy(lineYn)}" stroke="#e8e8e8" stroke-width="1.5" stroke-dasharray="4,3"/>`;
   }
 
-  // Current data points (red)
+  // Current P(s) curve (connect the points) plus the points themselves.
+  {
+    let pts = '';
+    for (let i = 0; i < n; i++) pts += `${sx(xData[i]).toFixed(1)},${sy(yData[i]).toFixed(1)} `;
+    svg += `<polyline points="${pts.trim()}" fill="none" stroke="#f4741e" stroke-width="1" opacity="0.9"/>`;
+  }
   for (let i = 0; i < n; i++) {
-    svg += `<circle cx="${sx(xData[i])}" cy="${sy(yData[i])}" r="1.5" fill="#f4741e" opacity="0.6"/>`;
+    svg += `<circle cx="${sx(xData[i])}" cy="${sy(yData[i])}" r="1.3" fill="#f4741e" opacity="0.6"/>`;
   }
 
   svg += '</svg>';
@@ -1160,6 +1179,70 @@ function renderDecayChart(
     }
   }
 
+  svg += '</div>';
+  svg += renderSlopePanel(xData, yData, result.decayExponent);
+  return svg;
+}
+
+/**
+ * A companion panel plotting the local slope of the P(s) curve against
+ * distance. The global exponent (dashed white) hides where the curve bends;
+ * this shows the local log-derivative, with the healthy -1.5 to -0.8 band
+ * shaded so a curator can see a short-range plateau or a long-range roll-off.
+ */
+function renderSlopePanel(
+  logD: Float64Array,
+  logC: Float64Array,
+  exponent: number,
+): string {
+  const n = Math.min(logD.length, logC.length);
+  if (n < 3) return '';
+  const slope = computeLocalSlope(logD, logC, 2);
+
+  const W = 240, H = 92;
+  const m = { top: 6, right: 8, bottom: 22, left: 36 };
+  const pw = W - m.left - m.right, ph = H - m.top - m.bottom;
+
+  let xMin = logD[0], xMax = logD[0];
+  for (let i = 1; i < n; i++) {
+    if (logD[i] < xMin) xMin = logD[i];
+    if (logD[i] > xMax) xMax = logD[i];
+  }
+  const xPad = (xMax - xMin) * 0.05 || 0.1;
+  xMin -= xPad; xMax += xPad;
+  const yMin = -3, yMax = 0.5; // slope display window; extremes clamp in
+  const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+  const sx = (v: number) => m.left + ((v - xMin) / (xMax - xMin)) * pw;
+  const sy = (v: number) => m.top + ph - ((clamp(v, yMin, yMax) - yMin) / (yMax - yMin)) * ph;
+
+  let svg = `<div class="decay-chart" style="margin-top:4px;"><svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  // Healthy slope band (-1.5 to -0.8)
+  svg += `<rect x="${m.left}" y="${sy(-0.8)}" width="${pw}" height="${sy(-1.5) - sy(-0.8)}" fill="#4caf50" opacity="0.1"/>`;
+  // Axes
+  svg += `<line x1="${m.left}" y1="${m.top + ph}" x2="${m.left + pw}" y2="${m.top + ph}" stroke="#a0a0b0" stroke-width="0.5"/>`;
+  svg += `<line x1="${m.left}" y1="${m.top}" x2="${m.left}" y2="${m.top + ph}" stroke="#a0a0b0" stroke-width="0.5"/>`;
+  for (const t of [0, -1, -2, -3]) {
+    const y = sy(t);
+    svg += `<line x1="${m.left}" y1="${y}" x2="${m.left + pw}" y2="${y}" stroke="#3a3a44" stroke-width="0.3"/>`;
+    svg += `<line x1="${m.left - 3}" y1="${y}" x2="${m.left}" y2="${y}" stroke="#a0a0b0" stroke-width="0.5"/>`;
+    svg += `<text x="${m.left - 5}" y="${y + 2.5}" text-anchor="end" font-size="7" fill="#a0a0b0">${t}</text>`;
+  }
+  // Global exponent reference
+  if (Number.isFinite(exponent)) {
+    svg += `<line x1="${m.left}" y1="${sy(exponent)}" x2="${m.left + pw}" y2="${sy(exponent)}" stroke="#e8e8e8" stroke-width="0.8" stroke-dasharray="4,3"/>`;
+  }
+  // Local slope curve
+  let pts = '';
+  for (let i = 0; i < n; i++) {
+    if (!Number.isFinite(slope[i])) continue;
+    pts += `${sx(logD[i]).toFixed(1)},${sy(slope[i]).toFixed(1)} `;
+  }
+  svg += `<polyline points="${pts.trim()}" fill="none" stroke="#56b4e9" stroke-width="1"/>`;
+  // Labels (with units)
+  svg += `<text x="${m.left + pw / 2}" y="${H - 2}" text-anchor="middle" font-size="8" fill="#a0a0b0">log₁₀(distance)</text>`;
+  svg += `<text x="8" y="${m.top + ph / 2}" text-anchor="middle" font-size="8" fill="#a0a0b0" transform="rotate(-90, 8, ${m.top + ph / 2})">local slope</text>`;
+  svg += '</svg>';
+  svg += '<div style="text-align:center;font-size:8px;color:var(--text-secondary);margin-top:1px;">Local slope vs distance (green band = healthy −1.5 to −0.8; dashed = global fit)</div>';
   svg += '</div>';
   return svg;
 }

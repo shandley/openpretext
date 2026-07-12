@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeContactDecay,
+  computeLocalSlope,
   formatDecayStats,
 } from '../../src/analysis/ContactDecay';
 import type { ContigRange } from '../../src/curation/AutoSort';
@@ -241,5 +242,36 @@ describe('formatDecayStats', () => {
     const result = computeContactDecay(new Float32Array(0), 0, []);
     const html = formatDecayStats(result);
     expect(html).toContain('—');
+  });
+});
+
+describe('computeLocalSlope', () => {
+  it('returns the exact slope everywhere for a perfect power law', () => {
+    // log(contacts) = -1 * log(distance): slope -1 at every point.
+    const logD = Float64Array.from([0, 1, 2, 3, 4, 5]);
+    const logC = Float64Array.from([0, -1, -2, -3, -4, -5]);
+    const slope = computeLocalSlope(logD, logC, 2);
+    for (let i = 0; i < slope.length; i++) expect(slope[i]).toBeCloseTo(-1, 6);
+  });
+
+  it('recovers a -1.5 slope on non-uniform spacing', () => {
+    const logD = Float64Array.from([0, 0.3, 0.7, 1.2, 2.0]);
+    const logC = Float64Array.from([...logD].map((x) => -1.5 * x + 2));
+    const slope = computeLocalSlope(logD, logC, 2);
+    for (let i = 0; i < slope.length; i++) expect(slope[i]).toBeCloseTo(-1.5, 6);
+  });
+
+  it('tracks a change in slope between two regimes', () => {
+    // Flat (slope 0) for the first half, steep (slope -2) for the second.
+    const logD = Float64Array.from([0, 1, 2, 3, 4, 5, 6]);
+    const logC = Float64Array.from([0, 0, 0, 0, -2, -4, -6]);
+    const slope = computeLocalSlope(logD, logC, 1);
+    expect(slope[1]).toBeCloseTo(0, 6); // inside the flat regime
+    expect(slope[5]).toBeCloseTo(-2, 6); // inside the steep regime
+  });
+
+  it('is NaN where the window has fewer than two finite points', () => {
+    const slope = computeLocalSlope(Float64Array.from([1]), Float64Array.from([1]), 2);
+    expect(Number.isNaN(slope[0])).toBe(true);
   });
 });
