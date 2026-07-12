@@ -3,15 +3,25 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     commit-message:
       prefix: "deps:"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
+    groups:
+      # All dev tooling (typescript, vite, vitest, playwright, types) lands in
+      # one PR. pako is the only production dependency and is left ungrouped,
+      # so a runtime bump like a pako major always gets its own PR to review.
+      dev-dependencies:
+        dependency-type: development
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     commit-message:
       prefix: "ci:"
     open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
