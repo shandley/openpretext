@@ -40,13 +40,13 @@
   <section class="hero" style="border-top: none;">
     <div class="wrap hero-grid">
       <div>
-        <h1>A draft genome is full of mistakes. The contact map shows you <span class="em">every one</span>.</h1>
-        <p class="lede">Curation is the craft of turning a fragmented assembly into finished chromosomes. This guide teaches you to read the signs and make the fixes, using OpenPretext, free and in your browser. Built-in tools carry more of the load than you would expect, so you can learn the craft as you go, no specialist required.</p>
+        <h1>A field guide to genome curation</h1>
+        <p class="lede">Hi-C contact maps reveal the ordering and orientation errors in a draft genome assembly. This guide explains how to read the map, recognize the common misassembly signatures, and correct them in OpenPretext, a contact map viewer that runs in the browser.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Start the tutorials
+          <a class="btn btn-primary" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open the tutorials
             <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </a>
-          <a class="btn btn-ghost" href="#read">Learn to read a map</a>
+          <a class="btn btn-ghost" href="#read">How to read a map</a>
         </div>
       </div>
       <figure aria-labelledby="hero-cap">
@@ -64,7 +64,7 @@
           <rect class="cm-frame" x="1" y="1" width="98" height="98"/>
         </svg>
         <figcaption id="hero-cap" class="mono" style="text-align:center; font-size:0.75rem; letter-spacing:0.02em; color:var(--ink-soft); margin-top:0.8rem;">
-          A Hi-C contact map. Bright means close. Each block is a chromosome.
+          A Hi-C contact map. Brighter regions have more contacts. Each block along the diagonal is a chromosome.
         </figcaption>
       </figure>
     </div>
@@ -73,12 +73,12 @@
   <section class="mission reveal">
     <div class="wrap">
       <div class="sec-head">
-        <span class="eyebrow">Why it matters</span>
-        <h2>Reference genomes are built by hand, one map at a time.</h2>
+        <span class="eyebrow">Background</span>
+        <h2>Reference genomes are curated by hand.</h2>
       </div>
       <div class="prose" style="margin-top:1.8rem;">
-        <p>Assemblers stitch DNA reads into long pieces, but they make mistakes: they join sequences that do not belong together, flip fragments backward, and leave chromosomes in scattered pieces. A Hi-C contact map exposes these errors, because DNA that sits close together in the nucleus makes a bright signal, and a correct chromosome makes an unmistakable pattern.</p>
-        <p>Fixing those patterns by hand is <strong>curation</strong>, and until recently it lived mostly inside a handful of large sequencing centers. OpenPretext puts the same capability in any browser, at no cost. Good training is the other half of that: this guide, and the tutorials it leads into, are meant to teach the craft itself, so a lab with a new genome does not need a specialist to finish it.</p>
+        <p>Assemblers join sequencing reads into longer pieces, but they make errors: they join sequences that do not belong together, place fragments in the wrong orientation, and leave chromosomes in scattered pieces. A Hi-C contact map makes these errors visible, because DNA that sits close together in the nucleus produces a stronger signal and a correctly assembled chromosome produces a distinctive pattern.</p>
+        <p>Correcting these patterns by hand is called <strong>curation</strong>. The expertise has been concentrated in a small number of large sequencing centers. OpenPretext runs the same workflow in a web browser at no cost, and this guide and its tutorials are intended to teach the process, so that a lab with a new genome can curate it without specialist support.</p>
       </div>
     </div>
   </section>
@@ -86,9 +86,9 @@
   <section id="read" class="reveal">
     <div class="wrap">
       <div class="sec-head">
-        <span class="eyebrow">The one idea</span>
+        <span class="eyebrow">Reading the map</span>
         <h2>How to read a contact map</h2>
-        <p>Everything in curation follows from a single fact about Hi-C: sequences that are physically close in the cell make more contacts, so they light up brighter. Learn to see four things and the rest is pattern recognition.</p>
+        <p>Curation rests on one property of Hi-C data: sequences that are physically close in the nucleus produce more contacts and appear brighter on the map. Four features carry most of what you need to read.</p>
       </div>
       <div class="read-grid">
         <figure>
@@ -109,7 +109,7 @@
         <div class="facts">
           <div class="fact">
             <span class="k">01 diagonal</span>
-            <div><h3>The bright line down the middle</h3><p>Every position contacts itself most of all, so the main diagonal is always the strongest signal. It is your baseline.</p></div>
+            <div><h3>The bright line down the middle</h3><p>Every position contacts itself most of all, so the main diagonal is always the strongest signal. It is the baseline for reading everything else.</p></div>
           </div>
           <div class="fact">
             <span class="k">02 blocks</span>
@@ -117,7 +117,7 @@
           </div>
           <div class="fact">
             <span class="k">03 falloff</span>
-            <div><h3>Signal fades away from the diagonal</h3><p>The farther apart two positions are, the fewer contacts they share. Bright signal far from the diagonal is a red flag: something is in the wrong place.</p></div>
+            <div><h3>Signal fades away from the diagonal</h3><p>The farther apart two positions are, the fewer contacts they share. Bright signal far from the diagonal usually means a sequence is in the wrong place.</p></div>
           </div>
           <div class="fact">
             <span class="k">04 tracks</span>
@@ -131,9 +131,9 @@
   <section id="guide" class="reveal">
     <div class="wrap">
       <div class="sec-head">
-        <span class="eyebrow">The visual grammar</span>
+        <span class="eyebrow">Misassembly signatures</span>
         <h2>Four errors to fix, and two things to leave alone</h2>
-        <p>Assembly errors leave the same fingerprints on every genome. Once you know them, curation becomes a diagnosis followed by a fix. Compare each against a clean chromosome. In practice you meet misordered fragments and inversions most often; translocations are rarer but the most disruptive, so it pays to hunt for them.</p>
+        <p>Assembly errors produce the same recognizable patterns across genomes, so each fix is a matter of identifying the pattern and applying the right operation. Each is shown here next to a correctly assembled chromosome for comparison. Misordered fragments and inversions are the most common; translocations are rarer but the most disruptive to a final assembly.</p>
       </div>
       <div class="guide-grid">
 
@@ -143,7 +143,7 @@
             <line class="cm-diag" x1="1" y1="1" x2="59" y2="59" stroke-width="2.4" stroke-linecap="round"/>
             <rect class="cm-frame" x="1" y="1" width="58" height="58"/>
           </svg>
-          <span class="tag"><b>Reference</b> · what right looks like</span>
+          <span class="tag"><b>Reference</b> · a correct chromosome</span>
           <h3>A finished chromosome</h3>
           <p>One clean, bright square. A strong continuous diagonal, sharp edges, and little signal outside the block.</p>
           <div class="fix"><span class="lab">Action</span>Leave it alone.</div>
@@ -219,8 +219,8 @@
           </svg>
           <span class="tag"><b>Not an error</b> · biology</span>
           <h3>A centromere</h3>
-          <p>A faint band across an otherwise clean chromosome. Repetitive regions like centromeres look odd but are real. Do not cut them.</p>
-          <div class="fix"><span class="lab">Action</span>Recognize it and move on.</div>
+          <p>A faint band across an otherwise clean chromosome. Repetitive regions like centromeres look unusual but are real biology. Do not cut them.</p>
+          <div class="fix"><span class="lab">Action</span>Recognize it; leave it in place.</div>
         </div>
 
       </div>
@@ -230,9 +230,9 @@
   <section class="reality reveal">
     <div class="wrap">
       <div class="sec-head">
-        <span class="eyebrow">Reality check</span>
-        <h2>The cartoons are clean. Real maps are not.</h2>
-        <p>Every diagram above is idealized so the pattern is unmistakable. Here is a real bird genome, straight from the assembler, before any curation.</p>
+        <span class="eyebrow">A real assembly</span>
+        <h2>Real maps are noisier than the diagrams</h2>
+        <p>The diagrams above are idealized so that each pattern is clear. Below is a real bird genome as it comes from the assembler, before any curation.</p>
       </div>
       <div class="reality-grid">
         <figure style="margin:0;">
@@ -240,8 +240,8 @@
           <p class="reality-cap">King quail, 645 contigs, before curation. OpenPretext overview.</p>
         </figure>
         <div class="reality-txt">
-          <p>The strong line down the middle is the same diagonal you already know. Everything else is the work. <strong>Every red mark off that diagonal is a misassembly:</strong> the short crossing streaks are inversions, the blocks sitting away from the center are pieces in the wrong place, and the dense band is a cluster of tiny chromosomes waiting to be ordered.</p>
-          <p>It looks like a lot. It is not. Each mark is one of the four errors, and each has a one-key fix. Your job is to turn this into the clean square you saw at the start.</p>
+          <p>The strong line down the middle is the same diagonal described above. The red marks off that diagonal are misassemblies: the short crossing streaks are inversions, the blocks sitting away from the center are pieces in the wrong place, and the dense band is a cluster of small chromosomes that still need ordering.</p>
+          <p>Each mark corresponds to one of the four signatures, and each has a single-key operation to correct it. Curation reduces this map to the clean set of squares shown at the start.</p>
         </div>
       </div>
     </div>
@@ -250,17 +250,17 @@
   <section id="flow" class="reveal">
     <div class="wrap">
       <div class="sec-head">
-        <span class="eyebrow">The workflow</span>
+        <span class="eyebrow">Workflow</span>
         <h2>From draft to finished assembly</h2>
-        <p>Curation is a loop you repeat until the map is clean. OpenPretext gives you a tool for each step, plus automated help and a score that tells you when you are done.</p>
+        <p>Curation is a loop repeated until the map is clean. OpenPretext provides a tool for each step, along with automated help and a score that indicates when the assembly is finished.</p>
       </div>
       <div class="flow">
-        <div class="step"><h3>Inspect</h3><p>Scan the whole genome and mark the signatures: inversions, wrong joins, chimeras, scattered pieces. Turn on the overlay tracks (coverage, gaps, telomeres) as you scan; the app also flags contig junctions the Hi-C signal does not support and contigs that look like retained haplotigs, a second opinion built in.</p><span class="why">Diagnosis comes before treatment.</span></div>
+        <div class="step"><h3>Inspect</h3><p>Scan the whole genome and mark the signatures: inversions, wrong joins, chimeras, scattered pieces. Turn on the overlay tracks (coverage, gaps, telomeres) as you scan; the app also flags contig junctions the Hi-C signal does not support and contigs that look like retained haplotigs.</p><span class="why">Locate errors before correcting them.</span></div>
         <div class="step"><h3>Cut and join</h3><p>Split chimeric contigs at the break; merge pieces that belong together.</p><span class="why"><kbd>C</kbd> to cut, <kbd>J</kbd> to join.</span></div>
         <div class="step"><h3>Flip and order</h3><p>Reverse backward pieces and drag contigs into the right sequence so the diagonal strengthens.</p><span class="why"><kbd>F</kbd> to flip.</span></div>
-        <div class="step"><h3>Assign scaffolds</h3><p>Group the ordered pieces into chromosomes. Let auto-sort and auto-assign scaffolds do the heavy lifting first.</p><span class="why">The tools substitute for years of practice.</span></div>
-        <div class="step"><h3>Check the health score</h3><p>A single number rates contiguity, decay, and structure, and it rises as the assembly improves. The before/after map puts the assembly as loaded beside the one your curation produced, so you can see the diagonal you built.</p><span class="why">This is how you know you are finished.</span></div>
-        <div class="step terminal"><h3>Export</h3><p>Save the curated assembly as AGP or FASTA, with every reorder and flip applied, plus a log of what you changed. An AGP can be imported again later to pick up a curation where you left off.</p><span class="why">The finished genome, ready to use.</span></div>
+        <div class="step"><h3>Assign scaffolds</h3><p>Group the ordered pieces into chromosomes. Let auto-sort and auto-assign scaffolds do the first pass.</p><span class="why">Review the automated grouping before accepting it.</span></div>
+        <div class="step"><h3>Check the health score</h3><p>A single number rates contiguity, decay, and structure, and it rises as the assembly improves. The before/after map puts the assembly as loaded beside the one your curation produced, so you can compare the assembly you started from with the one you produced.</p><span class="why">The score rises as the assembly improves.</span></div>
+        <div class="step terminal"><h3>Export</h3><p>Save the curated assembly as AGP or FASTA, with every reorder and flip applied, plus a log of what you changed. An AGP can be imported again later to resume a curation in progress.</p><span class="why">Output for downstream analysis.</span></div>
       </div>
 
       <div class="note">
@@ -282,21 +282,21 @@
   <section class="reveal">
     <div class="wrap">
       <div class="sec-head">
-        <span class="eyebrow">Beyond curation</span>
-        <h2>The same map holds more than errors</h2>
-        <p>Once your assembly is clean, OpenPretext turns the contact map into a research instrument. These are optional, and worth knowing exist.</p>
+        <span class="eyebrow">Analysis</span>
+        <h2>The same map supports further analysis</h2>
+        <p>Once an assembly is clean, the same contact map can be used to measure genome structure. These analyses are optional and sit outside the core curation workflow.</p>
       </div>
       <div class="show-grid">
         <div class="panel">
-          <span class="eyebrow">Emerging science</span>
-          <h3>3D genomics, in the browser</h3>
-          <p>Three readouts, straight from the map with no extra experiments: insulation scores (where chromosome neighborhoods begin and end), P(s) decay (how tightly the genome is packed), and A and B compartments (active versus quiet regions). A window into how the genome folds, and concepts you will meet again as you go deeper.</p>
+          <span class="eyebrow">3D genome structure</span>
+          <h3>Structure readouts from the map</h3>
+          <p>Three measurements taken directly from the map, with no additional experiments: insulation scores (where chromosome neighborhoods begin and end), P(s) decay (how tightly the genome is packed), and A and B compartments (active versus quiet regions). This is an emerging area, and the concepts recur in the analysis page.</p>
           <p style="margin-top:0.7rem;"><a href="/reading-the-analysis">How to read these numbers &rarr;</a></p>
         </div>
         <div class="panel">
           <span class="eyebrow">Community</span>
           <h3>Shared curation strategies</h3>
-          <p>OpenPretext's AI assistant runs on prompt strategies that curators write and share, tuned for inversions, fragmented assemblies, micro-chromosomes, and more. Use them, or contribute your own.</p>
+          <p>OpenPretext's AI assistant runs on prompt strategies that curators write and share, tuned for inversions, fragmented assemblies, micro-chromosomes, and other cases. The collection is open for contributions.</p>
           <p style="margin-top:0.7rem;"><a href="https://github.com/shandley/openpretext-strategies" target="_blank" rel="noopener">Browse community strategies →</a></p>
         </div>
       </div>
@@ -305,9 +305,9 @@
 
   <section class="final reveal">
     <div class="wrap">
-      <span class="eyebrow">Start curating</span>
-      <h2 style="margin-top:0.8rem;">Your first genome is a few clicks away</h2>
-      <p>The interactive tutorials load a real genome and walk you through every step, from reading the map to exporting a finished assembly. Free, open source, nothing to install.</p>
+      <span class="eyebrow">Tutorials</span>
+      <h2 style="margin-top:0.8rem;">Start with the interactive tutorials</h2>
+      <p>The interactive tutorials load a real genome and work through each step, from reading the map to exporting a finished assembly. OpenPretext is free, open source, and runs without installation.</p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open OpenPretext
           <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>

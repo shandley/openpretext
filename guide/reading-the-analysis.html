@@ -40,24 +40,24 @@
 <main>
   <section class="ra-hero">
     <div class="wrap">
-      <span class="eyebrow">Field guide · deeper</span>
+      <span class="eyebrow">Field guide · analysis</span>
       <h1>Reading the analysis</h1>
-      <p class="lede">Once your assembly is clean, OpenPretext turns the contact map into measurements: contact decay, compartments, misassembly signatures, and model predictions. This page explains what each readout means and lets you build the intuition by hand. New to curation? Start with the <a href="/">field guide</a>.</p>
+      <p class="lede">Once an assembly is clean, OpenPretext computes a set of measurements from the contact map: contact decay, compartments, misassembly signatures, and model predictions. This page explains what each readout means, with interactive figures for the main ones. If you are new to curation, begin with the <a href="/">field guide</a>.</p>
     </div>
   </section>
   <section id="analysis" class="reveal">
     <div class="wrap">
       <div class="sec-head">
-        <span class="eyebrow">Reading the analysis</span>
+        <span class="eyebrow">Panel readouts</span>
         <h2>What the numbers in the panel mean</h2>
-        <p>Open the 3D Analysis panel and it fills with slopes, scores, and plots. Here is how to read each one, and what a healthy value looks like, so the panel becomes a second opinion instead of a wall of statistics.</p>
+        <p>Open the 3D Analysis panel and it reports a set of slopes, scores, and plots. This section explains how to read each one and what a healthy value looks like.</p>
       </div>
 
       <div class="psdemo" id="ps-demo">
         <div class="psdemo-head">
-          <span class="eyebrow">Try it</span>
-          <h3>See what the exponent means</h3>
-          <p>Drag the slider. The contact map repacks and the decay curve changes slope at the same time. The green band, on the slider and between the dashed lines, is the healthy range.</p>
+          <span class="eyebrow">Interactive</span>
+          <h3>The exponent and the decay curve</h3>
+          <p>Drag the slider. The contact map updates and the decay curve changes slope at the same time. The green band, on the slider and between the dashed lines, marks the healthy range.</p>
         </div>
         <div class="psdemo-figs">
           <figure class="psdemo-fig">
@@ -142,7 +142,7 @@
           <div class="rd-body">
             <h3>The composite health score</h3>
             <p>One number from 0 to 100 that folds five measurements together: contiguity (N50), decay quality (P(s)), integrity (fewer misassembly flags), compartment strength (A/B), and library quality (the cis to trans ratio, which needs scaffolds assigned). Above 70 is a well-assembled genome.</p>
-            <span class="rd-read"><b>Read it as a trend, not a grade:</b> a fresh assembly scores low on integrity and library before you have cut and scaffolded anything. Watch the number climb as you work. That climb is the point.</span>
+            <span class="rd-read"><b>Read it as a trend, not a grade:</b> a fresh assembly scores low on integrity and library before anything has been cut or scaffolded. It increases as curation progresses, and that trend is more informative than any single value.</span>
           </div>
         </div>
 
@@ -164,7 +164,7 @@
           <div class="rd-body">
             <h3>Join support at every junction</h3>
             <p>For each contig junction, OpenPretext checks whether contact keeps flowing across the boundary. A correct join carries contact over the seam about as strongly as it holds inside each contig. A wrong join or a misorder shows the opposite: contact drops away across the boundary, a dark square opens up off the diagonal, and the junction is flagged as a weak join with a red marker on the map. The check is scaffold aware, so a junction between two contigs you have assigned to different scaffolds counts as an intended chromosome boundary and is left alone.</p>
-            <span class="rd-read"><b>When to worry:</b> a weak join inside a single scaffold, where two pieces meant to be one chromosome barely touch across the seam. That is usually a cut waiting to happen, or two contigs that need reordering before they will join cleanly.</span>
+            <span class="rd-read"><b>When to worry:</b> a weak join inside a single scaffold, where two pieces meant to be one chromosome barely touch across the seam. This usually means a cut is needed, or that two contigs require reordering before they will join cleanly.</span>
           </div>
         </div>
 
@@ -232,12 +232,12 @@
       <div class="sec-head">
         <span class="eyebrow">Compartments</span>
         <h2>A and B, and the saddle plot</h2>
-        <p>Chromatin sorts into two compartments: A, gene-rich and active, and B, quiet and dense. On the map they show as a checkerboard; the saddle plot distills that checkerboard into one square so you can read the separation at a glance.</p>
+        <p>Chromatin sorts into two compartments: A, gene-rich and active, and B, quiet and dense. On the map they show as a checkerboard; the saddle plot condenses that checkerboard into a single square, which makes the degree of separation easier to read.</p>
       </div>
       <div class="cpdemo psdemo" id="cp-demo">
         <div class="psdemo-head">
-          <span class="eyebrow">Try it</span>
-          <h3>Turn the compartments up and down</h3>
+          <span class="eyebrow">Interactive</span>
+          <h3>Adjusting compartment strength</h3>
           <p>Slide the strength. The checkerboard on the map sharpens and the saddle plot's corners pull apart. Strong AA and BB corners with a weak middle mean the two compartments are cleanly separated.</p>
         </div>
         <div class="psdemo-figs">
@@ -258,13 +258,13 @@
       <div class="sec-head">
         <span class="eyebrow">Misassembly</span>
         <h2>The four signatures</h2>
-        <p>Most assembly errors leave a shape on the contact map. Learn the four and you can spot them at a glance, then fix them with a cut, a join, or a flip.</p>
+        <p>Most assembly errors leave a characteristic shape on the contact map. The four below cover the common cases, each corrected with a cut, a join, or a flip.</p>
       </div>
       <div class="msdemo" id="ms-demo">
         <div class="psdemo-head">
-          <span class="eyebrow">Try it</span>
-          <h3>Pick a signature</h3>
-          <p>Each button draws the pattern that error makes on the map. The note says what you are seeing and what to do about it.</p>
+          <span class="eyebrow">Interactive</span>
+          <h3>Select a signature</h3>
+          <p>Each button draws the pattern that error makes on the map. The note describes what you are seeing and the operation that corrects it.</p>
         </div>
         <div class="ms-tabs" role="tablist" aria-label="Misassembly signatures">
           <button class="ms-tab is-active" data-kind="inversion" type="button">Inversion</button>
@@ -289,12 +289,12 @@
       <div class="sec-head">
         <span class="eyebrow">Joins</span>
         <h2>Join support across a junction</h2>
-        <p>A join is only as good as the contact that crosses it. OpenPretext scores every contig junction by how well Hi-C signal continues over the seam. Where the signal holds, the join is supported. Where it drops away, the junction is flagged so you can look before you trust it.</p>
+        <p>A join is supported only if Hi-C contact continues across it. OpenPretext scores every contig junction by how well the signal carries over the seam. Where the signal holds, the join is supported. Where it drops away, the junction is flagged for inspection.</p>
       </div>
       <div class="joindemo psdemo" id="join-demo">
         <div class="psdemo-head">
-          <span class="eyebrow">Try it</span>
-          <h3>Weaken a join and watch it get flagged</h3>
+          <span class="eyebrow">Interactive</span>
+          <h3>Weakening a join until it is flagged</h3>
           <p>Two contigs meet at the junction in the middle of the map. Slide the junction signal down and the contact across the boundary fades into a dark square. Below a threshold the junction is marked as a weak join, with a red marker where the two contigs meet.</p>
         </div>
         <div class="psdemo-figs">
@@ -342,9 +342,9 @@
   </section>
   <section class="final reveal">
     <div class="wrap">
-      <span class="eyebrow">Put it to work</span>
-      <h2 style="margin-top:0.8rem;">Open a real genome and read its numbers</h2>
-      <p>Every readout here appears in the app's 3D Analysis panel. Load an assembly, compute the analyses, and the panel links back to these explanations.</p>
+      <span class="eyebrow">In the app</span>
+      <h2 style="margin-top:0.8rem;">Reading these numbers in the app</h2>
+      <p>Every readout described here appears in the app's 3D Analysis panel. Load an assembly, compute the analyses, and the panel links back to these explanations.</p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open OpenPretext
           <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
