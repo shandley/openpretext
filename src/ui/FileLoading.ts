@@ -12,7 +12,7 @@ import { generateSyntheticMap } from '../formats/SyntheticData';
 import { generateDemoTracks } from '../formats/SyntheticTracks';
 import { TileManager } from '../renderer/TileManager';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
-import { loadSession, loadReferenceFasta, loadBedGraphTrack } from './ExportSession';
+import { loadSession, loadReferenceFasta, loadBedGraphTrack, loadAGPFile } from './ExportSession';
 import { applyOverviewMode } from './EventWiring';
 
 // Reused across loads; created lazily so the worker only spins up when needed.
@@ -265,6 +265,8 @@ export function setupFileDrop(ctx: AppContext): void {
       await loadBedGraphTrack(ctx, file);
     } else if (name.endsWith('.json')) {
       await loadSession(ctx, file);
+    } else if (name.endsWith('.agp')) {
+      await loadAGPFile(ctx, file);
     } else {
       await loadPretextFile(ctx, file);
     }

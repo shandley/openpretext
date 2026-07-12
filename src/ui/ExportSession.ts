@@ -9,6 +9,7 @@ import { downloadAGP } from '../export/AGPWriter';
 import { downloadBED } from '../export/BEDWriter';
 import { downloadFASTA } from '../export/FASTAWriter';
 import { parseFASTA, parseFASTAStream } from '../formats/FASTAParser';
+import { parseAGP, deriveAGPPlan } from '../formats/AGPParser';
 import { parseBedGraph, bedGraphToTrack } from '../formats/BedGraphParser';
 import { computeFastaTrackData } from '../analysis/FastaTracks';
 import { refreshCuratorTracks } from './CuratorTracks';
@@ -166,6 +167,93 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
   } finally {
     hideLoading();
   }
+}
+
+/**
+ * Import an AGP file and apply its contig order, orientation, and scaffold
+ * grouping onto the currently-loaded assembly. Treated as a LOAD (like session
+ * import), not an incremental edit: it does not push undo operations.
+ *
+ * Contigs present in the loaded assembly but absent from the AGP are appended
+ * at the tail so nothing is lost. AGP rows that do not match any loaded contig
+ * are reported and skipped.
+ */
+export async function loadAGPFile(ctx: AppContext, file: File): Promise<void> {
+  const s0 = state.get();
+  if (!s0.map) {
+    ctx.showToast('Load an assembly first');
+    return;
+  }
+
+  showLoading('Importing AGP', 'Reading AGP file...');
+  try {
+    updateLoading('Reading AGP file...', 15);
+    const text = await file.text();
+    updateLoading('Parsing AGP...', 45);
+    const parsed = parseAGP(text);
+
+    // Resolve everything before mutating so a zero-match import is a no-op.
+    const nameToId = new Map<string, number>();
+    s0.map.contigs.forEach((c, id) => nameToId.set(c.name, id));
+    const plan = deriveAGPPlan(parsed, nameToId, s0.contigOrder);
+
+    if (plan.matchedCount === 0) {
+      ctx.showToast('No AGP contig names matched the loaded assembly');
+      return;
+    }
+
+    updateLoading('Applying order and orientation...', 70);
+
+    // Order must land before painting: paintContigs resolves contig ids via
+    // state.contigOrder[orderIndex].
+    state.update({ contigOrder: plan.newOrder });
+    if (plan.inversions.length > 0) {
+      state.updateContigs(
+        plan.inversions.map((inv) => ({ id: inv.id, changes: { inverted: inv.inverted } })),
+      );
+    }
+
+    updateLoading('Rebuilding scaffolds...', 85);
+
+    // Rebuild scaffolds from the AGP objects. resetScaffolds clears the manager
+    // and every contig assignment; then one scaffold per non-unplaced object.
+    ctx.scaffoldManager.resetScaffolds();
+    for (const group of plan.scaffoldGroups) {
+      const id = ctx.scaffoldManager.createScaffold(group.name, { record: false });
+      ctx.scaffoldManager.paintContigs(group.orderIndices, id, { record: false });
+    }
+
+    ctx.refreshAfterCuration();
+
+    if (plan.unmatchedNames.length > 0) {
+      console.warn(
+        `AGP import: ${plan.unmatchedNames.length} contig name(s) not found in assembly:`,
+        plan.unmatchedNames,
+      );
+    }
+
+    const unmatchedNote = plan.unmatchedNames.length > 0
+      ? `, ${plan.unmatchedNames.length} unmatched`
+      : '';
+    ctx.showToast(
+      `AGP applied: ${plan.matchedCount} contig(s), ${plan.scaffoldGroups.length} scaffold(s)${unmatchedNote}`,
+    );
+  } catch (err) {
+    console.error('AGP import error:', err);
+    ctx.showToast(`AGP import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+export function setupAGPImport(ctx: AppContext): void {
+  const input = document.getElementById('agp-file-input') as HTMLInputElement;
+  if (!input) return;
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (file) await loadAGPFile(ctx, file);
+    input.value = '';
+  });
 }
 
 export function exportBEDFile(ctx: AppContext): void {

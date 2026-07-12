@@ -93,6 +93,7 @@ function getCommands(ctx: AppContext) {
     { name: 'Clear all waypoints', shortcut: 'Del', action: () => { ctx.waypointManager.clearAll(); ctx.currentWaypointId = null; ctx.showToast('All waypoints cleared'); } },
     { name: 'Save session', shortcut: '', action: () => saveSession(ctx) },
     { name: 'Load session', shortcut: '', action: () => document.getElementById('session-file-input')?.click() },
+    { name: 'Import AGP', shortcut: '', action: () => document.getElementById('agp-file-input')?.click() },
     { name: 'Script console', shortcut: '`', action: () => toggleScriptConsole() },
     { name: 'Keyboard shortcuts', shortcut: '?', action: () => toggleShortcutsModal() },
     { name: 'Generate script from log', action: () => { document.getElementById('btn-generate-from-log')?.click(); toggleScriptConsole(); } },

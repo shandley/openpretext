@@ -43,6 +43,7 @@ import {
   setupClickInteractions,
   setupFastaUpload,
   setupTrackUpload,
+  setupAGPImport,
   setupFileDrop,
   setupFileInput,
   startRenderLoop,
@@ -195,6 +196,7 @@ class OpenPretextApp {
     setupContigSearch(ctx);
     setupTrackUpload(ctx);
     setupFastaUpload(ctx);
+    setupAGPImport(ctx);
     startRenderLoop(ctx);
     setupSpecimenPicker(ctx);
 

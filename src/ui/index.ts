@@ -52,7 +52,7 @@ export { performUndo, performRedo, invertSelectedContigs, cutAtCursorPosition, j
 export { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoin, runBatchInvert, runSortByLength, runAutoSort, runAutoCut, undoLastBatch } from './BatchActions';
 
 // ExportSession
-export { exportAGP, takeScreenshot, saveSession, loadSession, exportBEDFile, exportFASTAFile, loadReferenceFasta, setupFastaUpload, loadBedGraphTrack, setupTrackUpload } from './ExportSession';
+export { exportAGP, takeScreenshot, saveSession, loadSession, loadAGPFile, setupAGPImport, exportBEDFile, exportFASTAFile, loadReferenceFasta, setupFastaUpload, loadBedGraphTrack, setupTrackUpload } from './ExportSession';
 
 // FileLoading
 export { loadPretextFile, loadExampleDataset, loadSpecimen, loadDemoData, setupFileDrop, setupFileInput } from './FileLoading';
