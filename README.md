@@ -103,7 +103,7 @@ AGP 2.1, BED6, and FASTA (with reverse complement for inverted contigs), PNG scr
 
 ### Scripting
 
-An 18-command curation DSL covering every operation, with contig references by name or index (`#0`, `#15`), a script console with syntax highlighting, and replay from a curation log. Every UI curation operation has a script equivalent.
+A 13-command curation DSL covering every operation, with contig references by name or index (`#0`, `#15`), a script console with syntax highlighting, and replay from a curation log. Every UI curation operation has a script equivalent.
 
 ### Tutorials and example data
 
@@ -181,8 +181,8 @@ For the binary format details, see [docs/PRETEXT_FORMAT.md](docs/PRETEXT_FORMAT.
 
 ```bash
 npm run dev            # development server with hot reload (http://localhost:3000)
-npm test               # unit tests (2,362 tests across 89 files, Vitest)
-npm run test:visual    # end-to-end tests (35 tests, Playwright + Chromium)
+npm test               # unit tests (2,536 tests across 102 files, Vitest)
+npm run test:visual    # end-to-end tests (45 tests, Playwright + Chromium)
 npm run build          # production build to dist/
 npm run preview        # preview the production build
 ```
@@ -223,10 +223,10 @@ src/
                              Evo2HiC client and enhancement utilities
   export/                    AGP, BED, FASTA, analysis (BedGraph/TSV), PNG, curation log
   io/                        session save/load
-  ui/                        38 UI modules (plain DOM)
+  ui/                        43 UI modules (plain DOM)
 public/data/                 specimen catalog (10 species), lessons (10), pattern gallery,
                              prompt strategies (8)
-tests/                       unit (89 files) and e2e (Playwright)
+tests/                       unit (102 files) and e2e (Playwright)
 bench/                       benchmark CLI, runner, regression, metrics, GenomeArk acquire
 server/                      optional Evo2HiC server (Python / FastAPI)
 ```

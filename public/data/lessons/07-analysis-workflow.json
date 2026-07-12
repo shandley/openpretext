@@ -11,7 +11,7 @@
       "title": "Open the Sidebar",
       "instruction": "First, open the sidebar by pressing **I** or clicking the **Info** button in the toolbar. Scroll down to find the **3D Analysis** section. This is your analysis command center, organized into Compute, Results, and Export tabs. The analyses run automatically when the genome loads, so the Results tab opens showing them.",
       "expectedAction": { "type": "observe" },
-      "hint": "The 3D Analysis section is near the bottom of the sidebar, below Assembly Metrics and History."
+      "hint": "The 3D Analysis section is in the sidebar, below the History section."
     },
     {
       "id": "compute-all",

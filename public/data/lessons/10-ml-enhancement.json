@@ -93,7 +93,7 @@
     {
       "id": "session-persistence",
       "title": "Session Persistence",
-      "instruction": "All Evo2HiC outputs are saved when you save a session (Cmd+S or the Session section in the sidebar):\n\n\u2022 **Enhanced map**: the full enhanced overview is stored as base64\n\u2022 **Predicted tracks**: all 5 epigenomic tracks with their values and colors\n\u2022 **Predicted Hi-C**: the sequence-predicted contact map\n\nWhen you reload the session, these are restored without needing the server. This means you can run the server once, generate all predictions, save, and then work offline.\n\nNote: Curation operations (cut, join, invert, move) invalidate the enhanced map and predicted Hi-C because the contig ordering changes. Predicted epigenomic tracks are also cleared since they correspond to the pre-curation map layout.",
+      "instruction": "All Evo2HiC outputs are saved when you save a session (Save Session in the File menu, or from the command palette):\n\n\u2022 **Enhanced map**: the full enhanced overview is stored as base64\n\u2022 **Predicted tracks**: all 5 epigenomic tracks with their values and colors\n\u2022 **Predicted Hi-C**: the sequence-predicted contact map\n\nWhen you reload the session, these are restored without needing the server. This means you can run the server once, generate all predictions, save, and then work offline.\n\nNote: Curation operations (cut, join, invert, move) invalidate the enhanced map and predicted Hi-C because the contig ordering changes. Predicted epigenomic tracks are also cleared since they correspond to the pre-curation map layout.",
       "expectedAction": { "type": "observe" },
       "hint": "Save a session after running all three predictions to avoid re-computing them later."
     },

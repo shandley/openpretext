@@ -242,8 +242,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   or sex chromosome with colored sidebar badges and batch operations
 - **Telomere detection** — scan reference FASTA for TTAGGG/CCCTAA repeat motifs
   at contig ends with genome-wide density profiling and visualization track
-- **KR normalization** — Knight-Ruiz iterative matrix balancing as an alternative
-  to ICE; faster convergence with sqrt(rowSum) correction
+- **"KR" normalization**: a second Sinkhorn-Knopp matrix-balancing variant
+  alongside ICE, with sqrt(rowSum) correction. Originally mislabeled KR/Knight-Ruiz;
+  see the relabel note under Fixed. The `kr` key is kept only for session-file
+  back-compat.
 - **Contact map re-rendering** — heatmap now visually updates after every curation
   operation (cut/join/invert/move/sort) by reordering pixels from the original map
 - **Lesson browser** — modal showing all 9 tutorials with difficulty badges,

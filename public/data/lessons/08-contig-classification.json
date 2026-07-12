@@ -44,7 +44,7 @@
     {
       "id": "summary",
       "title": "Meta Tags Summary",
-      "instruction": "You've learned to use the meta tag system:\n\n\u2022 **Haplotig** for duplicate haplotype copies\n\u2022 **Contaminant** for foreign sequences\n\u2022 **Unlocalised** for unplaceable fragments\n\u2022 **Sex Chromosome** for sex-linked sequences\n\nTags are visual annotations that help you organize your thinking during curation. In combination with contig exclusion (press **H** to hide contigs from exports), tags help you track which contigs need special handling.\n\nTip: In bird and reptile assemblies, look for one distinctively large chromosome block (Z) and a small noisy one (W) to tag as sex chromosomes.",
+      "instruction": "You've learned to use the meta tag system:\n\n\u2022 **Haplotig** for duplicate haplotype copies\n\u2022 **Contaminant** for foreign sequences\n\u2022 **Unlocalised** for unplaceable fragments\n\u2022 **Sex Chromosome** for sex-linked sequences\n\nTags are visual annotations that help you organize your thinking during curation. In combination with contig exclusion (in Edit mode, press **H** to hide contigs from exports), tags help you track which contigs need special handling.\n\nTip: In bird and reptile assemblies, look for one distinctively large chromosome block (Z) and a small noisy one (W) to tag as sex chromosomes.",
       "expectedAction": { "type": "observe" }
     }
   ],

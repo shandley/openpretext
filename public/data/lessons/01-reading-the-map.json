@@ -46,7 +46,7 @@
     {
       "id": "zoom-out",
       "title": "Zoom Out for Overview",
-      "instruction": "Now zoom back out to see the entire genome at once. Use your scroll wheel in the opposite direction, or double-click on the map.",
+      "instruction": "Now zoom back out to see the entire genome at once. Use your scroll wheel in the opposite direction, or press the - key to zoom out.",
       "expectedAction": {
         "type": "zoom"
       },
