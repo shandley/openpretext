@@ -12,7 +12,7 @@
     --data-wash: oklch(0.575 0.205 27 / 0.12);
     --cta-bg: oklch(0.515 0.19 26);
     --cta-fg: oklch(0.99 0.008 60);
-    --good: oklch(0.58 0.12 155);
+    --good: oklch(0.50 0.14 155);
     --good-wash: oklch(0.58 0.12 155 / 0.14);
     --shadow: oklch(0.27 0.03 255 / 0.10);
     color-scheme: light;
@@ -41,7 +41,7 @@
     --ink: oklch(0.27 0.012 255); --ink-soft: oklch(0.43 0.012 255); --ink-faint: oklch(0.50 0.010 255);
     --line: oklch(0.885 0.006 240); --line-strong: oklch(0.80 0.008 240);
     --data: oklch(0.575 0.205 27); --data-ink: oklch(0.47 0.20 27); --data-wash: oklch(0.575 0.205 27 / 0.12);
-    --good: oklch(0.58 0.12 155); --good-wash: oklch(0.58 0.12 155 / 0.14); --shadow: oklch(0.27 0.03 255 / 0.10);
+    --good: oklch(0.50 0.14 155); --good-wash: oklch(0.58 0.12 155 / 0.14); --shadow: oklch(0.27 0.03 255 / 0.10);
     color-scheme: light;
   }
   :root[data-theme="dark"] {
