@@ -9,3 +9,6 @@ coverage/
 bench/data/
 .playwright-mcp/
 .vercel
+
+# Local-only agent instructions (not published)
+CLAUDE.md
