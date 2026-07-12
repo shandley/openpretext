@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { ContigInfo } from '../../src/core/State';
 import {
   computeNStat,
+  computeAuN,
   calculateMetrics,
   MetricsTracker,
 } from '../../src/curation/QualityMetrics';
@@ -407,5 +408,63 @@ describe('MetricsTracker', () => {
     for (let i = 1; i < history.length; i++) {
       expect(history[i].timestamp).toBeGreaterThanOrEqual(history[i - 1].timestamp);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// auN and scaffold-level metrics
+// ---------------------------------------------------------------------------
+
+describe('computeAuN', () => {
+  it('is sum of squared lengths over total length', () => {
+    // [10,8,6,4,2] -> (100+64+36+16+4)/30 = 220/30
+    expect(computeAuN([10, 8, 6, 4, 2], 30)).toBeCloseTo(220 / 30, 6);
+  });
+  it('is zero for an empty assembly', () => {
+    expect(computeAuN([], 0)).toBe(0);
+  });
+});
+
+describe('calculateMetrics scaffold-level and auN', () => {
+  // A(10) B(8) in scaffold 1, C(6) unscaffolded, D(4) in scaffold 2, E(2)
+  // unscaffolded. Scaffold lengths: {1:18, 2:4} plus 6 and 2 as their own.
+  const contigs = [
+    makeContig('A', 0, 10, 1),
+    makeContig('B', 1, 8, 1),
+    makeContig('C', 2, 6, null),
+    makeContig('D', 3, 4, 2),
+    makeContig('E', 4, 2, null),
+  ];
+  const order = [0, 1, 2, 3, 4];
+  const m = calculateMetrics(contigs, order);
+
+  it('pins contig auN', () => {
+    expect(m.auN).toBeCloseTo(220 / 30, 6); // total length 30
+  });
+
+  it('groups contigs into scaffolds for scaffold N50', () => {
+    // scaffold lengths sorted desc: [18, 6, 4, 2], total 30, threshold 15 ->
+    // 18 already clears it.
+    expect(m.scaffoldN50).toBe(18);
+    expect(m.scaffoldL50).toBe(1);
+    expect(m.largestScaffold).toBe(18);
+    expect(m.scaffoldCount).toBe(4); // 2 named scaffolds + 2 unscaffolded
+  });
+
+  it('pins scaffold auN', () => {
+    // (18^2 + 6^2 + 4^2 + 2^2)/30 = 380/30
+    expect(m.scaffoldAuN).toBeCloseTo(380 / 30, 6);
+  });
+
+  it('reports the fraction assigned to named scaffolds', () => {
+    // assigned = 10 + 8 + 4 = 22 of 30
+    expect(m.assignedFraction).toBeCloseTo(22 / 30, 6);
+  });
+
+  it('reports zero assigned fraction when nothing is scaffolded', () => {
+    const bare = [makeContig('X', 0, 10, null), makeContig('Y', 1, 5, null)];
+    const bm = calculateMetrics(bare, [0, 1]);
+    expect(bm.assignedFraction).toBe(0);
+    expect(bm.scaffoldN50).toBe(10); // each contig its own scaffold, N50 = largest
   });
 });

@@ -67,6 +67,14 @@ export function setupEventListeners(ctx: AppContext): void {
 
   events.on('misassembly:updated', () => ctx.updateSidebarContigList());
   events.on('metatag:updated', () => ctx.updateSidebarContigList());
+  // Scaffold assignment changes scaffold-level metrics (scaffold N50, auN,
+  // % assigned), so re-snapshot and refresh the stats panel. Assignment does
+  // not go through refreshAfterCuration, so it needs its own hook to stay live.
+  events.on('scaffold:changed', () => {
+    const s = state.get();
+    if (s.map) ctx.metricsTracker.snapshot(s.map.contigs, s.contigOrder, s.undoStack.length);
+    ctx.updateStatsPanel();
+  });
 
   events.on('curation:cut', (data) => { if (ctx.suppressCurationRefresh) return; refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });
   events.on('curation:join', (data) => { if (ctx.suppressCurationRefresh) return; refreshAfterCuration(ctx); flashContig(ctx, data?.contigIndex); });

@@ -125,6 +125,7 @@ export class ScaffoldManager {
     state.pushOperation(op);
 
     events.emit('render:request', {});
+    events.emit('scaffold:changed', {}); // unassigned contigs change scaffold metrics
   }
 
   /**
@@ -214,6 +215,10 @@ export class ScaffoldManager {
       state.pushOperation(op);
     }
     events.emit('render:request', {});
+    // A standalone paint changes contig assignments (and thus scaffold-level
+    // metrics). Skip when record is false: those calls run inside a
+    // bulkOperation, which emits scaffold:changed once at the end.
+    if (options?.record !== false) events.emit('scaffold:changed', {});
   }
 
   /**
@@ -353,12 +358,14 @@ export class ScaffoldManager {
     };
     state.pushOperation(op);
     events.emit('render:request', {});
+    events.emit('scaffold:changed', {});
   }
 
   /** Undo a scaffold_bulk: restore the entire prior scaffold state. */
   undoBulk(op: CurationOperation): void {
     this.restoreState(op.data.before as ScaffoldSnapshot);
     events.emit('render:request', {});
+    events.emit('scaffold:changed', {});
   }
 
   /** Redo a scaffold_bulk: restore the entire post-operation scaffold state. */
@@ -366,6 +373,7 @@ export class ScaffoldManager {
     this.restoreState(op.data.after as ScaffoldSnapshot);
     state.pushOperation({ ...op, timestamp: Date.now() });
     events.emit('render:request', {});
+    events.emit('scaffold:changed', {});
   }
 
   /**

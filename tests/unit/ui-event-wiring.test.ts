@@ -218,11 +218,19 @@ describe('EventWiring', () => {
       expect(eventNames).toContain('curation:redo');
     });
 
-    it('should subscribe to exactly 9 events', () => {
+    it('should subscribe to the scaffold:changed event', () => {
       const ctx = createMockCtx();
       setupEventListeners(ctx);
 
-      expect(mockEventsOn).toHaveBeenCalledTimes(9);
+      const eventNames = mockEventsOn.mock.calls.map((call: any[]) => call[0]);
+      expect(eventNames).toContain('scaffold:changed');
+    });
+
+    it('should subscribe to exactly 10 events', () => {
+      const ctx = createMockCtx();
+      setupEventListeners(ctx);
+
+      expect(mockEventsOn).toHaveBeenCalledTimes(10);
     });
 
     it('file:loaded handler should call updateSidebarContigList', () => {

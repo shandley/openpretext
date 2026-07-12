@@ -143,9 +143,10 @@ describe('StatsPanel', () => {
       expect(statsEl.innerHTML).not.toContain('No data loaded');
       expect(statsEl.innerHTML).toContain('1245');
       expect(statsEl.innerHTML).toContain('428.00 Mb');
-      // No delta indicators without a baseline to compare against.
-      expect(statsEl.innerHTML).not.toContain('#4caf50');
-      expect(statsEl.innerHTML).not.toContain('#ff6b6b');
+      // No delta indicators without a baseline to compare against. Delta spans
+      // are the only markup with a colored `(+/-...)` change; the EBP reference
+      // block may legitimately colour a met threshold, so target the delta span.
+      expect(statsEl.innerHTML).not.toContain('font-size:10px;">(');
     });
 
     it('should display all metrics when summary is available', () => {

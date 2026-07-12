@@ -27,6 +27,7 @@ export interface AppEvents {
   'tutorial:completed': { lessonId: string; score?: number };
   'misassembly:updated': { count: number };
   'metatag:updated': { count: number };
+  'scaffold:changed': {};
   'telomere:detected': { hitCount: number };
 }
 

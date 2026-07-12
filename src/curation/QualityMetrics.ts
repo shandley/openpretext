@@ -35,8 +35,20 @@ export interface AssemblyMetrics {
   meanLength: number;
   /** Median contig length. */
   medianLength: number;
+  /** auN: area under the Nx curve over contigs, sum(len^2)/totalLength. Robust N50. */
+  auN: number;
   /** Number of distinct scaffolds (contigs with same scaffoldId grouped). */
   scaffoldCount: number;
+  /** Scaffold N50: over scaffold lengths (contigs grouped by scaffoldId). */
+  scaffoldN50: number;
+  /** Scaffold L50. */
+  scaffoldL50: number;
+  /** auN over scaffold lengths. */
+  scaffoldAuN: number;
+  /** Longest scaffold length. */
+  largestScaffold: number;
+  /** Fraction of the assembly assigned to a named scaffold (0..1). */
+  assignedFraction: number;
   /** Number of operations performed so far. */
   operationCount: number;
   /** Timestamp of this snapshot. */
@@ -49,8 +61,21 @@ export interface MetricsSummary {
   current: AssemblyMetrics;
   contigCountDelta: number;
   n50Delta: number;
+  scaffoldN50Delta: number;
   scaffoldCountDelta: number;
   operationCount: number;
+}
+
+/**
+ * auN: the area under the Nx curve, sum(len^2) / totalLength. A length-weighted
+ * mean contig/scaffold size that, unlike N50, moves smoothly rather than
+ * jumping at the 50% threshold. Zero for an empty assembly.
+ */
+export function computeAuN(lengths: number[], totalLength: number): number {
+  if (totalLength <= 0) return 0;
+  let sumSq = 0;
+  for (const l of lengths) sumSq += l * l;
+  return sumSq / totalLength;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +151,13 @@ export function calculateMetrics(
       shortestContig: 0,
       meanLength: 0,
       medianLength: 0,
+      auN: 0,
       scaffoldCount: 0,
+      scaffoldN50: 0,
+      scaffoldL50: 0,
+      scaffoldAuN: 0,
+      largestScaffold: 0,
+      assignedFraction: 0,
       operationCount,
       timestamp: Date.now(),
     };
@@ -161,20 +192,36 @@ export function calculateMetrics(
   // N90 / L90
   const { nStat: n90, lStat: l90 } = computeNStat(sortedDesc, totalLength, 0.9);
 
-  // Scaffold count: group contigs by scaffoldId.
-  // Non-null scaffoldIds that are the same count as one scaffold.
-  // Null scaffoldIds each count as their own scaffold.
-  const scaffoldIds = new Set<number>();
-  let unscaffoldedCount = 0;
+  // auN over contigs: length-weighted mean size, a smoother companion to N50.
+  const auN = computeAuN(lengths, totalLength);
+
+  // Group contigs by scaffoldId to get scaffold lengths. Contigs sharing a
+  // scaffoldId sum into one scaffold; each unscaffolded contig is its own
+  // scaffold (matching the scaffoldCount convention). Scaffold-level N50 is the
+  // number that climbs as a curator groups contigs into chromosomes.
+  const scaffoldLengthById = new Map<number, number>();
+  const unscaffoldedLengths: number[] = [];
+  let assignedLength = 0;
   for (const idx of contigOrder) {
-    const sid = contigs[idx].scaffoldId;
-    if (sid !== null) {
-      scaffoldIds.add(sid);
+    const c = contigs[idx];
+    if (c.scaffoldId !== null) {
+      scaffoldLengthById.set(c.scaffoldId, (scaffoldLengthById.get(c.scaffoldId) ?? 0) + c.length);
+      assignedLength += c.length;
     } else {
-      unscaffoldedCount++;
+      unscaffoldedLengths.push(c.length);
     }
   }
-  const scaffoldCount = scaffoldIds.size + unscaffoldedCount;
+  const scaffoldLengths = [...scaffoldLengthById.values(), ...unscaffoldedLengths];
+  const scaffoldCount = scaffoldLengths.length;
+  const scaffoldSortedDesc = [...scaffoldLengths].sort((a, b) => b - a);
+  const { nStat: scaffoldN50, lStat: scaffoldL50 } = computeNStat(
+    scaffoldSortedDesc,
+    totalLength,
+    0.5,
+  );
+  const scaffoldAuN = computeAuN(scaffoldLengths, totalLength);
+  const largestScaffold = scaffoldSortedDesc[0] ?? 0;
+  const assignedFraction = totalLength > 0 ? assignedLength / totalLength : 0;
 
   return {
     totalLength,
@@ -187,7 +234,13 @@ export function calculateMetrics(
     shortestContig,
     meanLength,
     medianLength,
+    auN,
     scaffoldCount,
+    scaffoldN50,
+    scaffoldL50,
+    scaffoldAuN,
+    largestScaffold,
+    assignedFraction,
     operationCount,
     timestamp: Date.now(),
   };
@@ -266,6 +319,7 @@ export class MetricsTracker {
       current,
       contigCountDelta: current.contigCount - initial.contigCount,
       n50Delta: current.n50 - initial.n50,
+      scaffoldN50Delta: current.scaffoldN50 - initial.scaffoldN50,
       scaffoldCountDelta: current.scaffoldCount - initial.scaffoldCount,
       operationCount: current.operationCount,
     };
