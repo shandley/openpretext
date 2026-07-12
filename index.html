@@ -145,7 +145,12 @@
       font-size: 14px;
       color: var(--accent);
       margin-right: 12px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: opacity 0.12s ease;
     }
+    .toolbar-title:hover { opacity: 0.75; }
+    .toolbar-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
     .toolbar-select {
       background: var(--bg-primary);
@@ -2833,7 +2838,7 @@
     <!-- Toolbar -->
     <div id="toolbar">
       <div id="toolbar-scroll-fade"></div>
-      <span class="toolbar-title">OpenPretext</span>
+      <span class="toolbar-title" id="toolbar-home" role="button" tabindex="0" title="Return to the start screen">OpenPretext</span>
       <div class="toolbar-group">
         <button class="toolbar-btn" id="btn-open">Open <kbd>⌘O</kbd></button>
         <button class="toolbar-btn popover-trigger" id="btn-export-menu" aria-haspopup="true" aria-expanded="false" title="Export AGP / BED / FASTA">Export ▾</button>
@@ -2872,6 +2877,7 @@
         <button class="toolbar-menu-item" id="btn-save-fasta">Export FASTA</button>
       </div>
       <div class="toolbar-popover menu" id="popover-file" role="menu" aria-label="File">
+        <button class="toolbar-menu-item" id="btn-new-file">New / Close File</button>
         <button class="toolbar-menu-item" id="btn-save-session">Save Session</button>
         <button class="toolbar-menu-item" id="btn-load-session">Load Session</button>
         <button class="toolbar-menu-item" id="btn-load-fasta">Load FASTA</button>

@@ -15,6 +15,10 @@ import { TileManager } from '../renderer/TileManager';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 import { loadSession, loadReferenceFasta, loadBedGraphTrack, loadAGPFile } from './ExportSession';
 import { applyOverviewMode } from './EventWiring';
+import { contigExclusion } from '../curation/ContigExclusion';
+import { metaTags } from '../curation/MetaTagManager';
+import { misassemblyFlags } from '../curation/MisassemblyFlags';
+import { resetOEMap } from './OEMapToggle';
 
 // Reused across loads; created lazily so the worker only spins up when needed.
 let parseClient: ParseWorkerClient | null = null;
@@ -239,6 +243,51 @@ export function loadDemoData(ctx: AppContext): void {
   document.body?.classList.remove('no-file');
 
   events.emit('file:loaded', { filename: 'demo', contigs: contigs.length, textureSize: size });
+}
+
+/**
+ * Return to the welcome/landing screen, tearing down the loaded assembly.
+ * Guards against silently discarding unsaved curation (a non-empty undo stack).
+ */
+export function returnToLanding(ctx: AppContext): void {
+  if (state.get().map === null) return; // already on the landing screen
+
+  if (state.get().undoStack.length > 0) {
+    const ok = window.confirm(
+      'Return to the start screen? Unsaved curation will be lost. '
+      + 'Save it first with File → Save Session if you want to keep it.',
+    );
+    if (!ok) return;
+  }
+
+  // Tear down tile streaming for the current file.
+  if (ctx.tileDecodeDebounce !== null) { clearTimeout(ctx.tileDecodeDebounce); ctx.tileDecodeDebounce = null; }
+  ctx.tileDecoder?.cancel();
+  if (ctx.tileManager) { ctx.tileManager.dispose(); ctx.tileManager = null; }
+
+  // Clear per-file curation singletons, tracks, and derived views so nothing
+  // leaks into the next loaded assembly.
+  contigExclusion.clearAll();
+  metaTags.clearAll();
+  misassemblyFlags.clearAll();
+  ctx.waypointManager.clearAll();
+  ctx.currentWaypointId = null;
+  ctx.trackRenderer?.clearTracks();
+  ctx.fastaTrackData = null;
+  resetOEMap(ctx);
+
+  // Reset app state (map -> null, undo/redo cleared) and refresh the (now empty)
+  // panels.
+  state.reset();
+  ctx.updateSidebarContigList();
+  ctx.updateSidebarScaffoldList();
+  ctx.updateStatsPanel();
+
+  // Show the landing screen.
+  document.getElementById('status-file')!.textContent = '';
+  document.getElementById('status-contigs')!.textContent = '';
+  document.getElementById('welcome')!.style.display = '';
+  document.body?.classList.add('no-file');
 }
 
 export function setupFileDrop(ctx: AppContext): void {

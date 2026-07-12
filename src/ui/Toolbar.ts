@@ -9,7 +9,7 @@ import { events } from '../core/EventBus';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import { exportAGP, exportBEDFile, exportFASTAFile, takeScreenshot, saveSession } from './ExportSession';
 import { applyOverviewMode } from './EventWiring';
-import { loadExampleDataset, loadDemoData } from './FileLoading';
+import { loadExampleDataset, loadDemoData, returnToLanding } from './FileLoading';
 import { performUndo, performRedo } from './CurationActions';
 import { toggleLessonBrowser } from './LessonBrowser';
 import { setupToolbarPopovers } from './ToolbarPopovers';
@@ -18,6 +18,18 @@ export function setupToolbar(ctx: AppContext): void {
   setupToolbarPopovers();
   document.getElementById('btn-open')?.addEventListener('click', () => {
     document.getElementById('file-input')?.click();
+  });
+  // The wordmark and the File-menu item both return to the landing screen.
+  const home = document.getElementById('toolbar-home');
+  home?.addEventListener('click', () => returnToLanding(ctx));
+  home?.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') {
+      e.preventDefault();
+      returnToLanding(ctx);
+    }
+  });
+  document.getElementById('btn-new-file')?.addEventListener('click', () => {
+    returnToLanding(ctx);
   });
   document.getElementById('btn-welcome-open')?.addEventListener('click', () => {
     document.getElementById('file-input')?.click();
