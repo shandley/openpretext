@@ -4,6 +4,7 @@
 
 import type { AppContext } from './AppContext';
 import type { SpecimenEntry } from '../data/SpecimenCatalog';
+import { SPECIMEN_DATA_BASE_URL } from '../data/SpecimenCatalog';
 import { state } from '../core/State';
 import { events } from '../core/EventBus';
 import { isPretextFile } from '../formats/PretextParser';
@@ -121,7 +122,7 @@ export async function loadSpecimen(ctx: AppContext, specimen: SpecimenEntry): Pr
     return;
   }
 
-  const url = new URL(`data/${specimen.releaseAsset}`, document.baseURI).href;
+  const url = `${SPECIMEN_DATA_BASE_URL}/${specimen.releaseAsset}`;
 
   showLoading(`Loading ${specimen.commonName}`, `Downloading ${specimen.commonName} genome...`);
 

@@ -107,7 +107,7 @@
       "difficulty": "advanced",
       "patterns": ["unplaced-contigs", "sparse-signal"],
       "teachingNotes": "5,506 contigs — scalability stress test for algorithms.",
-      "releaseAsset": null,
+      "releaseAsset": "Diretmoides_argenteus.pretext",
       "releaseTag": "v0.2.0-data",
       "genomeArkKeys": {
         "pre": "species/Diretmoides_argenteus/assembly_curated/Diretmoides_argenteus.pretext",
@@ -126,7 +126,7 @@
       "difficulty": "advanced",
       "patterns": ["misassembly"],
       "teachingNotes": "Combined-haplotype assembly with 124 contigs. AutoCut false positive case — useful for benchmarking precision.",
-      "releaseAsset": null,
+      "releaseAsset": "Anilios_waitii.pretext",
       "releaseTag": "v0.2.0-data",
       "genomeArkKeys": {
         "pre": "species/Anilios_waitii/rAniWai1/assembly_curated/intermediates/pretextmap/rAniWai1.HiC.combined.decontam.multimap.20250911.pretext",
@@ -145,7 +145,7 @@
       "difficulty": "advanced",
       "patterns": ["misassembly"],
       "teachingNotes": "AutoCut false positive case — useful for benchmarking precision.",
-      "releaseAsset": null,
+      "releaseAsset": "Scaphiopus_couchii.pretext",
       "releaseTag": "v0.2.0-data",
       "genomeArkKeys": {
         "pre": "species/Scaphiopus_couchii/assembly_curated/Scaphiopus_couchii.pretext",
@@ -164,7 +164,7 @@
       "difficulty": "advanced",
       "patterns": ["sparse-signal", "inversions"],
       "teachingNotes": "Lowest tau (0.903), non-vertebrate chordate. Challenging sorting case.",
-      "releaseAsset": null,
+      "releaseAsset": "Branchiostoma_lanceolatum_hap1.pretext",
       "releaseTag": "v0.2.0-data",
       "genomeArkKeys": {
         "pre": "species/Branchiostoma_lanceolatum/assembly_curated/Branchiostoma_lanceolatum_hap1.pretext",
@@ -183,7 +183,7 @@
       "difficulty": "advanced",
       "patterns": ["haplotype-switch", "translocations"],
       "teachingNotes": "Dual-haplotype assembly with complex inter-haplotype patterns.",
-      "releaseAsset": null,
+      "releaseAsset": "Artibeus_lituratus.pretext",
       "releaseTag": "v0.2.0-data",
       "genomeArkKeys": {
         "pre": "species/Artibeus_lituratus/assembly_curated/Artibeus_lituratus.pretext",

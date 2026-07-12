@@ -12,3 +12,8 @@ bench/data/
 
 # Local-only agent instructions (not published)
 CLAUDE.md
+
+# Local R2 / cloud credentials (never commit)
+.r2.env
+.env
+.env.local

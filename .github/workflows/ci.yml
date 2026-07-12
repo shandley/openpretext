@@ -80,16 +80,9 @@ jobs:
         # dev-server E2E suite above never exercises the shipped artifact.
         run: npx playwright test --config playwright.smoke.config.ts
 
-      - name: Download example datasets into dist
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-        run: |
-          mkdir -p dist/data
-          gh release download v0.2.0-data \
-            --pattern '*.pretext' \
-            --dir dist/data
-          rm -f dist/data/*_post.pretext
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # Specimen .pretext files are served from Cloudflare R2
+      # (pretext-data.evomics.org, free egress, no Pages 1 GB limit), fetched
+      # cross-origin by the app. They are no longer copied into the Pages site.
 
       - name: Upload artifact
         if: github.ref == 'refs/heads/master' && github.event_name == 'push'

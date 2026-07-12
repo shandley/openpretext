@@ -52,9 +52,12 @@ describe('SpecimenCatalog', () => {
       }
     });
 
-    it('benchmark-only specimens should have releaseAsset null', () => {
-      const benchOnly = catalog.specimens.filter(s => s.releaseAsset === null);
-      expect(benchOnly.length).toBe(5);
+    it('all specimens should be served (releaseAsset set) from R2', () => {
+      const unserved = catalog.specimens.filter(s => s.releaseAsset === null);
+      expect(unserved.length).toBe(0);
+      for (const s of catalog.specimens) {
+        expect(s.releaseAsset).toMatch(/\.pretext$/);
+      }
     });
 
     it('all specimens should have benchmark baselines', () => {
@@ -66,20 +69,19 @@ describe('SpecimenCatalog', () => {
   describe('getTutorialSpecimens', () => {
     it('should return only specimens with releaseAsset', () => {
       const tutorial = getTutorialSpecimens(catalog);
-      expect(tutorial).toHaveLength(5);
+      expect(tutorial).toHaveLength(10);
       for (const s of tutorial) {
         expect(s.releaseAsset).not.toBeNull();
       }
     });
 
-    it('should include koala, wrasse, quail, finch, crocodile', () => {
+    it('should include the full served collection', () => {
       const tutorial = getTutorialSpecimens(catalog);
       const ids = tutorial.map(s => s.id);
-      expect(ids).toContain('koala');
-      expect(ids).toContain('wrasse');
-      expect(ids).toContain('quail');
-      expect(ids).toContain('finch');
-      expect(ids).toContain('crocodile');
+      for (const id of ['koala', 'wrasse', 'quail', 'finch', 'crocodile',
+                        'spinyfin', 'snake', 'toad', 'lancelet', 'bat']) {
+        expect(ids).toContain(id);
+      }
     });
   });
 
@@ -127,9 +129,9 @@ describe('SpecimenCatalog', () => {
       expect(wrasse.difficulty).toBe('beginner');
     });
 
-    it('spinyfin should be benchmark-only with baseline', () => {
+    it('spinyfin should be served with baseline', () => {
       const spinyfin = catalog.specimens.find(s => s.id === 'spinyfin')!;
-      expect(spinyfin.releaseAsset).toBeNull();
+      expect(spinyfin.releaseAsset).toBe('Diretmoides_argenteus.pretext');
       expect(spinyfin.contigCount).toBe(5506);
       expect(spinyfin.benchmarkBaseline).not.toBeNull();
     });

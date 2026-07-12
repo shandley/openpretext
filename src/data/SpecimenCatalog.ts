@@ -42,6 +42,13 @@ export interface SpecimenCatalog {
   specimens: SpecimenEntry[];
 }
 
+/**
+ * Base URL for specimen .pretext downloads. Files live in a Cloudflare R2
+ * bucket served over a custom domain (free egress, no GitHub Pages size limit).
+ * A specimen's download URL is `${SPECIMEN_DATA_BASE_URL}/${releaseAsset}`.
+ */
+export const SPECIMEN_DATA_BASE_URL = 'https://pretext-data.evomics.org';
+
 /** Returns only specimens that have a release asset (loadable from the app). */
 export function getTutorialSpecimens(catalog: SpecimenCatalog): SpecimenEntry[] {
   return catalog.specimens.filter(s => s.releaseAsset !== null);
