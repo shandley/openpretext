@@ -44,7 +44,7 @@ OpenPretext needs a local HTTP server; opening the files over `file://` will not
 
 ### Rendering
 
-WebGL2 contact map at 60fps with tile-based level-of-detail, an LRU cache, and background decompression. Six color maps with keyboard cycling, adjustable gamma, a contig grid and edge labels, a click-to-navigate minimap, scaffold color bands, waypoint markers, annotation track overlays (line, heatmap, marker), and a comparison overlay of original versus curated boundaries.
+WebGL2 contact map at 60fps with tile-based level-of-detail, an LRU cache, and background decompression. Six color maps with keyboard cycling, adjustable gamma, a contig grid and edge labels, a click-to-navigate minimap, scaffold color bands, waypoint markers, annotation track overlays (line, heatmap, marker), and a comparison overlay of original versus curated boundaries. An observed/expected (O/E) view toggle divides out the distance-decay so long-range structure stands out (overview only; detail tiles stay raw at high zoom). A before/after view places the map as loaded beside the current curated arrangement.
 
 ### Curation
 
@@ -66,8 +66,8 @@ Vision-based analysis through the Anthropic Messages API. It captures the curren
 A suite of Hi-C metrics, all computed in a background Web Worker and exportable as BedGraph or TSV:
 
 - **Insulation score and TAD boundaries** (Crane et al. 2015): a sliding off-diagonal window with boundaries detected as prominent local minima.
-- **P(s) contact decay**: intra-chromosomal contact frequency versus distance with power-law fitting, whole-genome and per-chromosome, with a comparative baseline overlay.
-- **A/B compartments**: observed/expected normalization and first-eigenvector calculation, rendered as a heatmap track.
+- **P(s) contact decay**: intra-chromosomal contact frequency versus distance with power-law fitting, whole-genome and per-chromosome, with a comparative baseline overlay, reference-slope guides at -1.0 and -1.5, and a local-slope panel (the windowed log-derivative) that shows where the curve plateaus or rolls off.
+- **A/B compartments**: observed/expected normalization and first-eigenvector calculation, rendered as a heatmap track. When a reference FASTA is loaded, A and B are oriented by GC content (the gene-rich, GC-rich side is A); without one the split is real but the labels stay unoriented.
 - **Matrix balancing**: two iterative bias-correction normalizations, ICE and KR, both Sinkhorn-Knopp variants, each producing a per-bin bias track and re-running downstream analysis on the balanced matrix.
 - **Directionality index** (Dixon et al. 2012): signed directionality with TAD boundaries at sign-change crossings.
 - **Hi-C library quality**: cis/trans ratio, short/long range ratio, contact density, and per-contig cis ratios.
@@ -95,11 +95,11 @@ Toggle between original, enhanced, and predicted views in real time. All ML outp
 
 ### Misassembly detection
 
-Automatic flagging of potential chimeric contigs from TAD-boundary and compartment-switch signals that fall inside a contig rather than at its edges, shown as orange MIS badges. Cut suggestions with composite confidence scoring, a step-by-step cut-review panel with camera navigation, algorithmic inversion and translocation pattern detection, and automatic scaffold (chromosome block) detection.
+Automatic flagging of potential chimeric contigs from TAD-boundary and compartment-switch signals that fall inside a contig rather than at its edges, shown as orange MIS badges. Cut suggestions with composite confidence scoring, a step-by-step cut-review panel with camera navigation, algorithmic inversion and translocation pattern detection, and automatic scaffold (chromosome block) detection. Join support scores every contig junction by whether Hi-C contact carries across the boundary and flags the unsupported ones as weak joins, skipping intended chromosome boundaries between assigned scaffolds. A haplotig detector flags retained haplotigs from the bright duplicate block they leave against their homologous primary, reported as confirmed when read coverage near half the assembly median agrees and as an unconfirmed candidate otherwise, with a button to tag the confirmed ones.
 
 ### Export and import
 
-AGP 2.1, BED6, and FASTA (with reverse complement for inverted contigs), PNG screenshots, BedGraph and TSV for every analysis track, session save and load (JSON with the full undo stack and analysis data), curation-log export, and AI-strategy JSON. Load a reference FASTA for curated sequence export, or a BedGraph file for a custom track.
+AGP 2.1, BED6, and FASTA (with reverse complement for inverted contigs), PNG screenshots, BedGraph and TSV for every analysis track, session save and load (JSON with the full undo stack and analysis data), curation-log export, and AI-strategy JSON. Load a reference FASTA for curated sequence export, or a BedGraph file for a custom track. AGP import reads a prior curation and applies its contig order, orientation, and scaffold grouping back onto the loaded assembly, matching contigs by name and leaving any not named in the file at the tail.
 
 ### Scripting
 
@@ -111,7 +111,7 @@ Ten interactive lessons with step-by-step instructions, hints, and UI highlighti
 
 ### Also included
 
-Live assembly metrics (N50/L50, N90/L90, totals, per-contig stats) with delta tracking, real-time curation-progress scoring (Kendall tau against a reference ordering with trend arrows), annotation tracks from embedded `.pretext` graph extensions or uploaded BedGraph files, four interaction modes (Navigate, Edit, Scaffold, Waypoint), a fuzzy command palette, and a CLI benchmark pipeline for evaluating the AutoSort and AutoCut algorithms against stored baselines.
+Live assembly metrics (contig and scaffold N50/L50, N90/L90, auN, totals, per-contig stats, and the fraction assigned to scaffolds) with delta tracking, shown against the EBP `6.C.Q40` reference thresholds for contiguity and chromosome assignment; base accuracy (QV) is reported as not assessed, since a Hi-C map carries no read-level data to measure it. Real-time curation-progress scoring (Kendall tau against a reference ordering with trend arrows), annotation tracks from embedded `.pretext` graph extensions (coverage, gaps, telomeres, repeat density) or uploaded BedGraph files, four interaction modes (Navigate, Edit, Scaffold, Waypoint), a fuzzy command palette, and a CLI benchmark pipeline for evaluating the AutoSort and AutoCut algorithms against stored baselines.
 
 ## Keyboard shortcuts
 
@@ -173,6 +173,7 @@ autosort
 - **`.pretext`**: native BC4-compressed contact maps from [PretextMap](https://github.com/sanger-tol/PretextMap), including embedded graph extensions from [PretextGraph](https://github.com/sanger-tol/PretextGraph).
 - **`.bedgraph`**: annotation tracks loaded with the **Load Track** button.
 - **`.fasta`**: reference sequences loaded with **Load FASTA** for curated export.
+- **`.agp`**: a prior curation loaded with **Import AGP**, applying its order, orientation, and scaffold grouping to the current assembly.
 
 For the binary format details, see [docs/PRETEXT_FORMAT.md](docs/PRETEXT_FORMAT.md).
 

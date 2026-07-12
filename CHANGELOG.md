@@ -5,6 +5,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- **Curator overlay tracks from the `.pretext` file.** Coverage, gaps, telomeres,
+  and repeat-density tracks embedded as graph extensions are now surfaced as map
+  overlays, with fallbacks that compute gaps and telomeres from a loaded FASTA.
+- **Join support.** Every contig junction is scored by whether Hi-C contact
+  carries across the boundary; unsupported junctions are flagged as weak joins
+  with a marker and Next/Previous navigation. The check is scaffold-aware, so an
+  intended chromosome boundary between two assigned scaffolds is left alone.
+- **Haplotig detector.** Retained haplotigs are flagged from the bright duplicate
+  block they leave against their homologous primary. A candidate is reported as a
+  confirmed haplotig only when read coverage near half the assembly median agrees;
+  without a coverage track it stays an unconfirmed candidate. Confirmed candidates
+  can be tagged in one step.
+- **Before/after map.** A side-by-side view of the overview as loaded next to the
+  same overview reordered by the current curation, both drawn from the one
+  underlying matrix so it shows how the edits rearranged the diagonal.
+- **Observed/expected (O/E) view toggle.** Divides each overview cell by the
+  genome-wide mean contact at its separation, flattening the distance-decay so
+  long-range structure stands out. The transform applies to the coarse overview
+  only; detail tiles carry no genome-wide expectation and stay raw at high zoom.
+- **auN and scaffold-level contiguity stats.** The stats panel adds contig auN,
+  scaffold N50 and auN, largest scaffold, and the fraction assigned to scaffolds,
+  shown against the EBP `6.C.Q40` reference thresholds for contiguity and
+  chromosome assignment. Base accuracy (QV) is reported as not assessed, since a
+  Hi-C map carries no read-level data. Scaffold-level metrics refresh live as
+  contigs are grouped into chromosomes.
+- **AGP import.** Reads a prior curation and applies its contig order, orientation,
+  and scaffold grouping onto the loaded assembly, matching contigs by name and
+  leaving any not named in the file at the tail.
+
+### Changed
+- **A/B compartments are oriented by GC content.** The eigenvector sign is
+  arbitrary, so when a reference FASTA is loaded the gene-rich, GC-rich side is
+  labeled A. Without a FASTA the split is still computed but the labels are
+  reported as unoriented rather than guessed.
+- **The P(s) decay chart shows the curve, reference slopes, and a local-slope
+  panel.** The chart now draws the P(s) curve as a connected line (genome-wide and
+  per scaffold), decade gridlines, reference-slope guides at -1.0 and -1.5, and a
+  companion panel plotting the windowed log-derivative of the curve against
+  distance, which exposes a short-range plateau or long-range roll-off that the
+  single global exponent hides.
+- **Field guide.** Added a "Reading the analysis" page with readout explainers and
+  interactive demos, and cards for the curator tracks, join support, and the
+  haplotig detector.
+
 ### Fixed
 - **Insulation and Directionality Index are now contig-aware.** Both slid their
   windows without knowing contig boundaries, so at every contig junction the

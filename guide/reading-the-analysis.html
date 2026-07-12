@@ -105,7 +105,7 @@
           </div>
           <div class="rd-body">
             <h3>Contact decay, P(s)</h3>
-            <p>How fast contact frequency falls as two points move apart along a chromosome, measured as the slope of the decay on a log-log plot. A well-packed genome sits between &minus;1.0 and &minus;1.5.</p>
+            <p>How fast contact frequency falls as two points move apart along a chromosome, measured as the slope of the decay on a log-log plot. A well-packed genome sits between &minus;1.0 and &minus;1.5, drawn as dotted reference guides on the chart. Below the curve, a companion panel plots the local slope against distance, so a short-range plateau or a long-range roll-off shows up as a departure from the healthy band even when the single fitted slope looks fine.</p>
             <span class="rd-read"><b>When to worry:</b> a slope near 0 means contacts barely fade with distance, which points to poor compaction or a misassembly stitching distant regions together. A slope past &minus;2 usually means the data has been over-corrected.</span>
           </div>
         </div>
@@ -198,6 +198,28 @@
             <h3>Virtual 4C</h3>
             <p>Alt-click any point on the map to pull out that single locus's contact profile across the whole genome, the way a 4C experiment would. It turns a two-dimensional map into one readable track anchored at one place.</p>
             <span class="rd-read"><b>When to worry:</b> a sharp spike far from the diagonal but on the same chromosome is worth a look. It is either a wrong join pulling distant sequence together, or a real long-range contact.</span>
+          </div>
+        </div>
+
+        <div class="readout" id="analysis-oe">
+          <div>
+            <div class="rd-row"><span class="k">O/E view</span><span class="v">toggle</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>Observed over expected</h3>
+            <p>Contact frequency drops steeply with distance, and that decay dominates the raw map so much that faint long-range structure is hard to see. The O/E view divides every cell by the genome-wide average at its separation, so the decay cancels out and what is left is contact that is stronger or weaker than expected. On a diverging blue-to-red scale, red is enrichment and blue is depletion, and the compartment checkerboard and off-diagonal blocks stand out. This is the same observed/expected map the compartment analysis is built on, shown directly.</p>
+            <span class="rd-read"><b>Overview only:</b> the transform needs the genome-wide average, which exists for the whole-genome overview but not for a single detail tile. Zoom in past the overview and the raw tiles take over, so read O/E as a low-zoom diagnostic, not a replacement for the detailed map.</span>
+          </div>
+        </div>
+
+        <div class="readout" id="analysis-qc">
+          <div>
+            <div class="rd-row"><span class="k">Assembly quality</span><span class="v">6.C.Q40</span></div>
+          </div>
+          <div class="rd-body">
+            <h3>Contiguity and the reference-quality standard</h3>
+            <p>Alongside the health score, the stats panel reports the numbers assembly projects track: contig and scaffold N50, auN (a length-weighted average that moves more smoothly than N50), the largest scaffold, and the fraction of the assembly assigned to chromosomes. Scaffold N50 is the one that climbs as you group contigs into chromosomes, so it is the number to watch during curation. These are shown against the Earth BioGenome Project standard written as 6.C.Q40: a contig N50 above 1 Mb, chromosome-scale scaffolds, and fewer than one base error in 10,000.</p>
+            <span class="rd-read"><b>What it cannot tell you:</b> the Q in that standard is base accuracy, and measuring it needs the sequencing reads, which a Hi-C contact map does not carry. OpenPretext reports the contiguity and chromosome-assignment parts against the targets and leaves base accuracy marked as not assessed, rather than implying an assembly meets a standard it has only half-checked.</p>
           </div>
         </div>
       </div>
