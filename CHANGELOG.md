@@ -34,6 +34,76 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - **AGP import.** Reads a prior curation and applies its contig order, orientation,
   and scaffold grouping onto the loaded assembly, matching contigs by name and
   leaving any not named in the file at the tail.
+- **Overview detail mode (Clean / Faithful)** — a toolbar dropdown controlling
+  how the overview represents sparse off-diagonal contacts, fixing the jarring
+  inconsistency where the coarse overview was clean but zooming "revealed"
+  off-diagonal signal that popped in (and changed with zoom). Root cause: the
+  overview is built from the file's coarsest, most-lossy mip (sparse contacts
+  averaged to ~0), while detail tiles use finer mips that retain them. Both modes
+  are now consistent across zoom: the detail layer is **gated by its mode's
+  overview** (`u_gateEnabled`/`u_gateThresh` in the tile shader, sampling a
+  dedicated original-order gate texture), so detail only renders where that
+  overview has signal — no pop-in or zoom-dependent shifting. **Clean** (default)
+  uses the coarsest-mip overview (faint off-diagonal suppressed); **Faithful**
+  assembles a *finer* mip at its native resolution (`assembleOverview()` in
+  PretextParser, larger overview bounded by a size cap) so structured
+  off-diagonal/haplotype contacts show at every zoom and in the minimap. (Native
+  resolution, not max-pooling — max-pooling let a single contact light a whole
+  coarse cell and flooded fragmented assemblies to solid red.) Because the raw tile bytes are transferred to (and owned
+  by) the tile-decode worker, the Faithful overview is assembled **in that
+  worker** on demand (`TileDecodeWorkerClient.assembleOverview()`); if it can't
+  be produced it falls back to Clean rather than blanking the map. Mode persists
+  in sessions. 4 new unit tests (overview-mode.test.ts).
+- **Track name labels on canvas** — each analysis track now shows its name as a
+  semi-transparent label on the top-edge (horizontal) and left-edge (rotated 90°)
+  overlays, so tracks are identifiable without opening the sidebar config panel
+- **Pattern Gallery discoverability** — "Pattern Gallery" link added to welcome
+  screen hints row alongside Workflow Guide; steps 1-4 of the misassembly
+  detection tutorial now include an inline "Open Pattern Gallery →" button;
+  `showPatternGallery` field added to LessonStep schema
+- **FASTA streaming parser** — `parseFASTAStream()` in FASTAParser.ts processes
+  large files line-by-line via the Streams API, avoiding V8's ~1 GB string limit
+  that caused silent 0-sequence results on 2+ GB FASTA files (issue #53). Gzip
+  FASTA files (.fa.gz) now decompressed with pako; files >500 MB compressed show
+  a clear error. Loading overlay shows byte progress. 9 new unit tests.
+- **Export respects contig exclusion** — AGP, BED, and FASTA exporters now call
+  `contigExclusion.getIncludedOrder()` so contigs marked EXC are omitted from all
+  exported files. 4 new unit tests.
+- **Evo2HiC resolution enhancement** — ML-powered Hi-C contact map enhancement
+  using the Evo2HiC foundation model (81M parameters, 177 species). Optional
+  companion FastAPI server with real model weights or mock inference. Toggle
+  between original and enhanced views, with automatic invalidation on curation.
+  Tested on real King quail genome (645 contigs, 30 chromosomes).
+- 49 new unit tests for Evo2HiC client and enhancement utilities
+- **Contig meta tags** — classify contigs as haplotig, contaminant, unlocalised,
+  or sex chromosome with colored sidebar badges and batch operations
+- **Telomere detection** — scan reference FASTA for TTAGGG/CCCTAA repeat motifs
+  at contig ends with genome-wide density profiling and visualization track
+- **"KR" normalization**: a second Sinkhorn-Knopp matrix-balancing variant
+  alongside ICE, with sqrt(rowSum) correction. Originally mislabeled KR/Knight-Ruiz;
+  see the relabel note under Fixed. The `kr` key is kept only for session-file
+  back-compat.
+- **Contact map re-rendering** — heatmap now visually updates after every curation
+  operation (cut/join/invert/move/sort) by reordering pixels from the original map
+- **Lesson browser** — modal showing all 9 tutorials with difficulty badges,
+  estimated time, and descriptions; replaces hardcoded lesson-01 button
+- **Workflow guide** — 7-step recommended curation workflow modal accessible from
+  welcome screen and command palette
+- **Zoom controls** — +/- buttons with zoom percentage indicator; keyboard shortcuts
+  (+/= to zoom in, - to zoom out)
+- **Onboarding improvements** — welcome screen with tagline, 3 getting-started paths,
+  specimen card tooltips, and post-load orientation toast
+- **Export discoverability** — collapsible "Export Analysis Data" section with format
+  labels, disabled states, Export All button, and 8 command palette entries
+- **Edit mode hint** — one-time toast when clicking map in Navigate mode
+- **AutoSort/AutoCut feedback** — enriched toasts showing before/after metrics
+- **FASTA hint** — Analysis Panel prompts to load reference FASTA for telomere detection
+- 3 new tutorial lessons: 3D Genomics Analysis, Contig Classification, Automated
+  Misassembly Detection
+- 3 new Hi-C pattern gallery entries: telomere signal, sex chromosomes, haplotig mirror
+- 3 new AI prompt strategies: analysis-guided, haplotig detection, telomere-aware
+- Export buttons for KR bias BedGraph
+- CHANGELOG.md and CONTRIBUTING.md
 
 ### Changed
 - **A/B compartments are oriented by GC content.** The eigenvector sign is
@@ -49,6 +119,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Field guide.** Added a "Reading the analysis" page with readout explainers and
   interactive demos, and cards for the curator tracks, join support, and the
   haplotig detector.
+- **Toolbar reorganized to fit without horizontal scroll.** ~21 controls in one
+  strip overflowed on typical laptop widths (the toolbar scrolled with a hidden
+  scrollbar, so the right-hand panel toggles and the Clean/Faithful control sat
+  off-screen). The rarely-used and occasional controls now collapse into
+  click-to-open popovers: **Export ▾** (AGP/BED/FASTA), **File ▾** (Save/Load
+  Session, Load FASTA/Track, Screenshot), and **Display ▾** (colormap, gamma,
+  Min/Max contrast, Clean/Faithful overview). Mode buttons are a segmented
+  control and Undo/Redo are icons. Always-visible controls drop from ~21 to ~12,
+  fitting comfortably at ≥1280px. New lightweight `ToolbarPopovers` component
+  (one open at a time; closes on outside-click/Escape/scroll/resize); all control
+  IDs preserved so existing handlers are unchanged.
+- **Rendering performance pass** (no user-facing API changes):
+  - BC4 tile decode and `.pretext` parsing now run in Web Workers
+    (`TileDecodeWorker`, `ParseWorker`), so panning/zooming and loading
+    30–200 MB files no longer block the UI. Decode is debounced and buffers
+    transfer back zero-copy; both have synchronous fallbacks.
+  - Render loop only redraws when something changed (camera/hover/selection/
+    data/animation) instead of every frame — idle CPU drops to ~0.
+  - DerivedState caches invalidate only on contigOrder/map change, not on every
+    state update (e.g. camera pan no longer recomputes contig boundaries).
+  - Fewer per-frame allocations: cached contig-boundary uniform, batched
+    detail-tile draws (shared GL state hoisted out of the per-tile loop),
+    iterator instead of `Array.from` for single selection.
+  - BC4 decode reuses scratch buffers; `subarray` (view) instead of `slice`
+    (copy) before pako inflate.
+  - AI assist subsystem is lazy-loaded on first use (main bundle 344 → 294 kB,
+    99 → 84 kB gzip); production sourcemaps disabled.
+  - Undo history capped at 200 operations to bound long-session memory.
+  - ICE/KR normalization use a single working-matrix copy; `filterLowCoverageBins`
+    uses a typed-array sort.
+- TypeScript 5.9.3 → 6.0.3; removed unused `baseUrl` and `@/*` path alias from
+  tsconfig.json (deprecated in TS 6.0, never referenced in source)
+- vite 8.0.1 → 8.0.16, vitest 4.1.0 → 4.1.8, @vitest/coverage-v8 4.1.0 → 4.1.8,
+  @playwright/test 1.58.2 → 1.60.0, @types/node 25.5.0 → 25.9.1
+- CI actions: upload-pages-artifact v4 → v5, deploy-pages v4 → v5
+- Upgraded vite 5→8, vitest 2→4, @vitest/coverage-v8 2→4 (resolves 3 security
+  vulnerabilities)
 
 ### Fixed
 - **Insulation and Directionality Index are now contig-aware.** Both slid their
@@ -123,58 +230,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   `sinkhornKnoppBalance`, and all user-facing labels now read "Sinkhorn-Knopp" /
   "SK Bias". Internal symbol names and the `kr` session key keep the abbreviation
   for backward compatibility. Numeric behavior is unchanged.
-
-### Changed
-- **Toolbar reorganized to fit without horizontal scroll.** ~21 controls in one
-  strip overflowed on typical laptop widths (the toolbar scrolled with a hidden
-  scrollbar, so the right-hand panel toggles and the Clean/Faithful control sat
-  off-screen). The rarely-used and occasional controls now collapse into
-  click-to-open popovers: **Export ▾** (AGP/BED/FASTA), **File ▾** (Save/Load
-  Session, Load FASTA/Track, Screenshot), and **Display ▾** (colormap, gamma,
-  Min/Max contrast, Clean/Faithful overview). Mode buttons are a segmented
-  control and Undo/Redo are icons. Always-visible controls drop from ~21 to ~12,
-  fitting comfortably at ≥1280px. New lightweight `ToolbarPopovers` component
-  (one open at a time; closes on outside-click/Escape/scroll/resize); all control
-  IDs preserved so existing handlers are unchanged.
-
-### Added
-- **Overview detail mode (Clean / Faithful)** — a toolbar dropdown controlling
-  how the overview represents sparse off-diagonal contacts, fixing the jarring
-  inconsistency where the coarse overview was clean but zooming "revealed"
-  off-diagonal signal that popped in (and changed with zoom). Root cause: the
-  overview is built from the file's coarsest, most-lossy mip (sparse contacts
-  averaged to ~0), while detail tiles use finer mips that retain them. Both modes
-  are now consistent across zoom: the detail layer is **gated by its mode's
-  overview** (`u_gateEnabled`/`u_gateThresh` in the tile shader, sampling a
-  dedicated original-order gate texture), so detail only renders where that
-  overview has signal — no pop-in or zoom-dependent shifting. **Clean** (default)
-  uses the coarsest-mip overview (faint off-diagonal suppressed); **Faithful**
-  assembles a *finer* mip at its native resolution (`assembleOverview()` in
-  PretextParser, larger overview bounded by a size cap) so structured
-  off-diagonal/haplotype contacts show at every zoom and in the minimap. (Native
-  resolution, not max-pooling — max-pooling let a single contact light a whole
-  coarse cell and flooded fragmented assemblies to solid red.) Because the raw tile bytes are transferred to (and owned
-  by) the tile-decode worker, the Faithful overview is assembled **in that
-  worker** on demand (`TileDecodeWorkerClient.assembleOverview()`); if it can't
-  be produced it falls back to Clean rather than blanking the map. Mode persists
-  in sessions. 4 new unit tests (overview-mode.test.ts).
-- **Track name labels on canvas** — each analysis track now shows its name as a
-  semi-transparent label on the top-edge (horizontal) and left-edge (rotated 90°)
-  overlays, so tracks are identifiable without opening the sidebar config panel
-- **Pattern Gallery discoverability** — "Pattern Gallery" link added to welcome
-  screen hints row alongside Workflow Guide; steps 1-4 of the misassembly
-  detection tutorial now include an inline "Open Pattern Gallery →" button;
-  `showPatternGallery` field added to LessonStep schema
-- **FASTA streaming parser** — `parseFASTAStream()` in FASTAParser.ts processes
-  large files line-by-line via the Streams API, avoiding V8's ~1 GB string limit
-  that caused silent 0-sequence results on 2+ GB FASTA files (issue #53). Gzip
-  FASTA files (.fa.gz) now decompressed with pako; files >500 MB compressed show
-  a clear error. Loading overlay shows byte progress. 9 new unit tests.
-- **Export respects contig exclusion** — AGP, BED, and FASTA exporters now call
-  `contigExclusion.getIncludedOrder()` so contigs marked EXC are omitted from all
-  exported files. 4 new unit tests.
-
-### Fixed
 - **White detail-tile blocks that never disappeared** — zoomed-in tiles could get
   stuck "pending" (cancelled mid-decode and never re-queued), leaving permanent
   white squares. The decode guard is now state-based (re-queues anything not
@@ -204,71 +259,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   compartments + P(s) after showing its toast, keeping buttons disabled). Native
   `el.click()` via `page.evaluate` bypasses Playwright's strict visibility
   requirement for elements in overflow-y:auto containers. Timeout raised to 150s.
-
-### Changed
-- **Rendering performance pass** (no user-facing API changes):
-  - BC4 tile decode and `.pretext` parsing now run in Web Workers
-    (`TileDecodeWorker`, `ParseWorker`), so panning/zooming and loading
-    30–200 MB files no longer block the UI. Decode is debounced and buffers
-    transfer back zero-copy; both have synchronous fallbacks.
-  - Render loop only redraws when something changed (camera/hover/selection/
-    data/animation) instead of every frame — idle CPU drops to ~0.
-  - DerivedState caches invalidate only on contigOrder/map change, not on every
-    state update (e.g. camera pan no longer recomputes contig boundaries).
-  - Fewer per-frame allocations: cached contig-boundary uniform, batched
-    detail-tile draws (shared GL state hoisted out of the per-tile loop),
-    iterator instead of `Array.from` for single selection.
-  - BC4 decode reuses scratch buffers; `subarray` (view) instead of `slice`
-    (copy) before pako inflate.
-  - AI assist subsystem is lazy-loaded on first use (main bundle 344 → 294 kB,
-    99 → 84 kB gzip); production sourcemaps disabled.
-  - Undo history capped at 200 operations to bound long-session memory.
-  - ICE/KR normalization use a single working-matrix copy; `filterLowCoverageBins`
-    uses a typed-array sort.
-- TypeScript 5.9.3 → 6.0.3; removed unused `baseUrl` and `@/*` path alias from
-  tsconfig.json (deprecated in TS 6.0, never referenced in source)
-- vite 8.0.1 → 8.0.16, vitest 4.1.0 → 4.1.8, @vitest/coverage-v8 4.1.0 → 4.1.8,
-  @playwright/test 1.58.2 → 1.60.0, @types/node 25.5.0 → 25.9.1
-- CI actions: upload-pages-artifact v4 → v5, deploy-pages v4 → v5
-
-### Added
-- **Evo2HiC resolution enhancement** — ML-powered Hi-C contact map enhancement
-  using the Evo2HiC foundation model (81M parameters, 177 species). Optional
-  companion FastAPI server with real model weights or mock inference. Toggle
-  between original and enhanced views, with automatic invalidation on curation.
-  Tested on real King quail genome (645 contigs, 30 chromosomes).
-- 49 new unit tests for Evo2HiC client and enhancement utilities
-- **Contig meta tags** — classify contigs as haplotig, contaminant, unlocalised,
-  or sex chromosome with colored sidebar badges and batch operations
-- **Telomere detection** — scan reference FASTA for TTAGGG/CCCTAA repeat motifs
-  at contig ends with genome-wide density profiling and visualization track
-- **"KR" normalization**: a second Sinkhorn-Knopp matrix-balancing variant
-  alongside ICE, with sqrt(rowSum) correction. Originally mislabeled KR/Knight-Ruiz;
-  see the relabel note under Fixed. The `kr` key is kept only for session-file
-  back-compat.
-- **Contact map re-rendering** — heatmap now visually updates after every curation
-  operation (cut/join/invert/move/sort) by reordering pixels from the original map
-- **Lesson browser** — modal showing all 9 tutorials with difficulty badges,
-  estimated time, and descriptions; replaces hardcoded lesson-01 button
-- **Workflow guide** — 7-step recommended curation workflow modal accessible from
-  welcome screen and command palette
-- **Zoom controls** — +/- buttons with zoom percentage indicator; keyboard shortcuts
-  (+/= to zoom in, - to zoom out)
-- **Onboarding improvements** — welcome screen with tagline, 3 getting-started paths,
-  specimen card tooltips, and post-load orientation toast
-- **Export discoverability** — collapsible "Export Analysis Data" section with format
-  labels, disabled states, Export All button, and 8 command palette entries
-- **Edit mode hint** — one-time toast when clicking map in Navigate mode
-- **AutoSort/AutoCut feedback** — enriched toasts showing before/after metrics
-- **FASTA hint** — Analysis Panel prompts to load reference FASTA for telomere detection
-- 3 new tutorial lessons: 3D Genomics Analysis, Contig Classification, Automated
-  Misassembly Detection
-- 3 new Hi-C pattern gallery entries: telomere signal, sex chromosomes, haplotig mirror
-- 3 new AI prompt strategies: analysis-guided, haplotig detection, telomere-aware
-- Export buttons for KR bias BedGraph
-- CHANGELOG.md and CONTRIBUTING.md
-
-### Fixed
 - **Contact map not updating** after curation operations — the critical rendering
   bug that prevented users from seeing the effect of their curation work
 - **Toolbar hidden on small screens** — replaced `display: none` with horizontal
@@ -278,10 +268,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Zoom button overlap** — repositioned zoom controls above minimap canvas
 - Track color values now consistently use `#hex` format (fixes console warnings
   on `<input type="color">` elements)
-
-### Changed
-- Upgraded vite 5→8, vitest 2→4, @vitest/coverage-v8 2→4 (resolves 3 security
-  vulnerabilities)
 
 ## [0.4.0] — 2026-02-22
 
