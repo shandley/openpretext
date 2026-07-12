@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A plain-language glossary of genome curation and Hi-C terms: contig, scaffold, haplotig, N50, A/B compartments, AGP, and more. Part of the OpenPretext field guide.">
+<meta property="og:title" content="Glossary · OpenPretext field guide">
+<meta property="og:description" content="Plain definitions of the terms used in genome curation and the OpenPretext contact map, from contigs and scaffolds to compartments and AGP.">
+<meta name="theme-color" content="#f4f5f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#20242c" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect x='1' y='1' width='18' height='18' rx='3' fill='none' stroke='%23c0392b' stroke-width='2'/%3E%3Cline x1='3' y1='17' x2='17' y2='3' stroke='%23c0392b' stroke-width='2.4'/%3E%3C/svg%3E">
+<title>Glossary · OpenPretext field guide</title>
+<link rel="stylesheet" href="guide.css">
+<noscript><style>.reveal{opacity:1 !important;transform:none !important}</style></noscript>
+</head>
+<body>
+<header class="bar">
+  <div class="wrap bar-in">
+    <span class="brand">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="1" y="1" width="18" height="18" rx="2" fill="none" stroke="var(--data)" stroke-width="1.4"/>
+        <line x1="3" y1="17" x2="17" y2="3" stroke="var(--data)" stroke-width="1.8"/>
+        <rect x="4" y="10" width="4" height="4" fill="var(--data-wash)"/>
+        <rect x="11" y="3" width="5" height="5" fill="var(--data-wash)"/>
+      </svg>
+      OpenPretext
+    </span>
+    <nav class="bar-links" aria-label="Glossary sections">
+      <a href="#grp-assembly">Assembly</a>
+      <a href="#grp-map">Map</a>
+      <a href="#grp-metrics">Metrics</a>
+      <a href="#grp-structure">Structure</a>
+      <a href="#grp-biology">Biology</a>
+      <a href="#grp-formats">Formats</a>
+    </nav>
+    <a class="ghlink" href="/">Field guide</a>
+    <a class="cta-sm" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open the app</a>
+  </div>
+</header>
+
+<main>
+  <section class="ra-hero">
+    <div class="wrap">
+      <span class="eyebrow">Field guide · reference</span>
+      <h1>Glossary</h1>
+      <p class="lede">Plain definitions of the terms used across genome curation and the OpenPretext contact map, from contigs and scaffolds to compartments and AGP. New to curation? Start with the <a href="/">field guide</a>, or read the <a href="/reading-the-analysis">analysis page</a> for the deeper measurements.</p>
+    </div>
+  </section>
+
+  <section id="grp-assembly" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Assembly and curation</span>
+        <h2>The assembly and its errors</h2>
+      </div>
+      <dl class="gloss">
+        <div class="gloss-item"><dt id="assembly">Assembly</dt><dd>The set of sequences a genome project produces from its sequencing reads. A draft assembly, before curation, usually contains ordering and orientation errors.</dd></div>
+        <div class="gloss-item"><dt id="contig">Contig</dt><dd>A stretch of sequence assembled from overlapping reads, with no gaps inside it.</dd></div>
+        <div class="gloss-item"><dt id="scaffold">Scaffold</dt><dd>One or more contigs placed in order and orientation, with gaps of estimated length between them. Curation groups contigs into chromosome-scale scaffolds.</dd></div>
+        <div class="gloss-item"><dt id="curation">Curation</dt><dd>Correcting an assembly by hand, adjusting the order, orientation, and joins of its contigs, usually guided by a Hi-C contact map.</dd></div>
+        <div class="gloss-item"><dt id="misassembly">Misassembly</dt><dd>A placement error made by the assembler: a wrong join, a piece in the wrong orientation, or two unrelated regions fused into one contig.</dd></div>
+        <div class="gloss-item"><dt id="chimera">Chimera</dt><dd>A single contig the assembler built from two unrelated regions. The signal drops sharply in the middle of the block; the fix is to cut it at the break.</dd></div>
+        <div class="gloss-item"><dt id="inversion">Inversion</dt><dd>A stretch of sequence assembled in the wrong orientation. On the map it breaks and crosses the diagonal; the fix is to flip it.</dd></div>
+        <div class="gloss-item"><dt id="translocation">Translocation</dt><dd>Sequence joined to the wrong location, often the wrong chromosome. On the map it appears as a bright block far off the diagonal.</dd></div>
+        <div class="gloss-item"><dt id="haplotype">Haplotype</dt><dd>One of the two sequence copies of a chromosome in a diploid organism, one inherited from each parent.</dd></div>
+        <div class="gloss-item"><dt id="haplotig">Haplotig</dt><dd>A contig representing the alternate haplotype of a region already present in the primary assembly, so that region is represented twice. Confirmed haplotigs are tagged out of the primary set. See <a href="#coverage">coverage</a>.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section id="grp-map" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">The contact map</span>
+        <h2>Reading the map and its data</h2>
+      </div>
+      <dl class="gloss">
+        <div class="gloss-item"><dt id="hi-c">Hi-C</dt><dd>A sequencing method that records how often two pieces of DNA are close together in the nucleus. Nearby sequences produce more contacts.</dd></div>
+        <div class="gloss-item"><dt id="contact-map">Contact map</dt><dd>A square matrix of contact frequencies between genomic positions. Brighter cells mean more contacts. It is the main view in OpenPretext.</dd></div>
+        <div class="gloss-item"><dt id="diagonal">Diagonal</dt><dd>The line down the middle of the map where each position meets itself. It is always the strongest signal and the baseline for reading the rest.</dd></div>
+        <div class="gloss-item"><dt id="pretext"><span class="mono">.pretext</span></dt><dd>The binary contact-map file OpenPretext reads, produced by PretextMap. It stores the map as a multi-resolution image, so the overview loads without the full data.</dd></div>
+        <div class="gloss-item"><dt id="coverage">Coverage</dt><dd>How many sequencing reads span a position, also called read depth. A retained <a href="#haplotig">haplotig</a> sits near half the assembly's coverage.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section id="grp-metrics" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Contiguity metrics</span>
+        <h2>Measuring the assembly</h2>
+      </div>
+      <dl class="gloss">
+        <div class="gloss-item"><dt id="n50">N50</dt><dd>The length at which half of the assembly is contained in pieces at least that long. Contig N50 measures the raw assembly; scaffold N50 rises as contigs are grouped into chromosomes.</dd></div>
+        <div class="gloss-item"><dt id="aun">auN</dt><dd>A length-weighted average of piece length. It responds to change more smoothly than N50, because every piece contributes in proportion to its length.</dd></div>
+        <div class="gloss-item"><dt id="health-score">Health score</dt><dd>OpenPretext's summary of assembly quality from 0 to 100, combining contiguity, contact decay, integrity, compartment strength, and library quality.</dd></div>
+        <div class="gloss-item"><dt id="qv">QV</dt><dd>A measure of per-base accuracy on a log scale, where Q40 is one error in 10,000 bases. Measuring it needs the sequencing reads, so a contact map alone cannot report it.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section id="grp-structure" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Structure analysis</span>
+        <h2>The deeper measurements</h2>
+        <p>These come from the 3D Analysis panel and are explained in full, with interactive figures, on the <a href="/reading-the-analysis">analysis page</a>.</p>
+      </div>
+      <dl class="gloss">
+        <div class="gloss-item"><dt id="ps">Contact decay, P(s)</dt><dd>How contact frequency falls as two positions move apart along a chromosome. Its slope on a log-log plot reflects how tightly the genome is packed.</dd></div>
+        <div class="gloss-item"><dt id="compartments">A/B compartments</dt><dd>The division of chromatin into an active, gene-rich A compartment and a quiet, dense B compartment. On the map they form a checkerboard.</dd></div>
+        <div class="gloss-item"><dt id="saddle">Saddle plot</dt><dd>A single-square summary of compartment strength, made by sorting bins from most B to most A and averaging their contacts.</dd></div>
+        <div class="gloss-item"><dt id="insulation">Insulation and TAD boundaries</dt><dd>Insulation dips where a region is walled off from its neighbors. The deepest dips mark boundaries between chromosome neighborhoods.</dd></div>
+        <div class="gloss-item"><dt id="oe">Observed over expected, O/E</dt><dd>The contact map divided by the average contact at each genomic distance. Removing the distance decay makes long-range structure, such as compartments, visible.</dd></div>
+        <div class="gloss-item"><dt id="virtual-4c">Virtual 4C</dt><dd>The contact profile of a single chosen locus across the whole genome, the way a 4C experiment would measure it.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section id="grp-biology" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Biology to recognize</span>
+        <h2>Real features, not errors</h2>
+        <p>These make unusual shapes on the map but are real biology. See <a href="/#judgment">telling biology from error</a> in the field guide.</p>
+      </div>
+      <dl class="gloss">
+        <div class="gloss-item"><dt id="centromere">Centromere</dt><dd>The repeat-rich region where a chromosome attaches to the spindle during division. On the map it shows as a faint band, not a break, and should not be cut.</dd></div>
+        <div class="gloss-item"><dt id="telomere">Telomere</dt><dd>The repetitive sequence that caps a chromosome end.</dd></div>
+        <div class="gloss-item"><dt id="satellite">Satellite DNA and repeats</dt><dd>Highly repetitive sequence that maps to more than one place, producing dense or off-diagonal signal that can resemble a misassembly.</dd></div>
+        <div class="gloss-item"><dt id="rdna">rDNA</dt><dd>Tandem arrays of the ribosomal RNA genes, another repeat-rich region that can look unusual on the map.</dd></div>
+        <div class="gloss-item"><dt id="sex-chromosome">Sex chromosome</dt><dd>A chromosome that differs between the sexes, such as X and Y in mammals or Z and W in birds. A degenerate W or Y is gene-poor and gives a faint, sparse block.</dd></div>
+        <div class="gloss-item"><dt id="karyotype">Karyotype</dt><dd>The number and appearance of a species' chromosomes. Knowing it helps decide how many scaffolds a finished assembly should have.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section id="grp-formats" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">File formats</span>
+        <h2>Getting data in and out</h2>
+      </div>
+      <dl class="gloss">
+        <div class="gloss-item"><dt id="fasta">FASTA</dt><dd>A plain text format for sequence. OpenPretext exports the curated assembly as FASTA, reverse-complementing any inverted contigs.</dd></div>
+        <div class="gloss-item"><dt id="agp">AGP</dt><dd>A tab-delimited format that records how contigs are ordered and oriented into scaffolds. OpenPretext both imports and exports AGP.</dd></div>
+        <div class="gloss-item"><dt id="bed">BED</dt><dd>A format for genomic intervals. OpenPretext can export feature coordinates as BED.</dd></div>
+        <div class="gloss-item"><dt id="bedgraph">BedGraph</dt><dd>A format for per-position values such as coverage. PretextGraph can embed BedGraph data into a <span class="mono">.pretext</span> file as an annotation track.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="final reveal">
+    <div class="wrap">
+      <span class="eyebrow">Keep going</span>
+      <h2 style="margin-top:0.8rem;">Read the map with these in hand</h2>
+      <p>The field guide puts these terms to work, from reading a contact map to finishing an assembly.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="/">Back to the field guide</a>
+        <a class="btn btn-ghost" href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">Open the app</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <span>OpenPretext · a browser based Hi-C contact map viewer and genome curation tool</span>
+    <span>
+      <a href="/">Field guide</a> ·
+      <a href="/reading-the-analysis">Analysis</a> ·
+      <a href="https://shandley.github.io/openpretext/" target="_blank" rel="noopener">App</a> ·
+      <a href="https://github.com/shandley/openpretext" target="_blank" rel="noopener">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+<script src="guide.js"></script>
+</body>
+</html>
