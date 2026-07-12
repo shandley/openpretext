@@ -29,6 +29,7 @@
       <a href="#read">Read the map</a>
       <a href="#guide">Field guide</a>
       <a href="#flow">Workflow</a>
+      <a href="#judgment">Judgment</a>
       <a href="/reading-the-analysis">Analysis</a>
     </nav>
     <a class="ghlink" href="https://github.com/shandley/openpretext" target="_blank" rel="noopener">GitHub</a>
@@ -262,19 +263,74 @@
         <div class="step"><h3>Check the health score</h3><p>A single number rates contiguity, decay, and structure, and it rises as the assembly improves. The before/after map puts the assembly as loaded beside the one your curation produced, so you can compare the assembly you started from with the one you produced.</p><span class="why">The score rises as the assembly improves.</span></div>
         <div class="step terminal"><h3>Export</h3><p>Save the curated assembly as AGP or FASTA, with every reorder and flip applied. The full record of what you changed is kept in the saved session, which can also be exported as a replayable script. An AGP can be imported again later to resume a curation in progress.</p><span class="why">Output for downstream analysis.</span></div>
       </div>
+    </div>
+  </section>
 
-      <div class="note">
-        <svg class="glyph" viewBox="0 0 48 48" aria-hidden="true">
-          <circle cx="24" cy="24" r="22" fill="none" stroke="var(--line-strong)" stroke-width="1.5"/>
-          <path d="M24 13v16" stroke="var(--data)" stroke-width="3" stroke-linecap="round"/>
-          <circle cx="24" cy="35" r="2.2" fill="var(--data)"/>
-        </svg>
-        <div>
-          <span class="eyebrow" style="color:var(--ink-faint);">Judgment</span>
-          <h3 style="margin-top:0.5rem;">Not every oddity is a mistake</h3>
-          <p>The hardest part of curation is knowing when to leave something alone. Centromeres, telomeres, and repeat regions look unusual but are real biology. A faint band inside a clean chromosome is almost always a centromere, not an error.</p>
-          <p>When you are unsure, zoom in and let the signal decide, lean on the automated detection as a second opinion (the telomere and repeat tracks are part of it), and watch the health score: a change that helps the assembly usually moves it up.</p>
+  <section id="judgment" class="reveal">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Judgment</span>
+        <h2>Telling biology from error</h2>
+        <p>The harder half of curation is not finding the errors but knowing what to leave alone. Several features of a real genome make the same shapes on the contact map as a misassembly, and cutting them breaks a correct assembly. You have already met the clearest case: a centromere is a faint band across a chromosome, not a break, and it stays. Three harder calls follow.</p>
+      </div>
+      <div class="guide-grid">
+
+        <div class="card">
+          <svg class="card-map" viewBox="0 0 60 60" role="img" aria-label="A repeat array: a dense speckled band on the diagonal with faint off-diagonal specks">
+            <rect class="cm-block" x="1" y="1" width="58" height="58"/>
+            <rect class="cm-hot" x="24" y="24" width="12" height="12" opacity="0.28"/>
+            <rect class="cm-hot" x="26" y="27" width="3" height="3" opacity="0.7"/>
+            <rect class="cm-hot" x="31" y="25" width="3" height="3" opacity="0.6"/>
+            <rect class="cm-hot" x="28" y="31" width="3" height="3" opacity="0.65"/>
+            <rect class="cm-hot" x="33" y="32" width="2.5" height="2.5" opacity="0.55"/>
+            <rect class="cm-hot" x="8" y="28" width="3" height="3" opacity="0.32"/>
+            <rect class="cm-hot" x="28" y="8" width="3" height="3" opacity="0.32"/>
+            <rect class="cm-hot" x="47" y="30" width="3" height="3" opacity="0.28"/>
+            <rect class="cm-hot" x="30" y="47" width="3" height="3" opacity="0.28"/>
+            <line class="cm-diag" x1="1" y1="1" x2="59" y2="59" stroke-width="2.4" stroke-linecap="round"/>
+            <rect class="cm-frame" x="1" y="1" width="58" height="58"/>
+          </svg>
+          <span class="tag"><b>Repeat array</b> · looks like a chimera</span>
+          <h3>Satellite and rDNA arrays</h3>
+          <p>Highly repetitive regions such as satellite DNA and ribosomal RNA arrays make a dense, speckled band with faint off-diagonal specks, because reads from the repeats map to more than one place. The pattern can resemble a chimeric break or a scatter of small errors.</p>
+          <div class="fix"><span class="lab">How to tell</span>It lines up with a peak in the repeat-density track and sits where repeats are expected, near a centromere or a telomere. Cutting it does not clean the diagonal.</div>
         </div>
+
+        <div class="card">
+          <svg class="card-map" viewBox="0 0 60 60" role="img" aria-label="A retained haplotig: a bright off-diagonal block linking a small contig to a homologous region of a larger chromosome">
+            <rect class="cm-block" x="1" y="1" width="40" height="40"/>
+            <rect class="cm-block" x="44" y="44" width="15" height="15"/>
+            <rect class="cm-hot" x="44" y="10" width="15" height="15" opacity="0.85"/>
+            <rect class="cm-hot" x="10" y="44" width="15" height="15" opacity="0.85"/>
+            <line class="cm-diag" x1="1" y1="1" x2="59" y2="59" stroke-width="2.4" stroke-linecap="round"/>
+            <rect class="cm-frame" x="1" y="1" width="58" height="58"/>
+          </svg>
+          <span class="tag"><b>Haplotig</b> · looks like a duplication</span>
+          <h3>A retained alternate haplotype</h3>
+          <p>A retained haplotig and a real segmental duplication both appear as a bright block off the diagonal, where one region contacts a homologous region elsewhere. On the map alone the two are indistinguishable.</p>
+          <div class="fix"><span class="lab">How to tell</span>Read depth separates them. A haplotig carries about half the assembly's coverage, because reads split across the two haplotypes; a true duplication keeps full coverage. Load a coverage track before deciding.</div>
+        </div>
+
+        <div class="card">
+          <svg class="card-map" viewBox="0 0 60 60" role="img" aria-label="A degenerate sex chromosome: a faint, sparse block beside a normally bright chromosome">
+            <rect class="cm-block" x="1" y="1" width="34" height="34"/>
+            <rect x="35" y="35" width="24" height="24" fill="var(--data-wash)" opacity="0.35"/>
+            <rect class="cm-hot" x="40" y="41" width="2.5" height="2.5" opacity="0.4"/>
+            <rect class="cm-hot" x="48" y="46" width="2.5" height="2.5" opacity="0.35"/>
+            <rect class="cm-hot" x="52" y="53" width="2" height="2" opacity="0.3"/>
+            <line class="cm-diag" x1="1" y1="1" x2="35" y2="35" stroke-width="2.4" stroke-linecap="round"/>
+            <line class="cm-diag" x1="35" y1="35" x2="59" y2="59" stroke-width="1.6" stroke-linecap="round" opacity="0.4"/>
+            <rect class="cm-frame" x="1" y="1" width="58" height="58"/>
+          </svg>
+          <span class="tag"><b>Sex chromosome</b> · looks like a fragment</span>
+          <h3>A degenerate sex chromosome</h3>
+          <p>A degenerate sex chromosome, the W in birds or the Y in mammals, is gene-poor and repeat-rich, so its block is faint and sparse next to the autosomes. It can read as a low-quality or half-assembled region.</p>
+          <div class="fix"><span class="lab">How to tell</span>Weak contact here is expected and is not a defect. Check it against the species' known karyotype rather than forcing the block to match an autosome.</div>
+        </div>
+
+      </div>
+      <div class="prose" style="margin-top:1.8rem;">
+        <p>Three questions settle most of these calls. Does the feature line up with a track, coverage, repeats, or telomeres, that marks it as real? Does the automated detection flag it, or leave it alone? And does the edit you are considering actually help: a correct cut makes the diagonal cleaner and moves the metrics up, while cutting real biology does neither. When you are unsure, zoom in and let the signal decide before you commit.</p>
       </div>
     </div>
   </section>
