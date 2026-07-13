@@ -15,8 +15,8 @@ describe('SpecimenCatalog', () => {
       expect(catalog.version).toBe('1.0.0');
     });
 
-    it('should have 10 specimens', () => {
-      expect(catalog.specimens).toHaveLength(10);
+    it('should have 16 specimens', () => {
+      expect(catalog.specimens).toHaveLength(16);
     });
 
     it('should have unique IDs', () => {
@@ -60,16 +60,20 @@ describe('SpecimenCatalog', () => {
       }
     });
 
-    it('all specimens should have benchmark baselines', () => {
-      const noBaseline = catalog.specimens.filter(s => s.benchmarkBaseline === null);
-      expect(noBaseline.length).toBe(0);
+    it('GenomeArk pairs have benchmark baselines; DToL exercises do not', () => {
+      // The 10 vertebrate before/after pairs are benchmarked; the 6 DToL
+      // single-stage exercises are teaching-only (null baseline, inert to CI).
+      const withBaseline = catalog.specimens.filter(s => s.benchmarkBaseline !== null);
+      const without = catalog.specimens.filter(s => s.benchmarkBaseline === null);
+      expect(withBaseline.length).toBe(10);
+      expect(without.length).toBe(6);
     });
   });
 
   describe('getTutorialSpecimens', () => {
     it('should return only specimens with releaseAsset', () => {
       const tutorial = getTutorialSpecimens(catalog);
-      expect(tutorial).toHaveLength(10);
+      expect(tutorial).toHaveLength(16);
       for (const s of tutorial) {
         expect(s.releaseAsset).not.toBeNull();
       }
@@ -79,8 +83,20 @@ describe('SpecimenCatalog', () => {
       const tutorial = getTutorialSpecimens(catalog);
       const ids = tutorial.map(s => s.id);
       for (const id of ['koala', 'wrasse', 'quail', 'finch', 'crocodile',
-                        'spinyfin', 'snake', 'toad', 'lancelet', 'bat']) {
+                        'spinyfin', 'snake', 'toad', 'lancelet', 'bat',
+                        'celegans', 'cockle', 'mushroom', 'starfish', 'earthworm', 'maple']) {
         expect(ids).toContain(id);
+      }
+    });
+
+    it('includes the DToL single-stage exercises (benchmarkBaseline null)', () => {
+      const dtol = catalog.specimens.filter(s => s.benchmarkBaseline === null);
+      expect(dtol.map(s => s.id).sort()).toEqual(
+        ['celegans', 'cockle', 'earthworm', 'maple', 'mushroom', 'starfish'],
+      );
+      for (const s of dtol) {
+        expect(s.releaseAsset).toMatch(/\.pretext$/); // served
+        expect(s.genomeArkKeys).toBeNull();           // not a GenomeArk pair
       }
     });
   });

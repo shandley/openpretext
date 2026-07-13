@@ -21,7 +21,7 @@ export interface SpecimenEntry {
   id: string;
   species: string;
   commonName: string;
-  taxon: 'mammal' | 'bird' | 'reptile' | 'fish' | 'amphibian' | 'invertebrate';
+  taxon: 'mammal' | 'bird' | 'reptile' | 'fish' | 'amphibian' | 'invertebrate' | 'plant' | 'fungus';
   sizeMB: number;
   chromosomeCount: number | null;
   contigCount: number;
