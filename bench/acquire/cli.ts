@@ -1,17 +1,19 @@
 /**
- * CLI for acquiring benchmark data from GenomeArk S3.
+ * CLI for discovering and acquiring GenomeArk .pretext maps by curation stage.
  *
  * Usage:
- *   npx tsx bench/acquire/cli.ts --discover
- *   npx tsx bench/acquire/cli.ts --download
- *   npx tsx bench/acquire/cli.ts --species Homo_sapiens --max-size 200
+ *   npx tsx bench/acquire/cli.ts --discover --species-list Phascolarctos_cinereus,Coturnix_chinensis
+ *   npx tsx bench/acquire/cli.ts --discover --species Taeniopygia
  *   npx tsx bench/acquire/cli.ts --list
+ *   npx tsx bench/acquire/cli.ts --download --species Phascolarctos_cinereus
+ *   npx tsx bench/acquire/cli.ts --download --stage curated
  */
 
 import { parseArgs } from 'node:util';
 import { discoverSpecimens } from './discover';
-import { downloadSpecimens } from './download';
-import { loadManifest } from './manifest';
+import { downloadStages } from './download';
+import { loadManifest, STAGE_ORDER } from './manifest';
+import type { CurationStage } from './manifest';
 
 async function main() {
   const { values } = parseArgs({
@@ -20,6 +22,8 @@ async function main() {
       download: { type: 'boolean', default: false },
       list: { type: 'boolean', default: false },
       species: { type: 'string' },
+      'species-list': { type: 'string' },
+      stage: { type: 'string' },
       'max-size': { type: 'string', default: '500' },
       'max-specimens': { type: 'string', default: '50' },
       'manifest-path': { type: 'string' },
@@ -28,11 +32,13 @@ async function main() {
   });
 
   const manifestPath = values['manifest-path'];
+  const speciesList = values['species-list']?.split(',').map(s => s.trim()).filter(Boolean);
 
   if (values.discover) {
     await discoverSpecimens({
-      maxSpecimens: parseInt(values['max-specimens']!, 10),
+      speciesList,
       speciesFilter: values.species,
+      maxSpecimens: parseInt(values['max-specimens']!, 10),
       maxSizeMB: parseInt(values['max-size']!, 10),
       manifestPath,
     });
@@ -41,12 +47,13 @@ async function main() {
 
   if (values.download) {
     const manifest = await loadManifest(manifestPath);
-    if (manifest.specimens.length === 0) {
-      console.error('No specimens in manifest. Run --discover first.');
+    if (manifest.assemblies.length === 0) {
+      console.error('No assemblies in manifest. Run --discover first.');
       process.exit(1);
     }
-    await downloadSpecimens(manifest, {
+    await downloadStages(manifest, {
       speciesFilter: values.species,
+      stage: values.stage as CurationStage | undefined,
       manifestPath,
     });
     return;
@@ -54,31 +61,29 @@ async function main() {
 
   if (values.list) {
     const manifest = await loadManifest(manifestPath);
-    if (manifest.specimens.length === 0) {
+    if (manifest.assemblies.length === 0) {
       console.log('Manifest is empty. Run --discover first.');
       return;
     }
-
-    console.log(`Manifest (${manifest.updatedAt}):`);
-    console.log(`${'Species'.padEnd(30)} ${'Pre (MB)'.padEnd(10)} ${'Post (MB)'.padEnd(10)} Downloaded`);
-    console.log('-'.repeat(65));
-
-    for (const s of manifest.specimens) {
-      const preMB = s.preCurationSize ? (s.preCurationSize / 1e6).toFixed(0) : '?';
-      const postMB = s.postCurationSize ? (s.postCurationSize / 1e6).toFixed(0) : '?';
-      console.log(
-        `${s.species.padEnd(30)} ${preMB.padEnd(10)} ${postMB.padEnd(10)} ${s.downloaded ? 'yes' : 'no'}`,
-      );
+    console.log(`Manifest (${manifest.updatedAt}) — ${manifest.assemblies.length} assemblies\n`);
+    for (const a of manifest.assemblies) {
+      console.log(`${a.species} / ${a.tolid}${a.pairable ? '  [pairable]' : ''}`);
+      for (const s of [...a.stages].sort((x, y) => STAGE_ORDER[x.stage] - STAGE_ORDER[y.stage])) {
+        const mb = (s.size / 1e6).toFixed(0).padStart(4);
+        const meta = [s.haplotype, s.tag, s.date].filter(Boolean).join(' · ');
+        console.log(`    ${s.stage.padEnd(13)} ${mb} MB  ${meta}`);
+        console.log(`      ${s.key}`);
+      }
+      console.log('');
     }
     return;
   }
 
   console.log('Usage:');
-  console.log('  npx tsx bench/acquire/cli.ts --discover          Build manifest from S3');
-  console.log('  npx tsx bench/acquire/cli.ts --download           Download all specimens');
-  console.log('  npx tsx bench/acquire/cli.ts --list               Show manifest');
-  console.log('  npx tsx bench/acquire/cli.ts --species <name>     Filter by species');
-  console.log('  npx tsx bench/acquire/cli.ts --max-size <MB>      Max file size (default 500)');
+  console.log('  --discover --species-list A,B,C   Discover stages for specific species');
+  console.log('  --discover --species <substr>     Discover by species-name substring');
+  console.log('  --list                            Show the manifest with keys + stages');
+  console.log('  --download [--species S] [--stage curated|intermediate|evaluation]');
 }
 
 main().catch(err => {

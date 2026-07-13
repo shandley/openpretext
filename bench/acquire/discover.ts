@@ -1,56 +1,50 @@
 /**
- * S3 listing + paired file discovery for GenomeArk .pretext files.
+ * S3 listing + stage-classified .pretext discovery for GenomeArk.
  *
- * Uses `aws s3 ls --no-sign-request` to enumerate available specimens
- * and find paired pre/post-curation .pretext files.
+ * Uses `aws s3 ls --no-sign-request` to enumerate assemblies and classify every
+ * .pretext map by curation stage under the CURRENT GenomeArk layout:
+ *
+ *   curated (final):
+ *     species/<Sp>/<ToLID>/assembly_curated/<ToLID>.<pri|hap1|hap2>.cur.<DATE>.pretext
+ *   intermediate (fed to the curator):
+ *     species/<Sp>/<ToLID>/assembly_curated/intermediates/pretextmap/*.pretext
+ *   evaluation (scaffolding era):
+ *     species/<Sp>/<ToLID>/assembly_vgp_.../evaluation/.../pretext/...heatmap.pretext
+ *
+ * Keys and sizes come straight from the live bucket listing; nothing is
+ * constructed or guessed.
  */
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { SpecimenEntry, Manifest } from './manifest';
-import { loadManifest, saveManifest } from './manifest';
+import type { AssemblyEntry, CurationStage, StageFile, Manifest } from './manifest';
+import { STAGE_ORDER, loadManifest, saveManifest } from './manifest';
 
 const execFileAsync = promisify(execFile);
 
-/**
- * List directories under a given S3 prefix.
- */
 async function s3ListDirs(bucket: string, prefix: string): Promise<string[]> {
-  const { stdout } = await execFileAsync('aws', [
-    's3', 'ls', '--no-sign-request',
-    `s3://${bucket}/${prefix}`,
-  ], { maxBuffer: 10 * 1024 * 1024 });
-
-  return stdout
-    .split('\n')
-    .filter(line => line.trim().endsWith('/'))
-    .map(line => {
-      const parts = line.trim().split(/\s+/);
-      return parts[parts.length - 1].replace(/\/$/, '');
-    })
-    .filter(Boolean);
-}
-
-/**
- * List files under a given S3 prefix (recursive).
- */
-async function s3ListFiles(
-  bucket: string,
-  prefix: string,
-): Promise<Array<{ key: string; size: number }>> {
   try {
     const { stdout } = await execFileAsync('aws', [
-      's3', 'ls', '--no-sign-request', '--recursive',
-      `s3://${bucket}/${prefix}`,
-    ], { maxBuffer: 10 * 1024 * 1024 });
+      's3', 'ls', '--no-sign-request', `s3://${bucket}/${prefix}`,
+    ], { maxBuffer: 32 * 1024 * 1024 });
+    return stdout.split('\n')
+      .filter(line => line.trim().endsWith('/'))
+      .map(line => line.trim().split(/\s+/).pop()!.replace(/\/$/, ''))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
-    return stdout
-      .split('\n')
-      .filter(line => line.trim().length > 0)
+async function s3ListFiles(bucket: string, prefix: string): Promise<Array<{ key: string; size: number }>> {
+  try {
+    const { stdout } = await execFileAsync('aws', [
+      's3', 'ls', '--no-sign-request', '--recursive', `s3://${bucket}/${prefix}`,
+    ], { maxBuffer: 64 * 1024 * 1024 });
+    return stdout.split('\n')
       .map(line => {
-        const match = line.match(/^\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+(\d+)\s+(.+)$/);
-        if (!match) return null;
-        return { key: match[2], size: parseInt(match[1], 10) };
+        const m = line.match(/^\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+(\d+)\s+(.+)$/);
+        return m ? { key: m[2], size: parseInt(m[1], 10) } : null;
       })
       .filter((x): x is { key: string; size: number } => x !== null);
   } catch {
@@ -58,84 +52,115 @@ async function s3ListFiles(
   }
 }
 
+const HAPLOTYPE_RE = /(?:^|[._])(pri|hap1|hap2)(?:[._]|$)/;
+const DATE_RE = /(?:^|[._])(\d{8})(?:[._]|$)/;
+const INTERMEDIATE_TAGS = ['hires', 'mapqfilter', 'multimap', 'combined', 'decontam'];
+
+function baseName(key: string): string {
+  return key.split('/').pop() ?? key;
+}
+
+/** Classify a single .pretext S3 key into a stage, or null if not a map we want. */
+function classify(key: string): StageFile | null {
+  const base = baseName(key);
+  if (!base.endsWith('.pretext')) return null; // excludes .savestate / .agp siblings
+
+  const haplotype = base.match(HAPLOTYPE_RE)?.[1] ?? null;
+  const date = base.match(DATE_RE)?.[1] ?? null;
+
+  // curated: top level of assembly_curated (not the intermediates subtree), *.cur.DATE.pretext
+  if (key.includes('/assembly_curated/')
+      && !key.includes('/intermediates/')
+      && /\.cur\.\d{8}\.pretext$/.test(base)) {
+    return { stage: 'curated', key, size: 0, haplotype, tag: 'cur', date };
+  }
+
+  // intermediate: the pretextmap folder fed to the curator
+  if (key.includes('/assembly_curated/intermediates/pretextmap/')) {
+    const tag = INTERMEDIATE_TAGS.find(t => base.toLowerCase().includes(t)) ?? 'other';
+    return { stage: 'intermediate', key, size: 0, haplotype, tag, date };
+  }
+
+  // evaluation: scaffolding-era heatmaps
+  if (key.includes('/evaluation/') && key.includes('/pretext/')) {
+    const s = base.match(/__s(\d)/)?.[1];
+    const hap = base.match(/_(hap[12])_/)?.[1] ?? haplotype;
+    return { stage: 'evaluation', key, size: 0, haplotype: hap, tag: s ? `heatmap_s${s}` : 'heatmap', date };
+  }
+
+  return null;
+}
+
 /**
- * Discover paired pre/post-curation .pretext files on GenomeArk.
+ * Discover stage-classified .pretext maps for a set of assemblies.
  *
- * Looks for species that have both a pre-curation (assembly) and
- * post-curation .pretext file under the standard GenomeArk paths:
- *   species/<Name>/<assembly_id>/genomic_data/arima/
- *   species/<Name>/<assembly_id>/curated/
- *
- * @param maxSpecimens - Maximum number of specimens to discover.
- * @param speciesFilter - Optional species name filter.
+ * @param options.speciesList - Explicit species directory names to scan
+ *   (recommended: avoids enumerating the whole bucket). If omitted, the bucket's
+ *   species/ listing is enumerated and filtered by speciesFilter.
  */
 export async function discoverSpecimens(options: {
-  maxSpecimens?: number;
+  speciesList?: string[];
   speciesFilter?: string;
+  maxSpecimens?: number;
   maxSizeMB?: number;
   manifestPath?: string;
 } = {}): Promise<Manifest> {
-  const { maxSpecimens = 50, speciesFilter, maxSizeMB = 500, manifestPath } = options;
+  const { speciesList, speciesFilter, maxSpecimens = 50, maxSizeMB = 500, manifestPath } = options;
   const bucket = 'genomeark';
-  const manifest = await loadManifest(manifestPath);
-  const existingKeys = new Set(manifest.specimens.map(s => s.preCurationKey));
+  const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
-  console.log('Discovering species on GenomeArk...');
-  const speciesDirs = await s3ListDirs(bucket, 'species/');
+  let species: string[];
+  if (speciesList && speciesList.length > 0) {
+    species = speciesList;
+  } else {
+    console.log('Enumerating species on GenomeArk...');
+    const all = await s3ListDirs(bucket, 'species/');
+    species = speciesFilter
+      ? all.filter(d => d.toLowerCase().includes(speciesFilter.toLowerCase()))
+      : all.slice(0, maxSpecimens);
+  }
+  console.log(`Scanning ${species.length} species.`);
 
-  const filteredSpecies = speciesFilter
-    ? speciesDirs.filter(d => d.toLowerCase().includes(speciesFilter.toLowerCase()))
-    : speciesDirs;
+  const assemblies: AssemblyEntry[] = [];
 
-  console.log(`Found ${filteredSpecies.length} species directories to scan.`);
-  let discovered = 0;
+  for (const sp of species) {
+    const tolids = await s3ListDirs(bucket, `species/${sp}/`);
+    for (const tolid of tolids) {
+      const files = await s3ListFiles(bucket, `species/${sp}/${tolid}/`);
+      const bySize = new Map(files.map(f => [f.key, f.size]));
 
-  for (const species of filteredSpecies) {
-    if (discovered >= maxSpecimens) break;
+      const stages: StageFile[] = [];
+      for (const f of files) {
+        const classified = classify(f.key);
+        if (!classified) continue;
+        classified.size = bySize.get(f.key) ?? 0;
+        if (classified.size === 0) continue;             // skip empty placeholder objects
+        if (classified.size > maxSizeBytes) continue;    // size cap
+        stages.push(classified);
+      }
+      if (stages.length === 0) continue;
 
-    // List assembly directories
-    const assemblies = await s3ListDirs(bucket, `species/${species}/`);
+      stages.sort((a, b) =>
+        STAGE_ORDER[a.stage] - STAGE_ORDER[b.stage]
+        || (a.date ?? '').localeCompare(b.date ?? '')
+        || a.key.localeCompare(b.key));
 
-    for (const assembly of assemblies) {
-      if (discovered >= maxSpecimens) break;
+      const hasCurated = stages.some(s => s.stage === 'curated');
+      const hasEarlier = stages.some(s => s.stage !== 'curated');
+      const entry: AssemblyEntry = { species: sp, tolid, stages, pairable: hasCurated && hasEarlier };
+      assemblies.push(entry);
 
-      // Search for .pretext files
-      const files = await s3ListFiles(bucket, `species/${species}/${assembly}/`);
-      const pretextFiles = files.filter(f => f.key.endsWith('.pretext'));
-
-      if (pretextFiles.length < 2) continue;
-
-      // Identify pre-curation and post-curation files
-      const preCuration = pretextFiles.find(f =>
-        f.key.includes('genomic_data') || f.key.includes('/assembly/') ||
-        (!f.key.includes('curated') && !f.key.includes('curation')),
-      );
-      const postCuration = pretextFiles.find(f =>
-        f.key.includes('curated') || f.key.includes('curation'),
-      );
-
-      if (!preCuration || !postCuration) continue;
-      if (existingKeys.has(preCuration.key)) continue;
-
-      // Size filter
-      const maxSizeBytes = maxSizeMB * 1024 * 1024;
-      if (preCuration.size > maxSizeBytes || postCuration.size > maxSizeBytes) continue;
-
-      const entry: SpecimenEntry = {
-        species,
-        preCurationKey: preCuration.key,
-        postCurationKey: postCuration.key,
-        preCurationSize: preCuration.size,
-        postCurationSize: postCuration.size,
-      };
-
-      manifest.specimens.push(entry);
-      discovered++;
-      console.log(`  Found: ${species} (${(preCuration.size / 1e6).toFixed(0)}MB + ${(postCuration.size / 1e6).toFixed(0)}MB)`);
+      const tags = stages.map(s => `${s.stage}${s.haplotype ? `/${s.haplotype}` : ''}`).join(', ');
+      console.log(`  ${sp}/${tolid}: ${stages.length} map(s) [${tags}]${entry.pairable ? ' PAIRABLE' : ''}`);
     }
   }
 
+  const manifest = await loadManifest(manifestPath);
+  manifest.bucket = bucket;
+  manifest.assemblies = assemblies;
   await saveManifest(manifest, manifestPath);
-  console.log(`Manifest updated: ${manifest.specimens.length} total specimens.`);
+
+  const pairable = assemblies.filter(a => a.pairable).length;
+  console.log(`\nManifest: ${assemblies.length} assemblies, ${pairable} pairable.`);
   return manifest;
 }
