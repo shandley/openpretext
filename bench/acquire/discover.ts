@@ -126,7 +126,14 @@ export async function discoverSpecimens(options: {
   for (const sp of species) {
     const tolids = await s3ListDirs(bucket, `species/${sp}/`);
     for (const tolid of tolids) {
-      const files = await s3ListFiles(bucket, `species/${sp}/${tolid}/`);
+      // Only recurse into assembly_* subtrees; skip the large raw-data folders
+      // (genomic_data/, transcriptomic_data/, ...) that hold no .pretext maps.
+      const subdirs = await s3ListDirs(bucket, `species/${sp}/${tolid}/`);
+      const assemblyDirs = subdirs.filter(d => d.startsWith('assembly_'));
+      const files: Array<{ key: string; size: number }> = [];
+      for (const ad of assemblyDirs) {
+        files.push(...await s3ListFiles(bucket, `species/${sp}/${tolid}/${ad}/`));
+      }
       const bySize = new Map(files.map(f => [f.key, f.size]));
 
       const stages: StageFile[] = [];
