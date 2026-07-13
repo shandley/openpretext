@@ -19,6 +19,8 @@ import { contigExclusion } from '../curation/ContigExclusion';
 import { metaTags } from '../curation/MetaTagManager';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { resetOEMap } from './OEMapToggle';
+import { computeAutoContrast } from '../renderer/AutoContrast';
+import { syncFloorSlider, syncCeilSlider } from './ColorMapControls';
 
 // Reused across loads; created lazily so the worker only spins up when needed.
 let parseClient: ParseWorkerClient | null = null;
@@ -48,13 +50,16 @@ async function loadPretextFromBuffer(
   const overviewSize = parsed.overviewSize;
   const contactMap = parsed.overview;
 
+  // Pick sensible default contrast so dense/compact genomes don't load saturated.
+  const contrast = computeAutoContrast(contactMap);
+
   updateLoading('Uploading to GPU...', 92);
   ctx.renderer.uploadContactMap(contactMap, overviewSize);
   // Gate overview = the clean overview in original order; the detail-tile gate
   // (clean mode) samples this so it aligns with original-order tiles.
   ctx.renderer.uploadGateOverview(contactMap, overviewSize);
   ctx.faithfulOverviewOriginal = null; // invalidate cache for the new file
-  ctx.minimap.updateThumbnail(contactMap, overviewSize);
+  ctx.minimap.updateThumbnail(contactMap, overviewSize, undefined, contrast.floor, contrast.ceil);
   ctx.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
 
   // Dispose previous tile manager and cancel in-flight decodes
@@ -65,6 +70,8 @@ async function loadPretextFromBuffer(
 
   updateLoading('Finalizing...', 98);
   state.update({
+    signalFloor: contrast.floor,
+    signalCeil: contrast.ceil,
     map: {
       filename,
       textureSize: mapSize,
@@ -86,6 +93,8 @@ async function loadPretextFromBuffer(
   });
   // Hand the raw BC4 tile bytes to the background decoder (transfers buffers).
   ctx.tileDecoder?.setSource(parsed.tiles, h);
+  syncFloorSlider(contrast.floor);
+  syncCeilSlider(contrast.ceil);
   statusEl.textContent = filename;
   document.getElementById('status-contigs')!.textContent = `${parsed.contigs.length} contigs`;
   events.emit('file:loaded', { filename, contigs: parsed.contigs.length, textureSize: mapSize });
@@ -203,7 +212,10 @@ export function loadDemoData(ctx: AppContext): void {
   ctx.tileDecoder?.cancel();
   if (ctx.tileManager) { ctx.tileManager.dispose(); ctx.tileManager = null; }
 
+  const demoContrast = computeAutoContrast(data);
   state.update({
+    signalFloor: demoContrast.floor,
+    signalCeil: demoContrast.ceil,
     map: {
       filename: 'demo',
       textureSize: size,
@@ -226,7 +238,7 @@ export function loadDemoData(ctx: AppContext): void {
   });
 
   // Generate minimap thumbnail
-  ctx.minimap.updateThumbnail(data, size);
+  ctx.minimap.updateThumbnail(data, size, undefined, demoContrast.floor, demoContrast.ceil);
 
   // Generate synthetic annotation tracks
   if (ctx.trackRenderer) {
@@ -237,6 +249,8 @@ export function loadDemoData(ctx: AppContext): void {
     }
   }
 
+  syncFloorSlider(demoContrast.floor);
+  syncCeilSlider(demoContrast.ceil);
   document.getElementById('status-file')!.textContent = 'Demo data';
   document.getElementById('status-contigs')!.textContent = `${contigs.length} contigs`;
   document.getElementById('welcome')!.style.display = 'none';

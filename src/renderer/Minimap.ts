@@ -95,11 +95,18 @@ export class Minimap {
    * Generate a thumbnail from contact map data.
    * Downsamples the full-resolution map to minimap size.
    */
-  updateThumbnail(contactMap: Float32Array, mapSize: number, colorMap?: (value: number, gamma: number) => [number, number, number]): void {
+  updateThumbnail(
+    contactMap: Float32Array,
+    mapSize: number,
+    colorMap?: (value: number, gamma: number) => [number, number, number],
+    floor = 0,
+    ceil = 1,
+  ): void {
     const size = this.options.size;
     const imageData = this.thumbnailCtx.createImageData(size, size);
     const pixels = imageData.data;
     const scale = mapSize / size;
+    const range = Math.max(ceil - floor, 1e-5);
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -109,9 +116,10 @@ export class Minimap {
         const idx = srcY * mapSize + srcX;
         const value = contactMap[idx] ?? 0;
 
-        // Apply simple gamma and grayscale → reddish color
+        // Rescale by the contrast window (matching the main map), then gamma.
+        const t = Math.min(1, Math.max(0, (value - floor) / range));
         const gamma = 0.35;
-        const mapped = Math.pow(Math.min(1, Math.max(0, value)), gamma);
+        const mapped = Math.pow(t, gamma);
 
         const pi = (y * size + x) * 4;
         if (colorMap) {

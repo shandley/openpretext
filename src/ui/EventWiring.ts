@@ -146,7 +146,7 @@ function reorderAndUploadContactMap(ctx: AppContext): void {
 
   const reordered = reorderContactMap(original, s.map.contigs, s.contigOrder, mapSize);
   ctx.renderer.uploadContactMap(reordered, mapSize);
-  ctx.minimap.updateThumbnail(reordered, mapSize);
+  ctx.minimap.updateThumbnail(reordered, mapSize, undefined, s.signalFloor, s.signalCeil);
 }
 
 /**
