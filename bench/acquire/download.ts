@@ -29,12 +29,13 @@ async function fileExists(filePath: string, expectedSize?: number): Promise<bool
   }
 }
 
-async function downloadFile(bucket: string, key: string, dest: string): Promise<void> {
+async function downloadFile(bucket: string, key: string, dest: string, endpoint?: string): Promise<void> {
   await mkdir(dirname(dest), { recursive: true });
   console.log(`  s3://${bucket}/${key}`);
-  await execFileAsync('aws', [
-    's3', 'cp', '--no-sign-request', `s3://${bucket}/${key}`, dest,
-  ], { maxBuffer: 1024 * 1024, timeout: 600_000 });
+  const args = ['s3', 'cp', '--no-sign-request'];
+  if (endpoint) args.push('--endpoint-url', endpoint);
+  args.push(`s3://${bucket}/${key}`, dest);
+  await execFileAsync('aws', args, { maxBuffer: 1024 * 1024, timeout: 600_000 });
   console.log(`  -> ${dest}`);
 }
 
@@ -62,7 +63,7 @@ export async function downloadStages(
       if (await fileExists(dest, s.size)) {
         console.log(`  cached: ${s.stage}`);
       } else {
-        await downloadFile(manifest.bucket, s.key, dest);
+        await downloadFile(manifest.bucket, s.key, dest, manifest.endpoint);
       }
       s.local = resolve(dest);
     }

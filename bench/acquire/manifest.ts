@@ -13,17 +13,19 @@ import { existsSync } from 'node:fs';
 
 /**
  * Curation-pipeline stage, ordered earliest to latest:
- *   evaluation   - scaffolding-era heatmap (assembly_vgp_.../evaluation/pretext)
+ *   scaffolding  - raw scaffolder output, pre-curation (Sanger tolqc YaHS maps)
+ *   evaluation   - scaffolding-era heatmap (GenomeArk assembly_vgp_.../evaluation/pretext)
  *   intermediate - map fed to the curator (assembly_curated/intermediates/pretextmap)
  *   curated      - final manually curated map (assembly_curated/{id}.{hap}.cur.DATE.pretext)
  */
-export type CurationStage = 'evaluation' | 'intermediate' | 'curated';
+export type CurationStage = 'scaffolding' | 'evaluation' | 'intermediate' | 'curated';
 
 /** Pipeline order for sorting stages within an assembly. */
 export const STAGE_ORDER: Record<CurationStage, number> = {
-  evaluation: 0,
-  intermediate: 1,
-  curated: 2,
+  scaffolding: 0,
+  evaluation: 1,
+  intermediate: 2,
+  curated: 3,
 };
 
 export interface StageFile {
@@ -47,15 +49,24 @@ export interface AssemblyEntry {
   species: string;
   /** ToLID / assembly directory, e.g. "mPhaCin1". */
   tolid: string;
+  /** Data source. GenomeArk yields before/after pairs; DToL yields single-stage. */
+  source: 'genomeark' | 'dtol';
+  /** DToL taxon-group folder (algae, molluscs, fungi, ...), when source is dtol. */
+  taxonGroup?: string;
   /** All discovered .pretext maps for this assembly, sorted earliest to latest. */
   stages: StageFile[];
-  /** True when a curated map and at least one earlier stage both exist. */
+  /**
+   * True when a curated map and at least one earlier stage both exist (a
+   * demonstration pair). DToL single-stage exercises are never pairable.
+   */
   pairable: boolean;
 }
 
 export interface Manifest {
   updatedAt: string;
   bucket: string;
+  /** S3 endpoint override (Sanger tolqc); omitted for GenomeArk / default AWS. */
+  endpoint?: string;
   assemblies: AssemblyEntry[];
 }
 

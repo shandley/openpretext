@@ -15,42 +15,9 @@
  * constructed or guessed.
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import type { AssemblyEntry, CurationStage, StageFile, Manifest } from './manifest';
+import type { AssemblyEntry, StageFile, Manifest } from './manifest';
 import { STAGE_ORDER, loadManifest, saveManifest } from './manifest';
-
-const execFileAsync = promisify(execFile);
-
-async function s3ListDirs(bucket: string, prefix: string): Promise<string[]> {
-  try {
-    const { stdout } = await execFileAsync('aws', [
-      's3', 'ls', '--no-sign-request', `s3://${bucket}/${prefix}`,
-    ], { maxBuffer: 32 * 1024 * 1024 });
-    return stdout.split('\n')
-      .filter(line => line.trim().endsWith('/'))
-      .map(line => line.trim().split(/\s+/).pop()!.replace(/\/$/, ''))
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-async function s3ListFiles(bucket: string, prefix: string): Promise<Array<{ key: string; size: number }>> {
-  try {
-    const { stdout } = await execFileAsync('aws', [
-      's3', 'ls', '--no-sign-request', '--recursive', `s3://${bucket}/${prefix}`,
-    ], { maxBuffer: 64 * 1024 * 1024 });
-    return stdout.split('\n')
-      .map(line => {
-        const m = line.match(/^\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+(\d+)\s+(.+)$/);
-        return m ? { key: m[2], size: parseInt(m[1], 10) } : null;
-      })
-      .filter((x): x is { key: string; size: number } => x !== null);
-  } catch {
-    return [];
-  }
-}
+import { s3ListDirs, s3ListFiles } from './s3';
 
 const HAPLOTYPE_RE = /(?:^|[._])(pri|hap1|hap2)(?:[._]|$)/;
 const DATE_RE = /(?:^|[._])(\d{8})(?:[._]|$)/;
@@ -154,7 +121,7 @@ export async function discoverSpecimens(options: {
 
       const hasCurated = stages.some(s => s.stage === 'curated');
       const hasEarlier = stages.some(s => s.stage !== 'curated');
-      const entry: AssemblyEntry = { species: sp, tolid, stages, pairable: hasCurated && hasEarlier };
+      const entry: AssemblyEntry = { species: sp, tolid, source: 'genomeark', stages, pairable: hasCurated && hasEarlier };
       assemblies.push(entry);
 
       const tags = stages.map(s => `${s.stage}${s.haplotype ? `/${s.haplotype}` : ''}`).join(', ');
