@@ -1,0 +1,63 @@
+{
+  "id": "12-exercise-starfish",
+  "title": "Exercise: Fix a Fragmented Assembly (Goose-foot Starfish)",
+  "difficulty": "advanced",
+  "specimenId": "starfish",
+  "estimatedMinutes": 30,
+  "introduction": "This is a self-directed fix-it exercise on a real, uncurated Darwin Tree of Life assembly of the goose-foot starfish (Anseropoda placenta), an echinoderm. There is no answer key: no expert has curated this genome, so you decide what to fix.\n\nUnlike the clean cockle exercise, this assembly has a real problem to solve. It comes in two very different halves: a core of genuine chromosomes at the top-left, and a long tail of roughly 1,700 tiny contigs at the bottom-right that carry little Hi-C signal. Most of that tail is duplicate haplotype sequence (haplotigs) and unplaceable fragments, not missing chromosomes.\n\nYour task:\n1. Separate the real chromosomes from the unplaced tail.\n2. Triage the tail: find the rare placeable contig, and recognise the haplotigs and junk.\n3. Refine the chromosome core by hand.\n4. Self-assess the result.\n\nA note on the automated tools: on an overview-resolution map like this, auto-cut finds few or no breakpoints, and most flagged misassemblies are false positives. The real work here is manual judgment, not button-pressing.",
+  "steps": [
+    {
+      "id": "survey",
+      "title": "See the two halves",
+      "instruction": "Scan the whole map and notice it has two zones:\n\n• Top-left (about the first 55%): bright, square chromosome blocks. These are real chromosomes.\n• Bottom-right (the rest): a pale, grey, striped tail of hundreds of tiny contigs with almost no block structure.\n\nThe insulation track above the map tells the same story: it has signal over the core and goes flat over the tail.",
+      "expectedAction": { "type": "observe" },
+      "hint": "The minimap shows it at a glance: a solid diagonal in the top-left, fading to a faint smear in the bottom-right. That smear is the unplaced tail, and it is the main thing you are here to deal with."
+    },
+    {
+      "id": "examine-tail",
+      "title": "Zoom into the tail",
+      "instruction": "Zoom into the bottom-right tail and look closely. You will see many short contigs and heavy flagging: purple haplotig markers and red weak-join markers. Weak joins mean the Hi-C evidence linking these pieces to anything is thin.\n\nThis is what an unplaced tail looks like: real but fragmentary sequence the scaffolder could not confidently place.",
+      "expectedAction": { "type": "zoom" },
+      "hint": "Do not try to place every tiny contig. Most of the tail is haplotigs (duplicate haplotype) and small fragments that will never join a chromosome cleanly."
+    },
+    {
+      "id": "triage",
+      "title": "Triage the tail",
+      "instruction": "Now sort the tail into three kinds:\n\n• Placeable: a contig with a bright off-diagonal line pointing at a specific chromosome belongs there. These are rare but worth rescuing.\n• Haplotig: duplicate haplotype sequence, already flagged in purple. These should be set aside, not placed.\n• Unplaceable junk: tiny fragments with only weak, diffuse links.\n\nHunt for a placeable contig first; those are the highest-value finds.",
+      "expectedAction": { "type": "observe" },
+      "showPatternGallery": true,
+      "hint": "A placeable contig lights up a clean vertical or horizontal streak into one chromosome block. A haplotig tends to echo an existing chromosome rather than extend it."
+    },
+    {
+      "id": "auto-cut",
+      "title": "Try auto-cut (and see its limits)",
+      "instruction": "Run auto-cut (Alt+C or the command palette) and accept the default sensitivity. On this overview-resolution map it will likely find little or nothing to cut. That is expected: fine-scale misassemblies are not visible at this zoom, and most flags are false positives.\n\nThe lesson here is that automated tools are a starting point, not a substitute for looking.",
+      "expectedAction": { "type": "auto-cut" },
+      "highlight": { "type": "ui-element" },
+      "hint": "If auto-cut proposes cuts you disagree with, undo them all from the command palette. Trust the map over the flags."
+    },
+    {
+      "id": "fix-core",
+      "title": "Refine the chromosomes by hand",
+      "instruction": "Turn to the core and fix real problems by hand:\n\n• If a chromosome block shows a short anti-diagonal (a butterfly), that contig is inverted: cut it out and invert it.\n• If two adjacent contigs have a strong shared signal across their boundary, join them.\n• If you rescued a placeable contig from the tail, move it into its chromosome.\n\nWork on the largest chromosomes first, where mistakes cost the most.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Press E for edit mode. Hover a contig and press C to cut, F to invert a selection, J to join. High-impact edits on big scaffolds matter far more than fiddling with the tail."
+    },
+    {
+      "id": "sort-core",
+      "title": "Sort the core",
+      "instruction": "Run auto-sort (Alt+S) to order the chromosomes for the cleanest diagonal. Because the tail contigs carry little signal, focus your judgment on whether the large chromosome blocks are in a sensible order and orientation. Auto-sort handles order, not orientation, so check orientations yourself afterward.",
+      "expectedAction": { "type": "auto-sort" },
+      "highlight": { "type": "ui-element" },
+      "hint": "After sorting, the real chromosomes should form a clean, bright staircase down the diagonal, with the unplaced tail collected at the end."
+    },
+    {
+      "id": "self-check",
+      "title": "Self-assess the result",
+      "instruction": "There is no automated score for a species no one has curated yet. Judge it yourself:\n\n• Are the real chromosomes clean, bright, square blocks in a sensible order?\n• Did you rescue the contigs that clearly belonged in a chromosome?\n• Are the haplotigs and junk set aside rather than forced into the assembly?\n• Would you be comfortable calling the core, not the tail, the chromosome-level assembly?\n\nDeciding what to leave in the tail is as much of the job as building the chromosomes.",
+      "expectedAction": { "type": "observe" },
+      "hint": "A real curator ships the clean chromosomes and lists the rest as unplaced. A perfect diagonal over the core with a labelled tail is a success, not a failure."
+    }
+  ],
+  "assessment": null
+}

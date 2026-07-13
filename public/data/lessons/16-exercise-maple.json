@@ -1,0 +1,47 @@
+{
+  "id": "16-exercise-maple",
+  "title": "Exercise: Read a Busy Map (Sycamore Maple)",
+  "difficulty": "advanced",
+  "specimenId": "maple",
+  "estimatedMinutes": 25,
+  "introduction": "This is a self-directed exercise on a real Darwin Tree of Life assembly of the sycamore maple (Acer pseudoplatanus), a plant. It is the most demanding of the exercises, and its lesson is judgment, not editing.\n\nThis genome loads with a busy off-diagonal checkerboard: strong contacts far from the main diagonal, in a grid-like pattern. That off-diagonal signal has more than one possible cause, and they call for opposite responses:\n\n• Biology. Plant genomes have strong A/B compartments, which produce exactly this checkerboard. Compartments are real structure; you must not cut them.\n• Assembly problem. Unpurged duplicate haplotypes, or repeat-rich sequence, also throw off-diagonal signal, and those may need attention.\n\nBeing honest: even after study, the cause here is not obvious, and telling these apart is a genuinely hard, expert call. The goal of this exercise is to practise reasoning about ambiguous signal before touching anything, not to reach a tidy answer.\n\nYour task:\n1. Recognise the busy off-diagonal and resist reacting to it.\n2. Reason about whether it is biology or an assembly problem.\n3. Curate only what you are confident is a real defect.",
+  "steps": [
+    {
+      "id": "survey",
+      "title": "See the busy off-diagonal",
+      "instruction": "Scan the map. Unlike the other exercises, the off-diagonal here is full of structure: a checkerboard of blocks well away from the diagonal. There is still a main diagonal underneath it.\n\nYour first instinct might be that something is badly wrong. Suspend that judgment. Busy is not the same as broken.",
+      "expectedAction": { "type": "observe" },
+      "hint": "The near-flat P(s) decay and the grid pattern are both consistent with strong compartmentalisation, which is normal in plants. Do not start cutting."
+    },
+    {
+      "id": "compartments-vs-problem",
+      "title": "Biology or problem?",
+      "instruction": "Zoom in and reason about the checkerboard:\n\n• A/B compartments look like a plaid or checkerboard that respects the diagonal: bright squares at regular off-diagonal positions, reflecting active and inactive regions mixing at a distance.\n• Duplicate haplotypes look like a bright line or block that mirrors an existing chromosome, as if a region appears twice.\n• Repeats produce diffuse off-diagonal haze rather than clean squares.\n\nWhich does this look most like to you?",
+      "expectedAction": { "type": "zoom" },
+      "showPatternGallery": true,
+      "hint": "Use the Pattern Gallery to compare. If the off-diagonal pattern respects the diagonal and is regular, it is likely compartments, and compartments are biology to keep, not cut."
+    },
+    {
+      "id": "check-tracks",
+      "title": "Check the compartment track",
+      "instruction": "Look at the A/B Compartments track above the map. A strong, alternating compartment signal supports the biology interpretation. Remember that without a loaded reference FASTA the compartments are unoriented, so read the pattern, not the specific A-versus-B labels.",
+      "expectedAction": { "type": "observe" },
+      "hint": "If the compartment track is strong and structured, that is evidence the checkerboard is real biology. Evidence should move you before edits do."
+    },
+    {
+      "id": "curate-carefully",
+      "title": "Curate only clear defects",
+      "instruction": "Now act, conservatively. Fix only what you are confident is a genuine assembly error:\n\n• A clear break in the diagonal, or a butterfly inversion, is a real defect: fix it.\n• A duplicated block that clearly mirrors another chromosome may be an unpurged haplotype: consider tagging it.\n• The regular compartment checkerboard is biology: leave it alone.\n\nWhen unsure, do nothing. Over-curating a compartmentalised genome is a classic mistake.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Press E for edit mode. The hard skill here is restraint: cutting real compartment structure damages the assembly. Only edit what you can defend."
+    },
+    {
+      "id": "self-check",
+      "title": "Reflect on the call you made",
+      "instruction": "There is no clean answer key here, by design. Reflect:\n\n• Did you decide the off-diagonal was mostly biology, mostly problem, or a mix?\n• What evidence moved you: the pattern shape, the compartment track, the diagonal?\n• Did you resist editing signal you could not confidently call a defect?\n\nHolding uncertainty and not over-acting is exactly the judgment expert curators use on hard genomes. If you left the biology intact and fixed only clear defects, you did the job well.",
+      "expectedAction": { "type": "observe" },
+      "hint": "The best outcome is a well-reasoned decision, not a perfectly clean map. Some genomes are genuinely ambiguous, and knowing that is the lesson."
+    }
+  ],
+  "assessment": null
+}

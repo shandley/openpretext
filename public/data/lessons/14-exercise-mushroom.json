@@ -1,0 +1,47 @@
+{
+  "id": "14-exercise-mushroom",
+  "title": "Exercise: Read a Compact Genome (Button Mushroom)",
+  "difficulty": "intermediate",
+  "specimenId": "mushroom",
+  "estimatedMinutes": 15,
+  "introduction": "This is a self-directed exercise on a real Darwin Tree of Life assembly of the button mushroom (Agaricus bisporus), a fungus. It is short, and it teaches a specific skill: reading a small, compact genome, which looks very different from the vertebrate maps.\n\nFungal genomes are tiny (tens of megabases) and dense. At the overview scale the whole genome is close enough that contacts appear almost everywhere, so a compact genome tends to load looking like a bright, saturated block rather than a clean diagonal. OpenPretext applies an automatic contrast floor to make it readable, and you can adjust that yourself. Learning to tune contrast and read a busy map is the point here.\n\nYour task:\n1. Read the compact map, using the contrast controls if needed.\n2. Identify the chromosome structure under the density.\n3. Judge whether the assembly is sound.",
+  "steps": [
+    {
+      "id": "survey",
+      "title": "Meet a compact genome",
+      "instruction": "Scan the map. Notice how different it looks from the vertebrate and invertebrate genomes: the off-diagonal is far busier, because a small dense genome has real contacts across most of its length.\n\nThis is normal for a fungus, not a defect. The first skill is not mistaking density for disorder.",
+      "expectedAction": { "type": "observe" },
+      "hint": "A near-flat P(s) decay and a bright, busy map are expected for a compact genome. Compare the feel of this map to the koala or the cockle."
+    },
+    {
+      "id": "contrast",
+      "title": "Tune the contrast",
+      "instruction": "Open the Display menu and try the contrast controls: raise the floor to whiten the background, and adjust gamma. OpenPretext already set a floor automatically on load, but moving it yourself shows how much structure hides under a saturated map.\n\nFind a setting where the diagonal and any block boundaries are clearest.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Raising the floor pushes the diffuse background to white and leaves the strong on-diagonal signal. There is no single correct setting; adjust until the structure reads clearly."
+    },
+    {
+      "id": "structure",
+      "title": "Find the chromosome structure",
+      "instruction": "With contrast tuned, identify the chromosome-scale blocks. This genome is already consolidated into a small number of scaffolds, so there is not much to assemble; the task is to see the structure that the density hides.\n\n• Can you make out distinct blocks on the diagonal?\n• Is the strongest signal on the diagonal, as it should be?",
+      "expectedAction": { "type": "zoom" },
+      "hint": "Zoom in and the local structure separates from the background. Compact genomes reward patient reading over aggressive editing."
+    },
+    {
+      "id": "tools",
+      "title": "Check with the tools",
+      "instruction": "Run auto-sort (Alt+S) to confirm the ordering. As with the other Darwin Tree of Life assemblies, auto-cut will likely find little to cut on this overview map, so do not expect it to do heavy lifting.",
+      "expectedAction": { "type": "auto-sort" },
+      "highlight": { "type": "ui-element" },
+      "hint": "A compact, well-assembled genome needs little reordering. The tools mostly confirm what you can already see."
+    },
+    {
+      "id": "self-check",
+      "title": "Judge the assembly",
+      "instruction": "Decide whether this compact assembly is sound:\n\n• With contrast tuned, is the on-diagonal signal clearly the strongest?\n• Are the blocks coherent, not fragmented?\n• Does the busyness look like genome density rather than misassembly?\n\nIf yes, you have read a compact genome correctly, which is a real skill when you meet fungi, small invertebrates, or bacteria.",
+      "expectedAction": { "type": "observe" },
+      "hint": "The lesson is interpretation, not repair. Reading density correctly stops you from over-curating a perfectly good compact genome."
+    }
+  ],
+  "assessment": null
+}

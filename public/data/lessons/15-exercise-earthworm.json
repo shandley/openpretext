@@ -1,0 +1,48 @@
+{
+  "id": "15-exercise-earthworm",
+  "title": "Exercise: Curate at Scale (Green Worm)",
+  "difficulty": "advanced",
+  "specimenId": "earthworm",
+  "estimatedMinutes": 30,
+  "introduction": "This is a self-directed fix-it exercise on a real Darwin Tree of Life assembly of the green worm (Allolobophora chlorotica), an annelid. You met the same problem in the starfish exercise, an unplaced tail, but here it is far larger: this assembly has nearly 8,000 contigs, most of them tiny.\n\nThat scale changes the strategy. You cannot inspect and place several thousand contigs by hand, and you should not try. The skill this exercise teaches is where to spend effort: build and verify the real chromosomes, let the automated tools organise the mass, and accept a large, honest unplaced bin rather than forcing fragments into the assembly.\n\nYour task:\n1. Find the real chromosomes among the fragmentation.\n2. Use auto-sort to organise the bulk rather than hand-placing it.\n3. Concentrate manual effort on the chromosome core only.\n4. Decide, honestly, what stays unplaced.",
+  "steps": [
+    {
+      "id": "survey",
+      "title": "Grasp the scale",
+      "instruction": "Scan the map. There is a chromosome core at the top-left, and then an enormous tail of tiny contigs running to the bottom-right. Nearly 8,000 contigs in total.\n\nFirst, decide what is real: how many genuine chromosome blocks can you see in the core? Everything after them is the tail.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Do not be intimidated by the contig count. A handful of real chromosomes carry most of the sequence; the thousands of fragments carry very little."
+    },
+    {
+      "id": "read-tracks",
+      "title": "Read the tail's flags",
+      "instruction": "Look at the flags over the tail: dense red weak-joins and purple haplotig markers. This is the signature of heavy fragmentation, much of it duplicate haplotype sequence the assembler could not collapse.\n\nAt this scale, these flags describe a population, not individual contigs to fix one by one.",
+      "expectedAction": { "type": "observe" },
+      "showPatternGallery": true,
+      "hint": "When almost the whole tail is flagged, that is telling you the tail as a whole is unplaceable, not that you have thousands of individual repairs to make."
+    },
+    {
+      "id": "auto-sort",
+      "title": "Let auto-sort organise the mass",
+      "instruction": "Run auto-sort (Alt+S). At this scale, the automated ordering is your main tool for the bulk: it arranges contigs by their link strength far faster than you could by hand. Auto-cut, as elsewhere on these overview maps, will find little, so do not rely on it.\n\nAfter sorting, the real chromosomes should stand out from the collected tail.",
+      "expectedAction": { "type": "auto-sort" },
+      "highlight": { "type": "ui-element" },
+      "hint": "Automated ordering is exactly the right tool when there are too many pieces to place by hand. Your judgment goes into the core, the tool handles the mass."
+    },
+    {
+      "id": "fix-core",
+      "title": "Curate the core by hand",
+      "instruction": "Now spend your manual effort only where it pays off: the real chromosomes.\n\n• Join any chromosome split across contigs.\n• Invert any block showing a butterfly.\n• Rescue only a tail contig that shows a clear, bright link into a specific chromosome.\n\nResist the urge to tidy the tail. That is not where the value is.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Press E for edit mode. On a heavily fragmented genome, ten good edits on the core beat a thousand edits on the tail."
+    },
+    {
+      "id": "self-check",
+      "title": "Decide what stays unplaced",
+      "instruction": "Finish by making the call every curator makes on a fragmented assembly:\n\n• Are the real chromosomes clean and correctly ordered?\n• Is the large unplaced tail set aside honestly, rather than forced into scaffolds?\n• Would you report this as a chromosome-level core plus an unplaced bin?\n\nAccepting a big unplaced set is not a failure. Overreaching to place fragments that do not belong is the real mistake.",
+      "expectedAction": { "type": "observe" },
+      "hint": "A good result at this scale is a clean chromosome core and a clearly labelled remainder. Knowing when to stop placing is the whole lesson."
+    }
+  ],
+  "assessment": null
+}

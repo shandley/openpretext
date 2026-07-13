@@ -1,0 +1,63 @@
+{
+  "id": "11-exercise-cockle",
+  "title": "Exercise: Curate a Mollusc (Prickly Cockle)",
+  "difficulty": "intermediate",
+  "estimatedMinutes": 20,
+  "specimenId": "cockle",
+  "introduction": "This is a self-directed exercise, not a guided walkthrough. You are looking at a real, raw pre-curation assembly of the prickly cockle (Acanthocardia echinata), a marine bivalve, straight from the Darwin Tree of Life scaffolding pipeline. Unlike the earlier lessons, there is no answer key: no expert has curated this genome yet, so you assess and refine it yourself, exactly as a curator would meet a newly assembled species.\n\nYour task:\n1. Survey the assembly and judge its overall quality.\n2. Read the analysis tracks and separate real problems from detector noise.\n3. Investigate flagged regions and decide what, if anything, needs fixing.\n4. Apply the automated tools and any manual refinement.\n5. Self-assess the result against what a finished chromosome-level assembly should look like.\n\nOne lesson up front: this assembly is already quite clean. A large part of real curation is recognising a good result and knowing when to stop, not just cutting and joining.",
+  "steps": [
+    {
+      "id": "survey",
+      "title": "Survey the cockle assembly",
+      "instruction": "Start by scanning the whole map. The scaffolder has already organised this genome into roughly 20 chromosome-scale blocks along the diagonal, ordered largest to smallest. Use the minimap and zoom to take in the overall shape before touching anything.\n\n• How many clear chromosome blocks can you count?\n• Is the space off the diagonal mostly empty (a good sign) or busy?\n• Are the blocks bright and square, or ragged?",
+      "expectedAction": { "type": "observe" },
+      "hint": "A well-scaffolded genome shows bright square blocks on the diagonal and mostly empty space off it. The blocks getting smaller toward the bottom-right just means chromosomes are sorted by size."
+    },
+    {
+      "id": "read-tracks",
+      "title": "Read the analysis tracks",
+      "instruction": "Above the map, the tracks summarise assembly quality: insulation score, TAD boundaries, A/B compartments, misassembly flags (orange), and weak joins (red).\n\nImportant: the automated misassembly detector flags dozens of candidates on almost every assembly. Most are false positives. Treat the flags as places to look, not instructions to cut.",
+      "expectedAction": { "type": "observe" },
+      "showPatternGallery": true,
+      "hint": "The P(s) decay exponent near -1.6 and a clean diagonal both indicate healthy Hi-C signal. Use the flags to guide where you zoom, then judge each one with your own eyes."
+    },
+    {
+      "id": "investigate",
+      "title": "Investigate a flagged region",
+      "instruction": "Pick a misassembly or weak-join flag near the diagonal and zoom in on it. Decide whether it is a real problem or detector noise.\n\n• A real misassembly breaks the diagonal or shows a bright off-diagonal square.\n• An inversion shows a short anti-diagonal (a butterfly) inside a block.\n• If the diagonal runs straight through the flag, it is a false positive: leave it alone.",
+      "expectedAction": { "type": "zoom" },
+      "hint": "Zoom in far enough to see individual contig boundaries. On this assembly most flags will turn out to be false positives, which is itself the lesson."
+    },
+    {
+      "id": "auto-cut",
+      "title": "Try auto-cut",
+      "instruction": "Run auto-cut (Alt+C, or the command palette) to let the tool propose breakpoints from the contact signal. On a clean assembly like this, expect it to find little or nothing to cut. That is a good outcome, not a failure: it confirms the scaffolder did not leave large chimeric joins.",
+      "expectedAction": { "type": "auto-cut" },
+      "highlight": { "type": "ui-element" },
+      "hint": "Auto-cut is a starting point, not the final word. You can always undo all of its cuts from the command palette if it over-cuts."
+    },
+    {
+      "id": "auto-sort",
+      "title": "Try auto-sort",
+      "instruction": "Run auto-sort (Alt+S) to reorder contigs for the strongest diagonal. This map is already close to sorted, so watch whether the ordering changes much. When a genome comes in this well-ordered, auto-sort mostly confirms the existing arrangement.",
+      "expectedAction": { "type": "auto-sort" },
+      "highlight": { "type": "ui-element" },
+      "hint": "Auto-sort cannot fix orientation or misassemblies, only order. Use it after any cutting, then refine by hand."
+    },
+    {
+      "id": "refine",
+      "title": "Refine by hand, or decide to stop",
+      "instruction": "Now apply your own judgment. If a block still shows an inversion, cut and invert it; if two adjacent contigs clearly belong together, join them. But on a clean assembly, the right answer is often minimal change.\n\nKnowing when an assembly is good enough is a real curation skill. Do not manufacture edits just to feel productive.",
+      "expectedAction": { "type": "observe" },
+      "hint": "High-impact edits (fixing an inversion in a large scaffold) matter far more than nudging tiny contigs. If nothing stands out, that is a valid conclusion."
+    },
+    {
+      "id": "self-check",
+      "title": "Self-assess the result",
+      "instruction": "There is no automated score here, because there is no curated ground truth for this species yet. Judge the assembly yourself:\n\n• Is each chromosome a clean, bright, square block?\n• Is the diagonal strong and continuous, with little off-diagonal signal?\n• Do a small number of large scaffolds hold most of the sequence?\n• How does it compare to the curated vertebrate genomes from earlier lessons?\n\nIf you can answer yes to the first three, you have done the job.",
+      "expectedAction": { "type": "observe" },
+      "hint": "This is exactly the judgment a curator makes before signing off a new reference genome. Trust the map."
+    }
+  ],
+  "assessment": null
+}

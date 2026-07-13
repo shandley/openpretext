@@ -1,0 +1,54 @@
+{
+  "id": "13-exercise-celegans",
+  "title": "Exercise: Verify a Model Genome (C. elegans)",
+  "difficulty": "beginner",
+  "specimenId": "celegans",
+  "estimatedMinutes": 15,
+  "introduction": "This is a self-directed exercise on a real Darwin Tree of Life assembly of Caenorhabditis elegans, the roundworm that is one of biology's most studied model organisms. It is a gentle first exercise, and it has a rare advantage: you already know the right answer from biology.\n\nC. elegans has six chromosomes (five autosomes and X). A finished assembly should therefore show six clean chromosome blocks along the diagonal, built from the roughly 90 contigs the scaffolder started with. That known target makes this a good place to learn what a near-complete assembly looks like.\n\nYour task:\n1. Survey the assembly and count the chromosome blocks.\n2. Check that count against the known karyotype of six.\n3. Investigate anything that does not fit.\n4. Confirm the assembly is clean and correctly ordered.\n\nThis is mostly verification, not repair. Recognising a good assembly is a skill in itself.",
+  "steps": [
+    {
+      "id": "survey",
+      "title": "Count the chromosomes",
+      "instruction": "Scan the whole map and count the bright, square chromosome blocks along the diagonal. C. elegans should have six. A small number of tiny contigs may sit at the end as an unplaced remainder.\n\n• Do you count six clear blocks?\n• Are they bright and square, or ragged?",
+      "expectedAction": { "type": "observe" },
+      "hint": "The minimap gives you the whole shape at once. Six strong blocks on the diagonal is exactly what a finished C. elegans assembly should look like."
+    },
+    {
+      "id": "read-tracks",
+      "title": "Read the analysis tracks",
+      "instruction": "Check the tracks above the map. A healthy assembly shows a strong, continuous diagonal, a P(s) decay near -1.5, and mostly empty space off the diagonal.\n\nThe misassembly detector will still flag candidates. As you saw in earlier lessons, most are false positives on a clean genome. Use them to decide where to look, not what to cut.",
+      "expectedAction": { "type": "observe" },
+      "hint": "For a genome this well studied and this clean, expect the flags to be mostly noise. The point is learning to tell healthy signal from real problems."
+    },
+    {
+      "id": "investigate",
+      "title": "Investigate anything unexpected",
+      "instruction": "If you counted more or fewer than six blocks, or a block looks split or ragged, zoom in and find out why.\n\n• A chromosome split across two contigs shows two blocks with a strong bridge between them: they should be joined.\n• A short anti-diagonal (a butterfly) inside a block is an inversion.\n• A straight, continuous diagonal through a flag means the flag is a false positive.",
+      "expectedAction": { "type": "zoom" },
+      "hint": "Compare what you see to the six-chromosome expectation. Knowing the target tells you whether something is genuinely wrong."
+    },
+    {
+      "id": "auto-sort",
+      "title": "Confirm the ordering",
+      "instruction": "Run auto-sort (Alt+S) and see whether it changes much. On a genome this clean it should mostly confirm the existing order. Auto-cut, by contrast, will likely find nothing to cut here, which is the correct result for a near-finished assembly.",
+      "expectedAction": { "type": "auto-sort" },
+      "highlight": { "type": "ui-element" },
+      "hint": "If auto-sort barely reorders anything, that is a good sign: the scaffolder already produced a well-ordered assembly."
+    },
+    {
+      "id": "refine",
+      "title": "Fix only what is genuinely wrong",
+      "instruction": "Join any chromosome that was split into two contigs, and invert any block that shows a butterfly. But if the six chromosomes are already clean, the right move is to make no changes.\n\nDo not curate away a good assembly.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Press E for edit mode. The best curators change as little as possible. On C. elegans you may find there is nothing to fix, and that is a valid outcome."
+    },
+    {
+      "id": "self-check",
+      "title": "Confirm against the karyotype",
+      "instruction": "Finish by checking your result against what you know:\n\n• Do you have six clean chromosome blocks?\n• Is the diagonal strong and continuous?\n• Are the few remaining tiny contigs a small, honest unplaced set?\n\nIf yes, you have verified a model genome. This is the baseline of what good looks like; carry that mental picture into the harder exercises.",
+      "expectedAction": { "type": "observe" },
+      "hint": "Six chromosomes, clean diagonal, small remainder. That is the standard the messier assemblies are trying to reach."
+    }
+  ],
+  "assessment": null
+}
