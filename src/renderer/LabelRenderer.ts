@@ -53,6 +53,11 @@ export class LabelRenderer {
     return (screenY + 0.5) * h;
   }
 
+  /** Blank the label canvas (used when no assembly is loaded). */
+  clear(): void {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
   render(opts: LabelRenderOptions): void {
     const { contigBoundaries, contigNames, camera, hoveredIndex, canvasWidth, canvasHeight } = opts;
     const ctx = this.ctx;

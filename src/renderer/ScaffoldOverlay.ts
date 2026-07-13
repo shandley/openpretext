@@ -103,6 +103,11 @@ export class ScaffoldOverlay {
   // Rendering
   // -----------------------------------------------------------------------
 
+  /** Blank the scaffold overlay canvas (used when no assembly is loaded). */
+  clear(): void {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
   render(opts: ScaffoldOverlayOptions): void {
     const {
       contigBoundaries,

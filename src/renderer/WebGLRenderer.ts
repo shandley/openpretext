@@ -490,6 +490,25 @@ export class WebGLRenderer {
   /**
    * Render the contact map with current camera and settings.
    */
+  /**
+   * Blank the canvas to the background colour without drawing a map. Used when
+   * no assembly is loaded (e.g. after returning to the landing screen) so a
+   * previous map does not persist behind the welcome overlay.
+   */
+  clear(): void {
+    const gl = this.gl;
+    const dpr = window.devicePixelRatio || 1;
+    const displayWidth = Math.floor(this.canvas.clientWidth * dpr);
+    const displayHeight = Math.floor(this.canvas.clientHeight * dpr);
+    if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
+      this.canvas.width = displayWidth;
+      this.canvas.height = displayHeight;
+    }
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.clearColor(0.125, 0.114, 0.102, 1.0); // warm charcoal, matches --bg-primary
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
   render(camera: { x: number; y: number; zoom: number }, options: {
     gamma?: number;
     floor?: number;

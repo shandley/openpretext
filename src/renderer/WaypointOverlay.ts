@@ -112,6 +112,11 @@ export class WaypointOverlay {
   /**
    * Render all waypoint markers and labels onto the overlay canvas.
    */
+  /** Blank the waypoint overlay canvas (used when no assembly is loaded). */
+  clear(): void {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
   render(opts: WaypointOverlayOptions): void {
     const {
       camera,

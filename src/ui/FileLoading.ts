@@ -291,8 +291,10 @@ export function returnToLanding(ctx: AppContext): void {
   resetOEMap(ctx);
 
   // Reset app state (map -> null, undo/redo cleared) and refresh the (now empty)
-  // panels.
+  // panels. Mark dirty so the render loop runs once and blanks the canvas (the
+  // guard there clears it since s.map is now null).
   state.reset();
+  ctx.renderDirty = true;
   ctx.updateSidebarContigList();
   ctx.updateSidebarScaffoldList();
   ctx.updateStatsPanel();

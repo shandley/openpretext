@@ -53,6 +53,19 @@ export function startRenderLoop(ctx: AppContext): void {
     const cam = ctx.camera.getState();
     const s = state.get();
 
+    // No assembly loaded (e.g. after returning to the landing screen): blank the
+    // canvas and overlays so a previous map does not persist behind the welcome
+    // overlay, then idle until something loads.
+    if (!s.map) {
+      ctx.renderer.clear();
+      ctx.trackRenderer?.clear();
+      ctx.labelRenderer?.clear();
+      ctx.scaffoldOverlay?.clear();
+      ctx.waypointOverlay?.clear();
+      ctx.animFrameId = requestAnimationFrame(renderFrame);
+      return;
+    }
+
     // Highlight from hover, single selection, or curation flash
     let highlightStart: number | undefined;
     let highlightEnd: number | undefined;
