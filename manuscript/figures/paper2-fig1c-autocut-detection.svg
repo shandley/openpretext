@@ -1,0 +1,212 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="360" font-family="Arial, Helvetica, sans-serif">
+  <rect width="700" height="360" fill="white"/>
+
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#555"/>
+    </marker>
+    <linearGradient id="hicGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d32f2f"/>
+      <stop offset="30%" stop-color="#ef5350"/>
+      <stop offset="50%" stop-color="#ffcdd2"/>
+      <stop offset="100%" stop-color="#fff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ============================================================ -->
+  <!-- Step 1: Diagonal signal density (left panel) -->
+  <!-- ============================================================ -->
+  <rect x="15" y="25" width="200" height="310" rx="8" fill="#e3f2fd" stroke="#1976d2" stroke-width="1.5"/>
+  <text x="115" y="18" font-size="11" font-weight="bold" fill="#1976d2" text-anchor="middle">Step 1: Diagonal Density</text>
+
+  <!-- Mini contact map with diagonal -->
+  <rect x="35" y="40" width="160" height="100" fill="#f5f5f5" stroke="#999" stroke-width="0.5"/>
+
+  <!-- Diagonal band (strong signal) -->
+  <line x1="35" y1="40" x2="115" y2="100" stroke="#d32f2f" stroke-width="8" stroke-opacity="0.5"/>
+  <!-- Gap in diagonal (breakpoint) -->
+  <line x1="115" y1="100" x2="130" y2="110" stroke="#fff" stroke-width="10"/>
+  <line x1="115" y1="100" x2="130" y2="110" stroke="#ffcdd2" stroke-width="4" stroke-opacity="0.3"/>
+  <!-- Diagonal resumes -->
+  <line x1="130" y1="110" x2="195" y2="140" stroke="#d32f2f" stroke-width="8" stroke-opacity="0.5"/>
+
+  <!-- Sliding window indicator -->
+  <rect x="90" y="76" width="20" height="20" fill="none" stroke="#1976d2" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <text x="78" y="80" font-size="7" fill="#1976d2">window</text>
+
+  <!-- Arrow down to density trace -->
+  <line x1="115" y1="145" x2="115" y2="158" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Density trace -->
+  <rect x="35" y="162" width="160" height="70" fill="#fff" stroke="#bbb" stroke-width="0.5"/>
+
+  <!-- X axis for density -->
+  <line x1="35" y1="227" x2="195" y2="227" stroke="#999" stroke-width="0.5"/>
+  <text x="115" y="240" font-size="8" fill="#666" text-anchor="middle">genomic position along contig</text>
+
+  <!-- Density signal line - high, then drop, then high -->
+  <polyline points="38,185 50,182 60,180 70,183 80,181 88,184 95,186 100,190 108,200 115,218 120,220 125,214 130,198 138,186 148,183 158,181 165,184 175,182 185,180 192,183"
+    fill="none" stroke="#1976d2" stroke-width="2"/>
+
+  <!-- Baseline (30% threshold) - dashed -->
+  <line x1="35" y1="205" x2="195" y2="205" stroke="#e65100" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="197" y="208" font-size="7" fill="#e65100">30% baseline</text>
+
+  <!-- Red arrow at breakpoint -->
+  <line x1="115" y1="226" x2="115" y2="163" stroke="#d32f2f" stroke-width="1" stroke-dasharray="2,2"/>
+  <polygon points="115,224 112,230 118,230" fill="#d32f2f"/>
+  <text x="115" y="256" font-size="8" fill="#d32f2f" text-anchor="middle" font-weight="bold">candidate</text>
+
+  <!-- Description -->
+  <text x="115" y="278" font-size="8" fill="#555" text-anchor="middle">Sliding-window mean of</text>
+  <text x="115" y="290" font-size="8" fill="#555" text-anchor="middle">diagonal Hi-C intensity</text>
+  <text x="115" y="306" font-size="8" fill="#555" text-anchor="middle">Drop below 30% of local</text>
+  <text x="115" y="318" font-size="8" fill="#555" text-anchor="middle">4x-radius baseline flags</text>
+  <text x="115" y="330" font-size="8" fill="#555" text-anchor="middle">candidate breakpoints</text>
+
+  <!-- ============================================================ -->
+  <!-- Arrow Step 1 -> Step 2 -->
+  <!-- ============================================================ -->
+  <line x1="220" y1="180" x2="250" y2="180" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- Step 2: Centromere verification (center panel) -->
+  <!-- ============================================================ -->
+  <rect x="255" y="25" width="195" height="310" rx="8" fill="#e8f5e9" stroke="#388e3c" stroke-width="1.5"/>
+  <text x="352" y="18" font-size="11" font-weight="bold" fill="#388e3c" text-anchor="middle">Step 2: Centromere Check</text>
+
+  <!-- Misassembly case (top) -->
+  <text x="352" y="46" font-size="9" fill="#333" text-anchor="middle" font-weight="bold">Misassembly (cut)</text>
+  <rect x="275" y="52" width="155" height="75" fill="#fff" stroke="#bbb" stroke-width="0.5"/>
+
+  <!-- Mini heatmap - reduced off-diagonal signal -->
+  <rect x="280" y="57" width="65" height="30" fill="#ef5350" fill-opacity="0.6"/>
+  <rect x="355" y="87" width="70" height="35" fill="#ef5350" fill-opacity="0.6"/>
+  <!-- Off-diagonal blocks - WEAK -->
+  <rect x="350" y="57" width="75" height="30" fill="#ffcdd2" fill-opacity="0.15"/>
+  <rect x="280" y="87" width="65" height="35" fill="#ffcdd2" fill-opacity="0.15"/>
+
+  <!-- Breakpoint line -->
+  <line x1="348" y1="52" x2="348" y2="127" stroke="#d32f2f" stroke-width="1.5" stroke-dasharray="3,2"/>
+
+  <!-- Labels -->
+  <text x="312" y="76" font-size="7" fill="#c62828" text-anchor="middle">strong</text>
+  <text x="312" y="110" font-size="7" fill="#bbb" text-anchor="middle">weak</text>
+  <text x="390" y="76" font-size="7" fill="#bbb" text-anchor="middle">weak</text>
+  <text x="390" y="110" font-size="7" fill="#c62828" text-anchor="middle">strong</text>
+  <text x="352" y="140" font-size="8" fill="#d32f2f" text-anchor="middle">Off-diag ratio &lt; 0.3</text>
+
+  <!-- Check mark -->
+  <text x="437" y="92" font-size="18" fill="#d32f2f">&#x2702;</text>
+
+  <!-- Centromere case (bottom) -->
+  <text x="352" y="168" font-size="9" fill="#333" text-anchor="middle" font-weight="bold">Centromere (retain)</text>
+  <rect x="275" y="174" width="155" height="75" fill="#fff" stroke="#bbb" stroke-width="0.5"/>
+
+  <!-- Mini heatmap - maintained off-diagonal signal -->
+  <rect x="280" y="179" width="65" height="30" fill="#ef5350" fill-opacity="0.6"/>
+  <rect x="355" y="209" width="70" height="35" fill="#ef5350" fill-opacity="0.6"/>
+  <!-- Off-diagonal blocks - STRONG (centromere maintains contacts) -->
+  <rect x="350" y="179" width="75" height="30" fill="#ef5350" fill-opacity="0.35"/>
+  <rect x="280" y="209" width="65" height="35" fill="#ef5350" fill-opacity="0.35"/>
+
+  <!-- Diagonal gap line -->
+  <line x1="348" y1="174" x2="348" y2="249" stroke="#388e3c" stroke-width="1.5" stroke-dasharray="3,2"/>
+
+  <!-- Labels -->
+  <text x="312" y="198" font-size="7" fill="#c62828" text-anchor="middle">strong</text>
+  <text x="312" y="232" font-size="7" fill="#c62828" text-anchor="middle">moderate</text>
+  <text x="390" y="198" font-size="7" fill="#c62828" text-anchor="middle">moderate</text>
+  <text x="390" y="232" font-size="7" fill="#c62828" text-anchor="middle">strong</text>
+  <text x="352" y="262" font-size="8" fill="#388e3c" text-anchor="middle">Off-diag ratio > 0.3</text>
+
+  <!-- Green check -->
+  <text x="437" y="215" font-size="18" fill="#388e3c">&#x2714;</text>
+
+  <!-- Description -->
+  <text x="352" y="288" font-size="8" fill="#555" text-anchor="middle">Off-diagonal signal compared</text>
+  <text x="352" y="300" font-size="8" fill="#555" text-anchor="middle">to contig median. Centromeres</text>
+  <text x="352" y="312" font-size="8" fill="#555" text-anchor="middle">maintain inter-arm contacts;</text>
+  <text x="352" y="324" font-size="8" fill="#555" text-anchor="middle">misassemblies do not.</text>
+
+  <!-- ============================================================ -->
+  <!-- Arrow Step 2 -> Step 3 -->
+  <!-- ============================================================ -->
+  <line x1="455" y1="180" x2="485" y2="180" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- Step 3: Confidence filter (right panel) -->
+  <!-- ============================================================ -->
+  <rect x="490" y="25" width="195" height="310" rx="8" fill="#fce4ec" stroke="#c62828" stroke-width="1.5"/>
+  <text x="587" y="18" font-size="11" font-weight="bold" fill="#c62828" text-anchor="middle">Step 3: Confidence Filter</text>
+
+  <!-- Confidence scoring breakdown -->
+  <g transform="translate(505, 42)">
+    <!-- Component bars -->
+    <text x="0" y="12" font-size="9" fill="#333">Confidence components:</text>
+
+    <!-- TAD signal -->
+    <rect x="0" y="22" width="80" height="14" rx="2" fill="#1976d2" fill-opacity="0.7"/>
+    <text x="5" y="33" font-size="8" fill="white" font-weight="bold">TAD (50%)</text>
+
+    <!-- Compartment signal -->
+    <rect x="0" y="40" width="48" height="14" rx="2" fill="#7b1fa2" fill-opacity="0.7"/>
+    <text x="5" y="51" font-size="8" fill="white" font-weight="bold">Comp. (30%)</text>
+
+    <!-- Decay signal -->
+    <rect x="0" y="58" width="32" height="14" rx="2" fill="#e65100" fill-opacity="0.7"/>
+    <text x="5" y="69" font-size="8" fill="white" font-weight="bold">Decay (20%)</text>
+
+    <!-- Formula -->
+    <text x="0" y="92" font-size="8" fill="#333">Score = 0.5T + 0.3C + 0.2D</text>
+  </g>
+
+  <!-- Threshold line -->
+  <g transform="translate(505, 148)">
+    <rect x="0" y="0" width="165" height="50" fill="#fff" stroke="#bbb" stroke-width="0.5" rx="3"/>
+
+    <!-- Accepted candidates -->
+    <circle cx="25" cy="15" r="6" fill="#4caf50"/>
+    <text x="25" y="18" font-size="7" fill="white" text-anchor="middle">0.8</text>
+    <circle cx="55" cy="15" r="6" fill="#4caf50"/>
+    <text x="55" y="18" font-size="7" fill="white" text-anchor="middle">0.7</text>
+    <circle cx="85" cy="15" r="6" fill="#ffc107"/>
+    <text x="85" y="18" font-size="7" fill="#333" text-anchor="middle">0.6</text>
+
+    <!-- Rejected candidates -->
+    <circle cx="115" cy="15" r="6" fill="#f44336" fill-opacity="0.4"/>
+    <text x="115" y="18" font-size="7" fill="white" text-anchor="middle">0.3</text>
+    <circle cx="145" cy="15" r="6" fill="#f44336" fill-opacity="0.4"/>
+    <text x="145" y="18" font-size="7" fill="white" text-anchor="middle">0.2</text>
+
+    <!-- Threshold line -->
+    <line x1="97" y1="3" x2="97" y2="30" stroke="#333" stroke-width="1.5" stroke-dasharray="3,2"/>
+    <text x="97" y="43" font-size="8" fill="#333" text-anchor="middle">threshold = 0.5</text>
+  </g>
+
+  <!-- Minimum fragment size -->
+  <g transform="translate(505, 210)">
+    <text x="0" y="12" font-size="9" fill="#333" font-weight="bold">Fragment size guard:</text>
+    <!-- Contig bar -->
+    <rect x="0" y="22" width="165" height="16" rx="2" fill="#e0e0e0" stroke="#999" stroke-width="0.5"/>
+    <!-- Fragments -->
+    <rect x="2" y="24" width="100" height="12" rx="1" fill="#81c784"/>
+    <rect x="105" y="24" width="15" height="12" rx="1" fill="#ef9a9a"/>
+    <rect x="123" y="24" width="40" height="12" rx="1" fill="#81c784"/>
+    <text x="52" y="33" font-size="7" fill="#333" text-anchor="middle">OK</text>
+    <text x="112" y="33" font-size="7" fill="#c62828" text-anchor="middle">X</text>
+    <text x="143" y="33" font-size="7" fill="#333" text-anchor="middle">OK</text>
+    <text x="82" y="52" font-size="8" fill="#666" text-anchor="middle">min 16 pixels per fragment</text>
+  </g>
+
+  <!-- Output summary -->
+  <g transform="translate(505, 270)">
+    <rect x="0" y="0" width="165" height="52" rx="4" fill="#ffebee" stroke="#c62828" stroke-width="1"/>
+    <text x="82" y="16" font-size="9" fill="#c62828" text-anchor="middle" font-weight="bold">Output</text>
+    <text x="82" y="30" font-size="8" fill="#555" text-anchor="middle">Validated breakpoints with</text>
+    <text x="82" y="42" font-size="8" fill="#555" text-anchor="middle">confidence scores (0-1)</text>
+  </g>
+
+  <!-- Bottom summary -->
+  <text x="350" y="352" font-size="10" fill="#333" text-anchor="middle" font-weight="bold">Result: 0 false positives for 31/34 specimens; 4 total FPs across 34 genomes</text>
+</svg>

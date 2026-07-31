@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="420" font-family="Arial, Helvetica, sans-serif">
+  <rect width="700" height="420" fill="white"/>
+
+  <!-- Plot area -->
+  <rect x="130" y="25" width="530" height="330" fill="#fafafa" stroke="#ccc" stroke-width="0.5"/>
+
+  <!-- Grid lines -->
+  <g stroke="#e0e0e0" stroke-width="0.5">
+    <line x1="218" y1="25" x2="218" y2="355"/>  <!-- 0.90 -->
+    <line x1="306" y1="25" x2="306" y2="355"/>  <!-- 0.92 -->
+    <line x1="394" y1="25" x2="394" y2="355"/>  <!-- 0.94 -->
+    <line x1="483" y1="25" x2="483" y2="355"/>  <!-- 0.96 -->
+    <line x1="571" y1="25" x2="571" y2="355"/>  <!-- 0.98 -->
+    <line x1="660" y1="25" x2="660" y2="355"/>  <!-- 1.00 -->
+  </g>
+
+  <!-- Mean line tau=0.988: x = 130 + (0.988-0.88)/(1.005-0.88)*530 = 130 + 0.108/0.125*530 = 130 + 457.92 = 587.9 -->
+  <line x1="588" y1="25" x2="588" y2="355" stroke="#555" stroke-width="1" stroke-dasharray="5,4"/>
+  <text x="592" y="20" font-size="10" fill="#555">mean τ = 0.988</text>
+
+  <!-- X scale: x = 130 + (val-0.88)/0.125*530 -->
+  <!-- 0.88 -> 130, 0.90 -> 218, 0.92 -> 306, 0.94 -> 394, 0.96 -> 483, 0.98 -> 571, 1.00 -> 660 -->
+
+  <!-- X axis -->
+  <line x1="130" y1="355" x2="660" y2="355" stroke="#333" stroke-width="1"/>
+  <g font-size="11" fill="#333" text-anchor="middle">
+    <text x="218" y="375">0.90</text>
+    <text x="306" y="375">0.92</text>
+    <text x="394" y="375">0.94</text>
+    <text x="483" y="375">0.96</text>
+    <text x="571" y="375">0.98</text>
+    <text x="660" y="375">1.00</text>
+  </g>
+  <g stroke="#333" stroke-width="1">
+    <line x1="218" y1="355" x2="218" y2="360"/>
+    <line x1="306" y1="355" x2="306" y2="360"/>
+    <line x1="394" y1="355" x2="394" y2="360"/>
+    <line x1="483" y1="355" x2="483" y2="360"/>
+    <line x1="571" y1="355" x2="571" y2="360"/>
+    <line x1="660" y1="355" x2="660" y2="360"/>
+  </g>
+  <text x="395" y="402" font-size="13" fill="#333" text-anchor="middle">Kendall's τ (ordering accuracy)</text>
+
+  <!-- Y axis -->
+  <line x1="130" y1="25" x2="130" y2="355" stroke="#333" stroke-width="1"/>
+
+  <!-- Row spacing: 330/7 = 47.1px per group, centers at 25 + 23.6, 70.7, 117.8, ... -->
+  <!-- Group 1: Amphibian (n=3), mean=1.000, all at 1.000 -> x=660 -->
+  <text x="122" y="52" font-size="12" fill="#333" text-anchor="end">Amphibian (n=3)</text>
+  <circle cx="660" cy="48" r="4" fill="#2ca02c" opacity="0.6"/>
+  <circle cx="660" cy="48" r="4" fill="#2ca02c" opacity="0.6"/>
+  <circle cx="660" cy="48" r="4" fill="#2ca02c" opacity="0.6"/>
+  <polygon points="660,41 665,48 660,55 655,48" fill="#2ca02c"/>
+
+  <!-- Group 2: Shark/Ray (n=4), taus: 0.998, 1.000, 0.998, 1.000, mean=0.999 -->
+  <!-- 0.998 -> 130+(0.998-0.88)/0.125*530 = 130+500.48 = 630.5 -->
+  <!-- 1.000 -> 660 -->
+  <!-- mean 0.999 -> 130+504.72 = 634.7 -->
+  <text x="122" y="99" font-size="12" fill="#333" text-anchor="end">Shark/Ray (n=4)</text>
+  <line x1="630" y1="95" x2="660" y2="95" stroke="#1f77b4" stroke-width="2"/>
+  <line x1="630" y1="89" x2="630" y2="101" stroke="#1f77b4" stroke-width="2"/>
+  <line x1="660" y1="89" x2="660" y2="101" stroke="#1f77b4" stroke-width="2"/>
+  <circle cx="630" cy="95" r="4" fill="#1f77b4" opacity="0.6"/>
+  <circle cx="660" cy="95" r="4" fill="#1f77b4" opacity="0.6"/>
+  <circle cx="630" cy="95" r="4" fill="#1f77b4" opacity="0.6"/>
+  <circle cx="660" cy="95" r="4" fill="#1f77b4" opacity="0.6"/>
+  <polygon points="635,88 640,95 635,102 630,95" fill="#1f77b4"/>
+
+  <!-- Group 3: Mammal (n=6), taus: 0.996-1.000, mean=0.998 -->
+  <!-- 0.996 -> 130+(0.996-0.88)/0.125*530 = 130+492.0 = 622.0 -->
+  <!-- 0.997 -> 626.2, 0.998 -> 630.5, 0.999 -> 634.7 -->
+  <text x="122" y="146" font-size="12" fill="#333" text-anchor="end">Mammal (n=6)</text>
+  <line x1="622" y1="142" x2="660" y2="142" stroke="#d62728" stroke-width="2"/>
+  <line x1="622" y1="136" x2="622" y2="148" stroke="#d62728" stroke-width="2"/>
+  <line x1="660" y1="136" x2="660" y2="148" stroke="#d62728" stroke-width="2"/>
+  <circle cx="630" cy="142" r="4" fill="#d62728" opacity="0.6"/>
+  <circle cx="635" cy="142" r="4" fill="#d62728" opacity="0.6"/>
+  <circle cx="626" cy="142" r="4" fill="#d62728" opacity="0.6"/>
+  <circle cx="630" cy="142" r="4" fill="#d62728" opacity="0.6"/>
+  <circle cx="660" cy="142" r="4" fill="#d62728" opacity="0.6"/>
+  <circle cx="622" cy="142" r="4" fill="#d62728" opacity="0.6"/>
+  <polygon points="630,135 635,142 630,149 625,142" fill="#d62728"/>
+
+  <!-- Group 4: Fish (n=6), taus: 0.974, 1.000, 1.000, 0.995, 0.974, 0.999, mean=0.990 -->
+  <!-- 0.974 -> 130+(0.974-0.88)/0.125*530 = 130+398.9 = 528.9 -->
+  <!-- 0.995 -> 617.8, 0.999 -> 634.7, 1.000 -> 660 -->
+  <!-- mean 0.990 -> 130+(0.110/0.125)*530 = 130+466.4 = 596.4 -->
+  <text x="122" y="193" font-size="12" fill="#333" text-anchor="end">Fish (n=6)</text>
+  <line x1="529" y1="189" x2="660" y2="189" stroke="#ff7f0e" stroke-width="2"/>
+  <line x1="529" y1="183" x2="529" y2="195" stroke="#ff7f0e" stroke-width="2"/>
+  <line x1="660" y1="183" x2="660" y2="195" stroke="#ff7f0e" stroke-width="2"/>
+  <circle cx="529" cy="189" r="4" fill="#ff7f0e" opacity="0.6"/>
+  <circle cx="660" cy="189" r="4" fill="#ff7f0e" opacity="0.6"/>
+  <circle cx="660" cy="189" r="4" fill="#ff7f0e" opacity="0.6"/>
+  <circle cx="618" cy="189" r="4" fill="#ff7f0e" opacity="0.6"/>
+  <circle cx="529" cy="189" r="4" fill="#ff7f0e" opacity="0.6"/>
+  <circle cx="635" cy="189" r="4" fill="#ff7f0e" opacity="0.6"/>
+  <polygon points="596,182 601,189 596,196 591,189" fill="#ff7f0e"/>
+
+  <!-- Group 5: Reptile (n=7), taus: 1.000, 0.985, 0.949, 0.978, 1.000, 0.980, 0.989, mean=0.983 -->
+  <!-- 0.949 -> 130+(0.069/0.125)*530 = 130+292.6 = 422.6 -->
+  <!-- 0.978 -> 130+(0.098/0.125)*530 = 130+415.5 = 545.5 -->
+  <!-- 0.980 -> 554.0, 0.985 -> 575.2, 0.989 -> 592.1, 1.000 -> 660 -->
+  <!-- mean 0.983 -> 130+(0.103/0.125)*530 = 130+436.6 = 566.6 -->
+  <text x="122" y="240" font-size="12" fill="#333" text-anchor="end">Reptile (n=7)</text>
+  <line x1="423" y1="236" x2="660" y2="236" stroke="#9467bd" stroke-width="2"/>
+  <line x1="423" y1="230" x2="423" y2="242" stroke="#9467bd" stroke-width="2"/>
+  <line x1="660" y1="230" x2="660" y2="242" stroke="#9467bd" stroke-width="2"/>
+  <circle cx="660" cy="236" r="4" fill="#9467bd" opacity="0.6"/>
+  <circle cx="575" cy="236" r="4" fill="#9467bd" opacity="0.6"/>
+  <circle cx="423" cy="236" r="4" fill="#9467bd" opacity="0.6"/>
+  <circle cx="546" cy="236" r="4" fill="#9467bd" opacity="0.6"/>
+  <circle cx="660" cy="236" r="4" fill="#9467bd" opacity="0.6"/>
+  <circle cx="554" cy="236" r="4" fill="#9467bd" opacity="0.6"/>
+  <circle cx="592" cy="236" r="4" fill="#9467bd" opacity="0.6"/>
+  <polygon points="567,229 572,236 567,243 562,236" fill="#9467bd"/>
+
+  <!-- Group 6: Bird (n=5), taus: 1.000, 0.980, 0.939, 0.995, 0.988, mean=0.980 -->
+  <!-- 0.939 -> 130+(0.059/0.125)*530 = 130+250.2 = 380.2 -->
+  <!-- 0.980 -> 554.0, 0.988 -> 587.9, 0.995 -> 617.8, 1.000 -> 660 -->
+  <!-- mean 0.980 -> 554.0 -->
+  <text x="122" y="287" font-size="12" fill="#333" text-anchor="end">Bird (n=5)</text>
+  <line x1="380" y1="283" x2="660" y2="283" stroke="#8c564b" stroke-width="2"/>
+  <line x1="380" y1="277" x2="380" y2="289" stroke="#8c564b" stroke-width="2"/>
+  <line x1="660" y1="277" x2="660" y2="289" stroke="#8c564b" stroke-width="2"/>
+  <circle cx="660" cy="283" r="4" fill="#8c564b" opacity="0.6"/>
+  <circle cx="554" cy="283" r="4" fill="#8c564b" opacity="0.6"/>
+  <circle cx="380" cy="283" r="4" fill="#8c564b" opacity="0.6"/>
+  <circle cx="618" cy="283" r="4" fill="#8c564b" opacity="0.6"/>
+  <circle cx="588" cy="283" r="4" fill="#8c564b" opacity="0.6"/>
+  <polygon points="554,276 559,283 554,290 549,283" fill="#8c564b"/>
+
+  <!-- Group 7: Chordate (n=3), taus: 0.969, 0.903, 1.000, mean=0.957 -->
+  <!-- 0.903 -> 130+(0.023/0.125)*530 = 130+97.5 = 227.5 -->
+  <!-- 0.969 -> 130+(0.089/0.125)*530 = 130+377.4 = 507.4 -->
+  <!-- mean 0.957 -> 130+(0.077/0.125)*530 = 130+326.5 = 456.5 -->
+  <text x="122" y="334" font-size="12" fill="#333" text-anchor="end">Chordate (n=3)</text>
+  <line x1="228" y1="330" x2="660" y2="330" stroke="#e377c2" stroke-width="2"/>
+  <line x1="228" y1="324" x2="228" y2="336" stroke="#e377c2" stroke-width="2"/>
+  <line x1="660" y1="324" x2="660" y2="336" stroke="#e377c2" stroke-width="2"/>
+  <circle cx="507" cy="330" r="4" fill="#e377c2" opacity="0.6"/>
+  <circle cx="228" cy="330" r="4" fill="#e377c2" opacity="0.6"/>
+  <circle cx="660" cy="330" r="4" fill="#e377c2" opacity="0.6"/>
+  <polygon points="457,323 462,330 457,337 452,330" fill="#e377c2"/>
+</svg>
