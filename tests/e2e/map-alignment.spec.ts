@@ -82,7 +82,7 @@ async function mapEdges(page: import('@playwright/test').Page) {
   });
 }
 
-/** Drag on the map canvas to pan, then let the frame settle. */
+/** Drag on the map canvas to pan. */
 async function drag(page: import('@playwright/test').Page, dx: number, dy: number) {
   const box = (await page.locator('#map-canvas').boundingBox())!;
   const x = box.x + box.width / 2;
@@ -92,7 +92,30 @@ async function drag(page: import('@playwright/test').Page, dx: number, dy: numbe
   await page.mouse.move(x + dx / 2, y + dy / 2, { steps: 5 });
   await page.mouse.move(x + dx, y + dy, { steps: 5 });
   await page.mouse.up();
-  await page.waitForTimeout(300);
+}
+
+/**
+ * Read the map edges once the canvas has stopped changing.
+ *
+ * The render loop is dirty-gated on requestAnimationFrame, so a fixed wait
+ * after a drag is a race: it held locally and failed under a loaded parallel
+ * run. Polling until two consecutive reads agree ties the wait to the thing
+ * being waited on.
+ */
+async function settledEdges(page: import('@playwright/test').Page) {
+  let previous = await mapEdges(page);
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(100);
+    const current = await mapEdges(page);
+    if (
+      current.top === previous.top && current.bottom === previous.bottom &&
+      current.left === previous.left && current.right === previous.right
+    ) {
+      return current;
+    }
+    previous = current;
+  }
+  return previous;
 }
 
 const PAN = 150;
@@ -104,7 +127,7 @@ test.describe('Map / overlay alignment', () => {
 
     // At zoom 1 the map exactly fills the canvas vertically, so no horizontal
     // edge is on screen to start with.
-    const before = await mapEdges(page);
+    const before = await settledEdges(page);
     expect(before.top, 'the map should fill the canvas vertically at reset').toBe(-1);
     expect(before.bottom).toBe(-1);
 
@@ -113,7 +136,7 @@ test.describe('Map / overlay alignment', () => {
     // Dragging up pulls the map's bottom edge into view, PAN px above the
     // bottom of the canvas. Reading the y convention backwards pushes that
     // edge further off-screen and brings the TOP edge down into view instead.
-    const after = await mapEdges(page);
+    const after = await settledEdges(page);
     expect(after.top, 'the map top edge must stay off-screen when dragging up').toBe(-1);
     expect(after.bottom).toBeGreaterThan(0);
     expect(Math.abs(after.bottom - (after.height - PAN))).toBeLessThan(TOLERANCE);
@@ -123,7 +146,7 @@ test.describe('Map / overlay alignment', () => {
     await loadDemo(page);
     await drag(page, 0, PAN);
 
-    const after = await mapEdges(page);
+    const after = await settledEdges(page);
     expect(after.bottom, 'the map bottom edge must stay off-screen when dragging down').toBe(-1);
     expect(after.top).toBeGreaterThan(0);
     expect(Math.abs(after.top - PAN)).toBeLessThan(TOLERANCE);
@@ -134,13 +157,13 @@ test.describe('Map / overlay alignment', () => {
 
     // The map is letterboxed horizontally on a landscape window, so both
     // vertical edges are already visible.
-    const before = await mapEdges(page);
+    const before = await settledEdges(page);
     expect(before.left).toBeGreaterThan(0);
     expect(before.right).toBeGreaterThan(0);
 
     await drag(page, -PAN, 0);
 
-    const after = await mapEdges(page);
+    const after = await settledEdges(page);
     expect(Math.abs(after.left - (before.left - PAN))).toBeLessThan(TOLERANCE);
     expect(Math.abs(after.right - (before.right - PAN))).toBeLessThan(TOLERANCE);
   });

@@ -20,6 +20,10 @@
 
 export type TrackType = 'line' | 'heatmap' | 'marker';
 
+/** Shared by the name block so its width matches the text drawn on it. */
+const TRACK_LABEL_FONT = '11px -apple-system, system-ui, sans-serif';
+const TRACK_LABEL_PADDING = 5;
+
 export interface TrackConfig {
   /** Unique identifier for this track. */
   name: string;
@@ -242,6 +246,8 @@ export class TrackRenderer {
       leftOffset += track.height + 2;
     }
 
+    this.renderTrackNames(ctx, visibleTracks, topStart, trackH);
+
     ctx.restore();
   }
 
@@ -289,23 +295,51 @@ export class TrackRenderer {
         break;
     }
 
-    // Track name label — the single, horizontal label for this track (the
-    // matching left-edge column is intentionally left unlabelled; it mirrors
-    // these by order). Vertically centred in the band, left-aligned.
-    //
-    // The band spans the whole canvas width, so once the map's left edge is
-    // panned off-screen the track's own data runs underneath the label and
-    // swallows it. A backing plate the width of the text keeps the name
-    // readable in every view; it costs a sliver of data at the far left, which
-    // is a better trade than an unreadable label.
-    ctx.font = '11px -apple-system, system-ui, sans-serif';
+    // Names are not drawn here. They go on one solid block painted over the
+    // whole gutter after every band, so nothing shows through them and the
+    // gaps between bands do not stripe it. See renderTrackNames.
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw the track names on a single solid block at the left of the top gutter.
+   *
+   * Each band spans the whole canvas width, so once the map's left edge is
+   * panned off-screen the track's own data runs under its name and swallows it.
+   * Drawing the names on one opaque block, after every band and sized to the
+   * widest name, gives a fixed rectangle with nothing passing beneath it rather
+   * than a ragged row of per-name plates. It costs a sliver of data at the far
+   * left of each band, which beats a name nobody can read; where the map's left
+   * edge is on screen, the usual view, the block lands on the gutter's own dark
+   * background and is invisible.
+   */
+  private renderTrackNames(
+    ctx: CanvasRenderingContext2D,
+    tracks: TrackConfig[],
+    gutterTop: number,
+    gutterHeight: number,
+  ): void {
+    ctx.save();
+    ctx.font = TRACK_LABEL_FONT;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    const labelWidth = ctx.measureText(track.name).width;
-    ctx.fillStyle = 'rgba(18, 18, 26, 0.85)';
-    ctx.fillRect(0, trackTop, labelWidth + 10, track.height);
+
+    let blockWidth = 0;
+    for (const track of tracks) {
+      blockWidth = Math.max(blockWidth, ctx.measureText(track.name).width);
+    }
+    blockWidth += TRACK_LABEL_PADDING * 2;
+
+    ctx.fillStyle = 'rgb(18, 18, 26)';
+    ctx.fillRect(0, gutterTop, blockWidth, gutterHeight);
+
     ctx.fillStyle = 'rgba(255, 255, 255, 0.82)';
-    ctx.fillText(track.name, 5, trackTop + track.height / 2);
+    let y = gutterTop;
+    for (const track of tracks) {
+      ctx.fillText(track.name, TRACK_LABEL_PADDING, y + track.height / 2);
+      y += track.height + 2;
+    }
 
     ctx.restore();
   }

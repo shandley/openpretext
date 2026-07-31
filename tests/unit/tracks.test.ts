@@ -497,11 +497,12 @@ describe('TrackRenderer — gutter corner', () => {
   });
 
   /**
-   * Records the clip rects and text draws the renderer issues, so a test can
-   * check where each gutter claimed space.
+   * Records the clip rects, fills, and text draws the renderer issues, so a
+   * test can check where each gutter claimed space and how it painted.
    */
   function createRecordingCanvas(width: number, height: number) {
     const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const fills: Array<{ x: number; y: number; w: number; h: number; style: string }> = [];
     const texts: Array<{ text: string; x: number; y: number }> = [];
     const ctx = {
       clearRect: () => {},
@@ -511,7 +512,9 @@ describe('TrackRenderer — gutter corner', () => {
       beginPath: () => {},
       rect: (x: number, y: number, w: number, h: number) => { rects.push({ x, y, w, h }); },
       clip: () => {},
-      fillRect: () => {},
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        fills.push({ x, y, w, h, style: String(ctx.fillStyle) });
+      },
       fillText: (text: string, x: number, y: number) => { texts.push({ text, x, y }); },
       measureText: () => ({ width: 40 }),
       moveTo: () => {},
@@ -529,7 +532,7 @@ describe('TrackRenderer — gutter corner', () => {
       shadowBlur: 0,
     };
     const canvas = { width, height, getContext: () => ctx } as unknown as HTMLCanvasElement;
-    return { canvas, rects, texts };
+    return { canvas, rects, fills, texts };
   }
 
   function makeTrack(name: string): TrackConfig {
@@ -553,7 +556,7 @@ describe('TrackRenderer — gutter corner', () => {
   it('left columns start below the top gutter so the labels stay clear', () => {
     const w = 800;
     const h = 600;
-    const { canvas, rects, texts } = createRecordingCanvas(w, h);
+    const { canvas, rects, fills, texts } = createRecordingCanvas(w, h);
     const renderer = new TrackRenderer(canvas);
     renderer.addTrack(makeTrack('Coverage'));
     renderer.addTrack(makeTrack('Gaps'));
@@ -581,6 +584,19 @@ describe('TrackRenderer — gutter corner', () => {
     expect(texts.map((t) => t.text)).toEqual(['Coverage', 'Gaps']);
     for (const t of texts) {
       expect(t.y).toBeLessThan(trackH);
+    }
+
+    // The names sit on one opaque block covering the full gutter height, not a
+    // per-band plate: a translucent or band-height fill lets the track data and
+    // the 2px inter-band gaps show through the names.
+    const block = fills.find((f) => f.x === 0 && f.h === trackH);
+    expect(block, 'a single name block spanning the gutter').toBeDefined();
+    expect(block!.style).toBe('rgb(18, 18, 26)');
+    expect(block!.w).toBeGreaterThan(0);
+    // Every name fits on it.
+    for (const t of texts) {
+      expect(t.x).toBeGreaterThanOrEqual(0);
+      expect(t.x).toBeLessThan(block!.w);
     }
   });
 

@@ -158,6 +158,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **The track gutters no longer cover each other or their own labels.** The top
+  gutter's bands run the full canvas width and the left gutter's columns the full
+  height, so the two contested the top-left corner and paint order alone decided
+  which showed; panning the map so its left edge left the window put the columns
+  straight over the track names. The corner now belongs to the top gutter, the
+  left columns begin below it, and the names sit on one opaque block sized to the
+  widest of them, so nothing passes underneath them. Where the map's left edge is
+  on screen, the usual view, the block falls on the gutter's own dark background
+  and is invisible.
+- **Reset view is reachable on a Mac.** It was bound only to Home, which laptop
+  keyboards do not have (it is Fn + Left), and the command palette matched on
+  command names alone, so searching "home", "fit", or "zoom out" found nothing.
+  `0` now resets the view, Home still works, and the palette searches shortcuts
+  and keywords as well as names.
 - **The map now shares one vertical coordinate convention with everything drawn
   over it.** The vertex shaders placed the map in a y-up space while the camera,
   the overlays (tracks, contig labels, minimap, scaffold and waypoint overlays,
