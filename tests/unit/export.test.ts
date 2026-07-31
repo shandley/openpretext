@@ -135,7 +135,6 @@ describe('AGPWriter', () => {
         gapType: 'scaffold',
         linkageEvidence: 'proximity_ligation',
         includeHeader: true,
-        scaffoldPrefix: 'scaffold_',
       });
 
       // Should produce: contig1, gap, contig2 = 3 lines
@@ -171,7 +170,6 @@ describe('AGPWriter', () => {
         gapType: 'scaffold',
         linkageEvidence: 'proximity_ligation',
         includeHeader: true,
-        scaffoldPrefix: 'scaffold_',
       });
 
       expect(lines.length).toBe(1);
@@ -191,7 +189,6 @@ describe('AGPWriter', () => {
         gapType: 'scaffold',
         linkageEvidence: 'proximity_ligation',
         includeHeader: true,
-        scaffoldPrefix: 'scaffold_',
       });
 
       const contigLines = lines.filter((l) => l.componentType === 'W');
@@ -210,7 +207,6 @@ describe('AGPWriter', () => {
         gapType: 'scaffold',
         linkageEvidence: 'proximity_ligation',
         includeHeader: true,
-        scaffoldPrefix: 'scaffold_',
       });
 
       // No gap lines when gapSize is 0
