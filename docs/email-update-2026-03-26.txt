@@ -1,0 +1,38 @@
+Subject: Re: Pretext -- new 3D genome architecture features inspired by HiArch paper
+
+Hi Rosa, Belen, and Carlos,
+
+Quick follow-up to my earlier email -- I came across this preprint that I think will be very relevant to Carlos's work:
+
+Che et al. 2025, "The evolution of high-order genome architecture revealed from 1,000 species"
+https://www.biorxiv.org/content/10.1101/2025.07.05.663309v2
+
+They analyzed Hi-C data from 1,025 species (largely Darwin Tree of Life) and characterized two major architectural features: "global folding" (how chromosomes are spatially organized in the nucleus) and "checkerboard" (A/B compartment regularity). I've now integrated two of their key algorithms into OpenPretext:
+
+1. Checkerboard Score (Che et al. 2025)
+   - Information-entropy measure of how regularly the A/B compartment pattern alternates
+   - Score from 0-100 (higher = stronger, more regular compartmentalization)
+   - After computing, a reference panel shows where your genome falls among 1,025 species -- nearest landmark species (e.g. "similar to Homo sapiens"), taxonomic group match, and approximate percentile
+   - This is wired into the health score as well, blended 50/50 with our existing eigenvalue-based compartment measure
+   - Button: "Checkerboard Score" (appears after running Compute All)
+
+2. Centromere Detection (CenterFinder algorithm, Che et al. 2025)
+   - Predicts centromere positions from the Hi-C contact map alone -- no annotation needed
+   - Works by finding inter-chromosomal contact hubs: centromeres cluster at the nuclear periphery, creating elevated inter-contig contacts at those positions
+   - Also incorporates anti-diagonal signal from Rabl-type chromosome folding
+   - Produces two tracks: "Centromere Signal" (pink line) and "Centromeres" (pink markers)
+   - Pairs with our existing telomere detection -- together they give you a complete chromosome structural map (telomeres at ends, centromere in middle) without needing any external annotation
+   - Button: "Detect Centromeres" in the analysis panel
+
+Carlos -- I think the checkerboard score + species reference comparison will be particularly useful for your 3D architecture work. The ability to say "this genome's compartmentalization is in the Xth percentile among 1,025 species, most similar to [species]" gives you a publishable comparative metric right in the browser.
+
+Both features are live now at: https://shandley.github.io/openpretext/
+
+To try them: load any dataset, click Compute All, then click "Checkerboard Score" and "Detect Centromeres". The centromere detection works best on real .pretext files where the biological signal is present (the synthetic demo won't show centromeres since it lacks that pattern).
+
+Let me know what you think -- especially whether the species reference data matches your expectations from the literature!
+
+Best,
+Scott
+
+P.S. The paper's GitHub repo with their full pipeline is at https://github.com/xjtu-omics/HiArch if you want to compare results.

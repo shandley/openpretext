@@ -1,0 +1,37 @@
+Subject: Re: Pretext
+
+Hi Rosa, Belen, and Carlos,
+
+I wanted to send you a quick update -- a lot has happened since my last message! I've been working through your feedback and I think you'll find most of the issues addressed.
+
+For Belen -- UI/UX fixes:
+- The toolbar is now fully responsive and should display correctly on all screen sizes
+- Zoom controls (+/- buttons) are now visible alongside the minimap
+- A welcome screen with clear entry points (Start Tutorial, Open File, specimen grid) replaces the blank initial state
+- Curation operations (cuts, joins, inversions) now show immediate visual feedback on the map -- this was a real rendering bug that's been fixed
+- Edit mode now shows a hint overlay explaining what you can do
+- A workflow guide (7-step recommended process) is accessible from the welcome screen
+
+For Carlos -- 3D genome analysis:
+- The three tutorials you asked about are now live:
+  - Lesson 7: 3D Genomics Analysis -- insulation scores, P(s) decay, A/B compartments, ICE normalization, health score
+  - Lesson 8: Classifying Contigs with Meta Tags -- haplotigs, contaminants, sex chromosomes
+  - Lesson 9: Automated Misassembly Detection -- TAD-based chimera detection, cut suggestions with confidence scoring, pattern detection
+- Data extraction: All analysis results (insulation, P(s), compartments, directionality, ICE/KR bias, saddle plot) can now be exported as BedGraph or TSV files via the Export buttons in the 3D Analysis panel
+- TAD boundaries are detected automatically and shown as marker tracks on the map
+
+New since last email -- ML-powered enhancement (Evo2HiC):
+- We've integrated the Evo2HiC foundation model (81M parameters, trained on 177 species) -- see https://github.com/CHNFTQ/Evo2HiC
+- Three capabilities via an optional companion server:
+  1. Resolution enhancement -- denoises and sharpens Hi-C overview maps
+  2. Epigenomic track prediction -- predicts DNase, CTCF, H3K27ac, H3K27me3, H3K4me3 from the contact map
+  3. Seq2HiC -- predicts expected Hi-C from DNA sequence alone
+- A new Lesson 10 walks through the full Evo2HiC workflow
+- Works on Apple Silicon GPUs (MPS) out of the box
+
+The live version is updated at: https://shandley.github.io/openpretext/
+
+I'd love your feedback on the 3D analysis workflow and the new tutorials especially. And please do file specific issues/ideas at https://github.com/shandley/openpretext/issues -- it really helps!
+
+Best,
+Scott
