@@ -138,9 +138,14 @@ describe('SpecimenCatalog', () => {
       expect(koala.releaseAsset).toBe('Phascolarctos_cinereus.pretext');
     });
 
+    // Contig counts below were verified on 2026-07-31 by parsing the header of
+    // each served .pretext, after an audit found 11 of 16 catalog counts wrong.
+    // Most held the post-curation file's count while releaseAsset names the
+    // pre-curation file. These assertions only restate the catalog, so they
+    // cannot catch that class of error; they guard against silent edits.
     it('wrasse should match known values', () => {
       const wrasse = catalog.specimens.find(s => s.id === 'wrasse')!;
-      expect(wrasse.contigCount).toBe(52);
+      expect(wrasse.contigCount).toBe(169);
       expect(wrasse.taxon).toBe('fish');
       expect(wrasse.difficulty).toBe('beginner');
     });
@@ -148,7 +153,7 @@ describe('SpecimenCatalog', () => {
     it('spinyfin should be served with baseline', () => {
       const spinyfin = catalog.specimens.find(s => s.id === 'spinyfin')!;
       expect(spinyfin.releaseAsset).toBe('Diretmoides_argenteus.pretext');
-      expect(spinyfin.contigCount).toBe(5506);
+      expect(spinyfin.contigCount).toBe(10123);
       expect(spinyfin.benchmarkBaseline).not.toBeNull();
     });
   });
