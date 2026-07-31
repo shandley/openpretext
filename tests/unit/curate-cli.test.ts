@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ContigInfo, MapData } from '../../src/core/State';
-import { applyCurationScript } from '../../bench/curate';
+import { applyCurationScript, parseFastaArg } from '../../bench/curate';
 
 // ---------------------------------------------------------------------------
 // Helpers (mirror tests/unit/curation.test.ts makeContig / makeTestMap)
@@ -138,5 +138,76 @@ describe('applyCurationScript', () => {
     expect(outcome.parseErrors).toHaveLength(1);
     expect(outcome.parseErrors[0].line).toBe(1);
     expect(outcome.ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FASTA export
+// ---------------------------------------------------------------------------
+
+describe('parseFastaArg', () => {
+  it('reads a bare path', () => {
+    expect(parseFastaArg('/data/hap1.fa.gz')).toEqual({ path: '/data/hap1.fa.gz', prefix: '' });
+  });
+
+  it('splits a path=prefix pair', () => {
+    expect(parseFastaArg('hap1.fa.gz=H1.')).toEqual({ path: 'hap1.fa.gz', prefix: 'H1.' });
+  });
+
+  it('splits on the last = so a path containing one survives', () => {
+    expect(parseFastaArg('a=b/hap.fa=H2.')).toEqual({ path: 'a=b/hap.fa', prefix: 'H2.' });
+  });
+
+  it('treats a leading = as part of the path, not an empty path', () => {
+    expect(parseFastaArg('=weird')).toEqual({ path: '=weird', prefix: '' });
+  });
+});
+
+describe('applyCurationScript FASTA export', () => {
+  const sequences = () =>
+    new Map([
+      ['chr1', 'AAAAAAAAAAGGGGGGGGGG'],
+      ['chr2', 'CCCCCCCCCCTTTTTTTTTT'],
+      ['chr3', 'ACGTACGTACGTACGTACGT'],
+      ['chr4', 'TTTTTTTTTTAAAAAAAAAA'],
+    ]);
+
+  it('omits FASTA entirely when no sequences are supplied', () => {
+    const out = applyCurationScript(makeTestMap(fourContigs()), [0, 1, 2, 3], 'echo hi');
+    expect(out.fasta).toBeUndefined();
+    expect(out.missingSequences).toBeUndefined();
+  });
+
+  it('reverse-complements an inverted contig and marks it in the header', () => {
+    const out = applyCurationScript(
+      makeTestMap(fourContigs()),
+      [0, 1, 2, 3],
+      'invert chr1',
+      sequences(),
+    );
+    expect(out.ok).toBe(true);
+    // revcomp(A*10 G*10) = C*10 T*10
+    expect(out.fasta).toContain('>chr1 orientation=-\nCCCCCCCCCCTTTTTTTTTT');
+    expect(out.fasta).toContain('>chr2 orientation=+\nCCCCCCCCCCTTTTTTTTTT');
+    expect(out.missingSequences).toEqual([]);
+  });
+
+  it('writes records in curated order, not file order', () => {
+    const out = applyCurationScript(
+      makeTestMap(fourContigs()),
+      [0, 1, 2, 3],
+      'move chr4 to 0',
+      sequences(),
+    );
+    const names = [...out.fasta!.matchAll(/^>(\S+)/gm)].map((m) => m[1]);
+    expect(names[0]).toBe('chr4');
+    expect(names).toHaveLength(4);
+  });
+
+  it('names the contigs it has no sequence for instead of failing', () => {
+    const partial = new Map([['chr1', 'ACGT']]);
+    const out = applyCurationScript(makeTestMap(fourContigs()), [0, 1, 2, 3], 'echo hi', partial);
+    expect(out.missingSequences).toEqual(['chr2', 'chr3', 'chr4']);
+    expect(out.fasta).toContain('>chr2 WARNING:sequence_not_found');
   });
 });
