@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { state, type ContigInfo, type MapData, type AppState } from '../../src/core/State';
+import { state, MAX_UNDO_DEPTH, type ContigInfo, type MapData, type AppState } from '../../src/core/State';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -298,7 +298,7 @@ describe('batch context', () => {
   it('caps undoStack at MAX_UNDO_DEPTH and retains most recent op', () => {
     state.reset();
 
-    const total = 250; // > MAX_UNDO_DEPTH (200)
+    const total = MAX_UNDO_DEPTH + 50;
     for (let i = 0; i < total; i++) {
       state.pushOperation({
         type: 'invert',
@@ -309,10 +309,141 @@ describe('batch context', () => {
     }
 
     const undoStack = state.get().undoStack;
-    expect(undoStack.length).toBe(200);
+    expect(undoStack.length).toBe(MAX_UNDO_DEPTH);
     // Most recent op must remain at the end (undo pops from the end).
     expect(undoStack[undoStack.length - 1].description).toBe(`op-${total - 1}`);
     // Oldest retained op is the one at depth boundary; older ones dropped.
-    expect(undoStack[0].description).toBe(`op-${total - 200}`);
+    expect(undoStack[0].description).toBe(`op-${total - MAX_UNDO_DEPTH}`);
+    expect(state.undoDroppedCount()).toBe(total - MAX_UNDO_DEPTH);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Undo-stack trimming rules
+//
+// The cap bounds memory, but it must never cost reversibility: a batched action
+// is undone as one unit by undoBatch, so dropping the front of a batch would
+// strand the assembly in a state no undo can restore. These pin the two
+// exceptions that make the cap safe (see MAX_UNDO_DEPTH in State.ts).
+// ---------------------------------------------------------------------------
+
+describe('undo stack trimming', () => {
+  beforeEach(() => {
+    state.reset();
+  });
+
+  /** Push `count` operations, optionally under a batch context. */
+  function push(count: number, prefix: string, batchId?: string): void {
+    if (batchId) state.setBatchContext(batchId);
+    for (let i = 0; i < count; i++) {
+      state.pushOperation({
+        type: 'invert',
+        timestamp: i,
+        description: `${prefix}-${i}`,
+        data: { seq: i },
+      });
+    }
+    if (batchId) state.clearBatchContext();
+  }
+
+  it('does not drop anything at exactly MAX_UNDO_DEPTH', () => {
+    push(MAX_UNDO_DEPTH, 'op');
+
+    expect(state.get().undoStack.length).toBe(MAX_UNDO_DEPTH);
+    expect(state.undoDroppedCount()).toBe(0);
+    expect(state.get().undoStack[0].description).toBe('op-0');
+  });
+
+  it('drops exactly one op at MAX_UNDO_DEPTH + 1', () => {
+    push(MAX_UNDO_DEPTH + 1, 'op');
+
+    const stack = state.get().undoStack;
+    expect(stack.length).toBe(MAX_UNDO_DEPTH);
+    expect(state.undoDroppedCount()).toBe(1);
+    expect(stack[0].description).toBe('op-1'); // op-0 dropped
+    expect(stack[stack.length - 1].description).toBe(`op-${MAX_UNDO_DEPTH}`);
+  });
+
+  it('ages out a whole batch rather than part of one', () => {
+    push(10, 'a', 'batch-a');
+    push(MAX_UNDO_DEPTH, 'u');
+
+    const stack = state.get().undoStack;
+    expect(stack.length).toBe(MAX_UNDO_DEPTH);
+    expect(state.undoDroppedCount()).toBe(10);
+    // No fragment of batch-a survives, and the front is not mid-batch.
+    expect(stack.some((op) => op.batchId === 'batch-a')).toBe(false);
+    expect(stack[0].description).toBe('u-0');
+  });
+
+  it('keeps a batch bigger than the cap whole, exceeding the cap', () => {
+    push(5, 'old');
+    push(MAX_UNDO_DEPTH, 'b', 'batch-b'); // batch alone fills the cap
+
+    // The 5 unbatched ops are droppable; the batch is not split to reach the cap.
+    expect(state.undoDroppedCount()).toBe(5);
+    expect(state.get().undoStack.length).toBe(MAX_UNDO_DEPTH);
+
+    push(1, 'newer'); // nothing left to drop except the middle of batch-b
+    const stack = state.get().undoStack;
+    expect(stack.length).toBe(MAX_UNDO_DEPTH + 1); // soft cap: batch kept whole
+    expect(state.undoDroppedCount()).toBe(5); // nothing further dropped
+    expect(stack.filter((op) => op.batchId === 'batch-b').length).toBe(MAX_UNDO_DEPTH);
+    expect(stack[0].description).toBe('b-0'); // front is the batch's first op
+  });
+
+  it('suspends trimming while an atomic action is open, then trims once', () => {
+    state.beginAtomicAction();
+    push(MAX_UNDO_DEPTH + 50, 'op');
+
+    // Nothing may be dropped mid-action: a script stamps its batchId only after
+    // running, so its ops are unprotected by the batch rule until then.
+    expect(state.get().undoStack.length).toBe(MAX_UNDO_DEPTH + 50);
+    expect(state.undoDroppedCount()).toBe(0);
+
+    state.endAtomicAction();
+
+    const stack = state.get().undoStack;
+    expect(stack.length).toBe(MAX_UNDO_DEPTH);
+    expect(state.undoDroppedCount()).toBe(50);
+    expect(stack[stack.length - 1].description).toBe(`op-${MAX_UNDO_DEPTH + 49}`);
+  });
+
+  it('nested atomic actions only trim when the outermost closes', () => {
+    state.beginAtomicAction();
+    state.beginAtomicAction();
+    push(MAX_UNDO_DEPTH + 10, 'op');
+    state.endAtomicAction();
+
+    expect(state.get().undoStack.length).toBe(MAX_UNDO_DEPTH + 10);
+
+    state.endAtomicAction();
+    expect(state.get().undoStack.length).toBe(MAX_UNDO_DEPTH);
+  });
+
+  it('assignBatchId stamps by mark, so trimming cannot shift the range', () => {
+    push(MAX_UNDO_DEPTH, 'old');
+    const mark = state.undoMark();
+    push(5, 'new'); // pushes 5 out of the front, shifting every index by 5
+
+    expect(state.undoDroppedCount()).toBe(5);
+
+    state.assignBatchId(mark, 'script-1');
+
+    const stack = state.get().undoStack;
+    const stamped = stack.filter((op) => op.batchId === 'script-1');
+    expect(stamped.length).toBe(5);
+    expect(stamped.map((op) => op.description)).toEqual([
+      'new-0', 'new-1', 'new-2', 'new-3', 'new-4',
+    ]);
+  });
+
+  it('reset clears the dropped-op counter', () => {
+    push(MAX_UNDO_DEPTH + 5, 'op');
+    expect(state.undoDroppedCount()).toBe(5);
+
+    state.reset();
+    expect(state.undoDroppedCount()).toBe(0);
+    expect(state.undoMark()).toBe(0);
   });
 });

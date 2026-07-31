@@ -23,6 +23,11 @@ const fakeState = {
 vi.mock('../../src/core/State', () => ({
   state: {
     get: vi.fn(() => fakeState),
+    // Marks and indices coincide because this fake never trims the stack.
+    undoMark: vi.fn(() => fakeState.undoStack.length),
+    undoIndexOfMark: vi.fn((mark: number) =>
+      Math.max(0, Math.min(fakeState.undoStack.length, mark))
+    ),
   },
 }));
 

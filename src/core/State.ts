@@ -12,13 +12,40 @@
 import type { PretextHeader } from '../formats/PretextParser';
 
 /**
- * Maximum number of operations retained in the undo stack. When this is
- * exceeded, the oldest operations are dropped so memory does not grow
- * unbounded over a long editing session. Each operation is independent
- * (it stores its own reverse data), so dropping the oldest is safe — the
- * user simply cannot undo past this depth.
+ * Soft target for the number of operations retained in the undo stack.
+ *
+ * The stack is trimmed from the front (oldest first) so memory does not grow
+ * without bound over a long session. The dominant per-operation cost is the
+ * `previousOrder` snapshot carried by cut/join/move, one number per contig:
+ * measured at ~10 KB per operation on a 1245-contig assembly and ~39 KB on a
+ * 5000-contig one, so this depth costs roughly 10 MB and 39 MB respectively.
+ *
+ * Two rules make the cap safe for the reversibility guarantee, and both mean
+ * the stack can legitimately hold MORE than this many operations:
+ *
+ * 1. Trimming never splits a batch. A batched action (auto-sort, auto-cut, a
+ *    script run) is undone as a unit by `undoBatch`, which pops while the top
+ *    of the stack carries the batch's id. Dropping the front of a batch would
+ *    leave the tail unrunnable in reverse and strand the assembly in a state
+ *    no undo can restore. The trim point therefore retreats to a batch
+ *    boundary, so the oldest retained operation is always either unbatched or
+ *    the first operation of its batch. A single batch larger than this depth
+ *    is retained whole, and only ages out once a further MAX_UNDO_DEPTH
+ *    operations have accumulated behind it. The real bound is therefore this
+ *    depth plus the largest retained batch: an auto-sort of a 5000-contig
+ *    assembly can emit of order 10^4 move operations, a few hundred MB, held
+ *    until that much newer work pushes it out. That is the price of the
+ *    guarantee — a batch that cannot be undone in full is worse than the
+ *    memory.
+ * 2. Trimming is suspended while an atomic action is open
+ *    (`beginAtomicAction`/`endAtomicAction`). Script runs stamp their batch id
+ *    *after* execution, so their operations look unbatched while they are
+ *    being pushed and rule 1 cannot protect them.
+ *
+ * When operations are dropped, `undoDroppedCount()` reports how many, so the
+ * UI can say so rather than silently losing history.
  */
-const MAX_UNDO_DEPTH = 200;
+export const MAX_UNDO_DEPTH = 1000;
 
 /**
  * A slice of a source (originally-loaded) contig's sequence, used to
@@ -173,6 +200,10 @@ class StateManager {
   private selectors: Map<number, SelectorEntry> = new Map();
   private nextSelectorId = 0;
   private batchContext: { batchId: string; metadata?: Record<string, any> } | null = null;
+  /** Operations dropped from the front of the undo stack this session. */
+  private undoDropped = 0;
+  /** Nesting depth of open atomic actions; trimming is suspended while > 0. */
+  private atomicDepth = 0;
 
   constructor() {
     this.state = createInitialState();
@@ -252,18 +283,85 @@ class StateManager {
       };
     }
     const grownUndoStack = [...this.state.undoStack, finalOp];
-    // Cap the undo stack to bound memory growth. Undo pops from the end
-    // (most recent), so drop the oldest entries from the front.
-    const cappedUndoStack =
-      grownUndoStack.length > MAX_UNDO_DEPTH
-        ? grownUndoStack.slice(-MAX_UNDO_DEPTH)
-        : grownUndoStack;
     this.state = {
       ...this.state,
-      undoStack: cappedUndoStack,
+      undoStack: this.trimUndoStack(grownUndoStack),
       redoStack: [],
     };
     this.notify();
+  }
+
+  /**
+   * Drop the oldest operations to keep the stack near MAX_UNDO_DEPTH, without
+   * ever breaking a batch apart and without trimming while an atomic action is
+   * open. Returns the stack to store (the input array when nothing is dropped).
+   * See MAX_UNDO_DEPTH for why both exceptions exist.
+   */
+  private trimUndoStack(stack: CurationOperation[]): CurationOperation[] {
+    if (this.atomicDepth > 0) return stack;
+
+    let drop = stack.length - MAX_UNDO_DEPTH;
+    if (drop <= 0) return stack;
+
+    // Retreat to a batch boundary so the oldest retained op is never the
+    // middle of a batch. Retreating only ever keeps more history.
+    while (
+      drop > 0 &&
+      stack[drop].batchId !== undefined &&
+      stack[drop - 1].batchId === stack[drop].batchId
+    ) {
+      drop--;
+    }
+    if (drop <= 0) return stack;
+
+    this.undoDropped += drop;
+    return stack.slice(drop);
+  }
+
+  /**
+   * Open an atomic action: no trimming happens until the matching
+   * `endAtomicAction`, so every operation pushed in between stays on the stack
+   * and stack indices captured before it remain valid. Nestable. Callers must
+   * pair it in a `finally` — a leaked open action disables trimming for the
+   * rest of the session.
+   */
+  beginAtomicAction(): void {
+    this.atomicDepth++;
+  }
+
+  /** Close an atomic action opened by `beginAtomicAction` and trim once. */
+  endAtomicAction(): void {
+    if (this.atomicDepth === 0) return;
+    this.atomicDepth--;
+    if (this.atomicDepth > 0) return;
+    const trimmed = this.trimUndoStack(this.state.undoStack);
+    if (trimmed !== this.state.undoStack) {
+      this.state = { ...this.state, undoStack: trimmed };
+      this.notify();
+    }
+  }
+
+  /**
+   * A stable mark for the current top of the undo stack, valid even if older
+   * operations are trimmed afterwards. Pass it to `assignBatchId`, or convert
+   * it back to a live index with `undoIndexOfMark`.
+   */
+  undoMark(): number {
+    return this.undoDropped + this.state.undoStack.length;
+  }
+
+  /**
+   * Convert a mark from `undoMark()` into an index into the current undo
+   * stack. Marks older than the trimmed region clamp to 0, so a caller slicing
+   * from here gets everything still available rather than the wrong window.
+   */
+  undoIndexOfMark(mark: number): number {
+    return Math.max(0, Math.min(this.state.undoStack.length, mark - this.undoDropped));
+  }
+
+  /** How many operations have been dropped from the front this session. */
+  undoDroppedCount(): number {
+    return this.undoDropped;
   }
 
   /**
@@ -282,15 +380,22 @@ class StateManager {
   }
 
   /**
-   * Stamp the trailing undo-stack operations (from index `from` to the end)
+   * Stamp the trailing undo-stack operations (from mark `fromMark` to the end)
    * with a shared batchId, so a multi-op action such as a script undoes as one
    * unit. Overwrites any inner batchIds (e.g. an autosort run inside the script)
    * so `undoBatch` pops the whole contiguous range. Post-hoc stamping is used
    * instead of spanning `setBatchContext` because nested batch operations clear
    * the context partway through.
+   *
+   * `fromMark` is a mark from `undoMark()`, which equals the stack length while
+   * nothing has been trimmed. It is resolved against the trimmed region rather
+   * than used as a raw index, so trimming between the mark and the stamp can
+   * never shift the range and leave part of the action unstamped.
    */
-  assignBatchId(from: number, batchId: string): void {
-    if (from < 0 || from >= this.state.undoStack.length) return;
+  assignBatchId(fromMark: number, batchId: string): void {
+    if (fromMark < 0) return;
+    const from = this.undoIndexOfMark(fromMark);
+    if (from >= this.state.undoStack.length) return;
     const undoStack = this.state.undoStack.map((op, i) =>
       i >= from ? { ...op, batchId } : op
     );
@@ -334,6 +439,8 @@ class StateManager {
   reset(): void {
     this.state = createInitialState();
     this.batchContext = null;
+    this.undoDropped = 0;
+    this.atomicDepth = 0;
     this.notify();
   }
 }

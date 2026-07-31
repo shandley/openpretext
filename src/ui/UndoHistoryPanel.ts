@@ -4,7 +4,7 @@
  */
 
 import type { AppContext } from './AppContext';
-import { state } from '../core/State';
+import { state, MAX_UNDO_DEPTH } from '../core/State';
 import type { CurationOperation } from '../core/State';
 import { undo, redo } from '../curation/CurationEngine';
 
@@ -140,6 +140,16 @@ export function updateUndoHistoryPanel(ctx: AppContext): void {
       <span class="history-icon">${icon}</span>
       <span class="history-desc">${g.label}${badge}</span>
       <span class="history-time">${relativeTime(g.timestamp)}</span>
+    </div>`;
+  }
+
+  // Say so when history has been trimmed, rather than letting the list end and
+  // imply those operations never happened. Trimming only ever drops whole
+  // batches, so what remains is still undoable in full (see MAX_UNDO_DEPTH).
+  const dropped = state.undoDroppedCount();
+  if (dropped > 0) {
+    html += `<div class="history-trimmed" style="color:var(--text-secondary);font-size:11px;padding:4px 6px;border-top:1px solid var(--border);">
+      ${dropped} earlier operation${dropped === 1 ? '' : 's'} dropped from history (depth limit ${MAX_UNDO_DEPTH}). They cannot be undone; the assembly and every export still reflect them.
     </div>`;
   }
 

@@ -12,7 +12,10 @@ const { mockUndoStack, mockRedoStack, mockUndo, mockRedo } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../src/core/State', () => ({
+  MAX_UNDO_DEPTH: 1000,
   state: {
+    // No trimming happens in these fixtures, so nothing has been dropped.
+    undoDroppedCount: vi.fn(() => 0),
     get: vi.fn(() => ({
       undoStack: mockUndoStack.value,
       redoStack: mockRedoStack.value,

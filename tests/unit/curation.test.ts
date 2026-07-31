@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { state, ContigInfo, MapData } from '../../src/core/State';
+import { state, MAX_UNDO_DEPTH, ContigInfo, MapData } from '../../src/core/State';
 import { events } from '../../src/core/EventBus';
 import { CurationEngine } from '../../src/curation/CurationEngine';
 import { SelectionManager } from '../../src/curation/SelectionManager';
@@ -1014,7 +1014,7 @@ describe('batch grouping (assignBatchId + undoBatch)', () => {
     expect(contigs[2].inverted).toBe(false);
   });
 
-  it('only stamps from the given index, leaving earlier operations ungrouped', () => {
+  it('only stamps from the given mark, leaving earlier operations ungrouped', () => {
     setupStandardState();
     CurationEngine.invert(0); // pre-existing op, index 0
     const from = state.get().undoStack.length;
@@ -1027,5 +1027,135 @@ describe('batch grouping (assignBatchId + undoBatch)', () => {
     expect(stack[0].batchId).toBeUndefined();
     expect(stack[1].batchId).toBe('script-2');
     expect(stack[2].batchId).toBe('script-2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reversibility across the undo-depth cap
+//
+// The claim these guard is that curation is exactly reversible: undoing an
+// action returns the assembly to the state it had before the action, whatever
+// its size. A multi-operation action that outgrew MAX_UNDO_DEPTH used to lose
+// its oldest operations to trimming, so undoBatch could only walk back part of
+// it and left an order no undo could restore. Assertions are on contigOrder,
+// not on operation counts: only the restored assembly proves reversibility.
+// ---------------------------------------------------------------------------
+
+describe('reversibility of actions larger than MAX_UNDO_DEPTH', () => {
+  beforeEach(() => {
+    state.reset();
+  });
+
+  /**
+   * Apply `count` move operations to the standard 4-contig fixture. move(0, 2)
+   * swaps the first two contigs, so an odd `count` leaves the order visibly
+   * changed and "order restored" is not a vacuous assertion.
+   */
+  function moveMany(count: number): void {
+    for (let i = 0; i < count; i++) {
+      CurationEngine.move(0, 2);
+    }
+  }
+
+  /** Odd, and past the cap: the batch cannot fit and must not be split. */
+  const OVER_CAP = MAX_UNDO_DEPTH + 51;
+
+  it('undoes an over-cap batched action in full (auto-sort shape)', () => {
+    setupStandardState();
+    const before = [...state.get().contigOrder];
+
+    // Shape of autoSortContigs on a fragmented genome: one batch id, one undo
+    // op per move, far more ops than the cap.
+    state.setBatchContext('autosort-test');
+    moveMany(OVER_CAP);
+    state.clearBatchContext();
+
+    // The batch is retained whole even though it exceeds the cap.
+    expect(state.get().undoStack.length).toBe(OVER_CAP);
+    expect(state.get().contigOrder).not.toEqual(before);
+
+    const undone = CurationEngine.undoBatch('autosort-test');
+
+    expect(undone).toBe(OVER_CAP);
+    expect(state.get().contigOrder).toEqual(before);
+    expect(state.get().undoStack.length).toBe(0);
+  });
+
+  it('redoes an over-cap batched action without trimming it away', () => {
+    setupStandardState();
+    const before = [...state.get().contigOrder];
+
+    state.setBatchContext('autosort-test');
+    moveMany(OVER_CAP);
+    state.clearBatchContext();
+    const after = [...state.get().contigOrder];
+    const droppedBeforeRedo = state.undoDroppedCount();
+
+    CurationEngine.undoBatch('autosort-test');
+    expect(state.get().contigOrder).toEqual(before);
+
+    // Redo replays operation by operation, pushing each one back onto the undo
+    // stack — the one path where trimming could eat a batch as it is rebuilt.
+    for (let i = 0; i < OVER_CAP; i++) {
+      expect(CurationEngine.redo()).toBe(true);
+    }
+
+    expect(state.get().contigOrder).toEqual(after);
+    expect(state.get().undoStack.length).toBe(OVER_CAP);
+    expect(state.undoDroppedCount()).toBe(droppedBeforeRedo);
+    // Still one batch, so it is undoable in full a second time.
+    expect(CurationEngine.undoBatch('autosort-test')).toBe(OVER_CAP);
+    expect(state.get().contigOrder).toEqual(before);
+  });
+
+  it('undoes an over-cap post-hoc stamped action in full (script/preview shape)', () => {
+    setupStandardState();
+    const before = [...state.get().contigOrder];
+
+    // Shape of runDSL/previewEffects: operations are pushed unbatched and only
+    // stamped as one batch after the script finishes, so the atomic action is
+    // what keeps them all on the stack until then.
+    const mark = state.undoMark();
+    state.beginAtomicAction();
+    try {
+      moveMany(OVER_CAP);
+      state.assignBatchId(mark, 'script-1');
+    } finally {
+      state.endAtomicAction();
+    }
+
+    expect(
+      state.get().undoStack.filter((op) => op.batchId === 'script-1').length
+    ).toBe(OVER_CAP);
+
+    const undone = CurationEngine.undoBatch('script-1');
+
+    expect(undone).toBe(OVER_CAP);
+    // The preview must leave no trace: exact pre-script order restored.
+    expect(state.get().contigOrder).toEqual(before);
+    expect(state.get().undoStack.length).toBe(0);
+  });
+
+  it('never leaves a partial batch at the front when older history ages out', () => {
+    setupStandardState();
+
+    // An old batch, then enough later operations to push the cap past it.
+    state.setBatchContext('old-batch');
+    moveMany(11);
+    state.clearBatchContext();
+    const afterOldBatch = [...state.get().contigOrder];
+
+    state.setBatchContext('recent-batch');
+    moveMany(MAX_UNDO_DEPTH + 1);
+    state.clearBatchContext();
+
+    const stack = state.get().undoStack;
+    // The old batch aged out whole; the recent one is intact and undoable.
+    expect(stack.some((op) => op.batchId === 'old-batch')).toBe(false);
+    expect(stack.filter((op) => op.batchId === 'recent-batch').length).toBe(MAX_UNDO_DEPTH + 1);
+    expect(state.get().contigOrder).not.toEqual(afterOldBatch);
+
+    CurationEngine.undoBatch('recent-batch');
+    expect(state.get().contigOrder).toEqual(afterOldBatch);
   });
 });

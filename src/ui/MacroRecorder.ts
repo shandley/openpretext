@@ -45,8 +45,13 @@ const CURATION_EVENTS = [
 ] as const;
 
 let recording = false;
-/** Undo-stack depth captured when recording started; the recorded slice begins here. */
-let startDepth = 0;
+/**
+ * Undo-stack mark captured when recording started; the recorded slice begins
+ * here. A mark rather than a raw depth, so trimming older history during a long
+ * recording cannot shift the window and pull in operations from before the
+ * record point (see State.undoMark).
+ */
+let startMark = 0;
 /** `#script-input` content that existed before recording started (recorded DSL is appended to it). */
 let basePrefix = '';
 /** Latest AppContext; refreshed on each setup so event handlers use current managers/toast. */
@@ -65,14 +70,14 @@ function scaffoldNameMap(ctx: AppContext): Map<number, string> {
 
 /**
  * Regenerate the DSL for the recorded slice and write it into `#script-input`,
- * preserving whatever text existed before recording began. Clamps `startDepth`
+ * preserving whatever text existed before recording began. Clamps `startMark`
  * down if the undo stack shrank below it (e.g. undo past the record point).
  */
 function regenerate(ctx: AppContext): number {
   const s = state.get();
   const stack = s.undoStack ?? [];
-  if (stack.length < startDepth) startDepth = stack.length;
-  const slice = stack.slice(startDepth);
+  if (state.undoMark() < startMark) startMark = state.undoMark();
+  const slice = stack.slice(state.undoIndexOfMark(startMark));
 
   const input = document.getElementById('script-input') as HTMLTextAreaElement | null;
   if (!input) return slice.length;
@@ -89,7 +94,7 @@ function regenerate(ctx: AppContext): number {
 
 function startRecording(ctx: AppContext): void {
   recording = true;
-  startDepth = (state.get().undoStack ?? []).length;
+  startMark = state.undoMark();
 
   const input = document.getElementById('script-input') as HTMLTextAreaElement | null;
   const existing = input?.value.trim() ?? '';

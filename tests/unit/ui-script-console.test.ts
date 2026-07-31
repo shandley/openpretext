@@ -14,12 +14,19 @@ vi.stubGlobal('document', {
 // ---------------------------------------------------------------------------
 
 vi.mock('../../src/core/State', () => ({
+  MAX_UNDO_DEPTH: 1000,
   state: {
     get: vi.fn(() => ({
       map: null,
       contigOrder: [],
       undoStack: [],
     })),
+    // Undo-stack bookkeeping the runner uses to group a script into one batch.
+    // Nothing is pushed here, so the mark never advances.
+    undoMark: vi.fn(() => 0),
+    assignBatchId: vi.fn(),
+    beginAtomicAction: vi.fn(),
+    endAtomicAction: vi.fn(),
   },
 }));
 

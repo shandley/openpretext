@@ -478,7 +478,10 @@ export function exportSession(
     ? waypointManager.getAllWaypoints()
     : [];
 
-  // Operation log (lightweight summary — no undo data)
+  // Operation log (lightweight summary — no undo data). It mirrors the undo
+  // stack, so on a session long enough to have trimmed history (see
+  // MAX_UNDO_DEPTH) it starts at the oldest operation still retained rather
+  // than at the first edit. The saved order/orientation is complete either way.
   const operationLog: SessionOperationLogEntry[] = appState.undoStack.map(
     (op: CurationOperation) => ({
       type: op.type,

@@ -98,20 +98,25 @@ export function runDSL(
 
   if (!halt && parseResult.commands.length > 0) {
     const scriptCtx = buildScriptContext(ctx, (msg) => echoMessages.push(msg));
-    const undoDepthBefore = state.get().undoStack.length;
+    const markBefore = state.undoMark();
     // Suppress per-op UI refresh during the script; refresh once at the end.
     ctx.suppressCurationRefresh = true;
+    // Hold the undo stack whole until the script's ops have been stamped as one
+    // batch — until then they look unbatched, so trimming could drop the front
+    // of the script and leave part of it un-undoable.
+    state.beginAtomicAction();
     try {
       results = executeScript(parseResult.commands, scriptCtx);
     } finally {
       ctx.suppressCurationRefresh = false;
-    }
-    // Group the script's curation operations into one undo unit so a single
-    // Ctrl+Z reverts the whole script (stamped before the refresh so the undo
-    // history panel shows the batch). One op needs no grouping.
-    const undoDepthAfter = state.get().undoStack.length;
-    if (undoDepthAfter - undoDepthBefore >= 2) {
-      state.assignBatchId(undoDepthBefore, `script-${++scriptRunSeq}`);
+      // Group the script's curation operations into one undo unit so a single
+      // Ctrl+Z reverts the whole script (stamped before the refresh so the undo
+      // history panel shows the batch). One op needs no grouping.
+      const applied = state.undoMark() - markBefore;
+      if (applied >= 2) {
+        state.assignBatchId(markBefore, `script-${++scriptRunSeq}`);
+      }
+      state.endAtomicAction();
     }
     ctx.refreshAfterCuration();
     ctx.updateSidebarScaffoldList();
@@ -213,11 +218,14 @@ export function previewEffects(
     const beforeOrder = [...sBefore.contigOrder];
     const beforeContigs = sBefore.map?.contigs ?? [];
     const beforeMetrics = calculateMetrics(beforeContigs, beforeOrder);
-    const undoBefore = sBefore.undoStack.length;
+    const undoBefore = state.undoMark();
     const redoBefore = [...sBefore.redoStack];
 
     const scriptCtx = buildScriptContext(ctx, (msg) => echoMessages.push(msg));
     ctx.suppressCurationRefresh = true;
+    // The revert below depends on every operation the preview applies still
+    // being on the undo stack, so nothing may be trimmed while it runs.
+    state.beginAtomicAction();
     try {
       results = executeScript(parseResult.commands, scriptCtx, { continueOnError: true });
 
@@ -234,18 +242,19 @@ export function previewEffects(
         n50Before: beforeMetrics.n50,
         n50After: afterMetrics.n50,
         contigsMoved,
-        applied: sAfter.undoStack.length - undoBefore,
+        applied: state.undoMark() - undoBefore,
       };
     } finally {
       // Always revert whatever got applied, then restore the redo stack so the
       // preview leaves no trace.
-      const applied = state.get().undoStack.length - undoBefore;
+      const applied = state.undoMark() - undoBefore;
       if (applied > 0) {
         state.assignBatchId(undoBefore, `preview-${++previewSeq}`);
         undoBatch(`preview-${previewSeq}`);
       }
       state.update({ redoStack: redoBefore });
       ctx.suppressCurationRefresh = false;
+      state.endAtomicAction();
     }
     ctx.refreshAfterCuration();
     ctx.updateSidebarScaffoldList();
