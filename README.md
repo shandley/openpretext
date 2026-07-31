@@ -37,14 +37,14 @@ OpenPretext needs a local HTTP server; opening the files over `file://` will not
 ## Learn
 
 - **[Field guide to genome curation](https://openpretext-guide.vercel.app)**: a visual introduction to reading a Hi-C map, the misassembly signatures, and the curation workflow.
-- **In-app tutorials**: 10 interactive lessons, from reading the map to a full curation exercise. Open the app and click **Start Tutorial**.
+- **In-app tutorials**: 16 interactive lessons, from reading the map through guided curation to open-ended practice exercises. Open the app and click **Start Tutorial**.
 - **Pattern gallery**: a reference of Hi-C patterns (clean diagonal, inversions, translocations, micro-chromosomes, and more) with descriptions and click-to-navigate.
 
 ## Features
 
 ### Rendering
 
-WebGL2 contact map at 60fps with tile-based level-of-detail, an LRU cache, and background decompression. Six color maps with keyboard cycling, adjustable gamma, a contig grid and edge labels, a click-to-navigate minimap, scaffold color bands, waypoint markers, annotation track overlays (line, heatmap, marker), and a comparison overlay of original versus curated boundaries. An observed/expected (O/E) view toggle divides out the distance-decay so long-range structure stands out (overview only; detail tiles stay raw at high zoom). A before/after view places the map as loaded beside the current curated arrangement.
+WebGL2 contact map with tile-based level-of-detail, an LRU cache, and background decompression. Six color maps with keyboard cycling, adjustable gamma, a contig grid and edge labels, a click-to-navigate minimap, scaffold color bands, waypoint markers, annotation track overlays (line, heatmap, marker), and a comparison overlay of original versus curated boundaries. An observed/expected (O/E) view toggle divides out the distance-decay so long-range structure stands out (overview only; detail tiles stay raw at high zoom). A before/after view places the map as loaded beside the current curated arrangement.
 
 ### Curation
 
@@ -103,11 +103,13 @@ AGP 2.1, BED6, and FASTA (with reverse complement for inverted contigs), PNG scr
 
 ### Scripting
 
-A 13-command curation DSL covering every operation, with contig references by name or index (`#0`, `#15`), a script console with syntax highlighting, and replay from a curation log. Every UI curation operation has a script equivalent.
+A 13-command curation DSL with contig references by name or index (`#0`, `#15`), a script console with syntax highlighting, and replay from a curation log. Cutting, joining, inverting, moving, selection, scaffold assignment, Auto Cut, and Auto Sort all have script equivalents. Meta tags, contig exclusion, and waypoints remain UI-only.
 
 ### Tutorials and example data
 
-Ten interactive lessons with step-by-step instructions, hints, and UI highlighting, spanning reading the map, detecting and fixing misassemblies, scaffold assignment, 3D genomics analysis, meta tags, automated detection, and ML enhancement, ending in a self-checked full curation exercise. Ships with 10 curated GenomeArk specimens (mammals, birds, reptiles, fish, amphibians, invertebrates) loadable from the welcome screen, alongside the pattern gallery.
+Sixteen interactive lessons with step-by-step instructions, hints, and UI highlighting. Ten guided tutorials span reading the map, detecting and fixing misassemblies, scaffold assignment, 3D genomics analysis, meta tags, automated detection, ML enhancement, and a full curation exercise. Six shorter practice exercises work on assemblies straight from the scaffolder. No lesson is scored automatically; you check your own work against what the lesson describes.
+
+Sixteen specimens are loadable from the welcome screen, alongside the pattern gallery. Ten come from [GenomeArk](https://www.genomeark.org/) and are mostly vertebrate: mammals, birds, reptiles, fish, an amphibian, and a lancelet. The other six are scaffolder output published by the Wellcome Sanger Institute for the Darwin Tree of Life, reaching parts of the tree GenomeArk does not cover: a nematode, a mollusc, an echinoderm, an annelid, a fungus, and a plant.
 
 ### Also included
 
@@ -140,7 +142,7 @@ Press `?` at any time for the full reference.
 | `[` / `,` | Previous waypoint |
 | `Up` / `Down` | Cycle color maps |
 | `Left` / `Right` | Adjust gamma |
-| `Home` | Reset view |
+| `0` / `Home` | Reset view |
 | `Cmd+K` | Command palette |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo |
 | `Cmd+O` | Open file |
@@ -181,8 +183,8 @@ For the binary format details, see [docs/PRETEXT_FORMAT.md](docs/PRETEXT_FORMAT.
 
 ```bash
 npm run dev            # development server with hot reload (http://localhost:3000)
-npm test               # unit tests (2,536 tests across 102 files, Vitest)
-npm run test:visual    # end-to-end tests (45 tests, Playwright + Chromium)
+npm test               # unit tests (Vitest)
+npm run test:visual    # end-to-end tests (Playwright + Chromium)
 npm run build          # production build to dist/
 npm run preview        # preview the production build
 ```
@@ -190,7 +192,7 @@ npm run preview        # preview the production build
 ### Benchmarks
 
 ```bash
-npm run bench:acquire      # download test specimens from GenomeArk
+npm run bench:acquire      # download test specimens from GenomeArk (-- --source dtol for Sanger tolqc)
 npm run bench:run          # execute benchmarks
 npm run bench:sweep        # sweep parameter ranges
 npm run bench:regression   # compare against stored baselines
@@ -223,11 +225,11 @@ src/
                              Evo2HiC client and enhancement utilities
   export/                    AGP, BED, FASTA, analysis (BedGraph/TSV), PNG, curation log
   io/                        session save/load
-  ui/                        43 UI modules (plain DOM)
-public/data/                 specimen catalog (10 species), lessons (10), pattern gallery,
+  ui/                        UI modules (plain DOM)
+public/data/                 specimen catalog (16 species), lessons (16), pattern gallery,
                              prompt strategies (8)
-tests/                       unit (102 files) and e2e (Playwright)
-bench/                       benchmark CLI, runner, regression, metrics, GenomeArk acquire
+tests/                       unit (Vitest) and e2e (Playwright)
+bench/                       benchmark CLI, runner, regression, metrics, specimen acquire
 server/                      optional Evo2HiC server (Python / FastAPI)
 ```
 
@@ -235,7 +237,7 @@ server/                      optional Evo2HiC server (Python / FastAPI)
 
 ## Obtaining test data
 
-The quickest way to get real data is **Load Example** in the app, which downloads a curated GenomeArk specimen. For more assemblies, [GenomeArk](https://www.genomeark.org/) hosts public genome data, including Hi-C contact maps, from the Vertebrate Genomes Project.
+The quickest way to get real data is **Load Example** in the app, which downloads a koala assembly. The specimen picker on the welcome screen offers the other fifteen. For more assemblies, [GenomeArk](https://www.genomeark.org/) hosts public genome data, including Hi-C contact maps, from the Vertebrate Genomes Project, and the Wellcome Sanger Institute publishes scaffolder output for Darwin Tree of Life species on its tolqc archive.
 
 ## Background
 

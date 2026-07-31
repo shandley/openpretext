@@ -158,6 +158,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **A long batched action can no longer outrun the undo stack.** The stack was
+  capped at 200 operations and trimmed from the front, on the stated assumption
+  that every operation is independent. Batched ones are not: auto-sort emits an
+  operation per moved contig, so on a 1245-contig assembly a single click pushed
+  roughly 2,400. Trimming cut the front off that batch, and undo, which pops
+  while the top carries the batch id, could then only walk back the retained
+  tail, leaving an order no undo could restore. Script preview was worse: it
+  reverts by undoing its own batch, so a dry run could permanently change the
+  assembly. Trimming now retreats to a batch boundary, so the oldest retained
+  operation is never mid-batch and a batch larger than the cap is kept whole;
+  script runs and previews additionally suspend trimming until their operations
+  are stamped. The cap is 1,000 (about 10 MB on a 1245-contig assembly, measured)
+  and is now a soft target, since both rules can hold more. When operations are
+  dropped the undo panel says so rather than letting the list quietly end. Also
+  fixes three batch contexts that leaked on early return and stamped unrelated
+  later operations with a stale batch id.
+- **Eleven of sixteen specimen contig counts were wrong.** Most recorded the
+  post-curation file's count while the catalog entry serves the pre-curation
+  file, so the picker understated the work in an assembly, sometimes by half
+  (the snake read 124 against a true 240). Every count was re-derived by parsing
+  the header of the file actually served.
+- **The shortcuts modal named the wrong key for Navigate mode.** It listed `N`,
+  which creates a scaffold. `Esc` returns to Navigate.
 - **The track gutters no longer cover each other or their own labels.** The top
   gutter's bands run the full canvas width and the left gutter's columns the full
   height, so the two contested the top-left corner and paint order alone decided
