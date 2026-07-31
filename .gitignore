@@ -5,7 +5,13 @@ dist/
 test-data/
 test-results/
 coverage/
+# Screenshots and rendered test output, which are regenerable and noisy.
 *.png
+# Manuscript figures are not: several are captures of specific data at specific
+# settings and exist nowhere else. `git add <dir>` skips ignored files silently,
+# so without this exception 21 of them sat untracked while appearing to be
+# committed.
+!manuscript/figures/**/*.png
 bench/data/
 .playwright-mcp/
 .vercel
