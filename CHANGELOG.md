@@ -158,6 +158,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **The track gutters no longer cover each other or their own labels.** The top
+  gutter's bands run the full canvas width and the left gutter's columns the full
+  height, so the two contested the top-left corner and paint order alone decided
+  which showed; panning the map so its left edge left the window put the columns
+  straight over the track names. The corner now belongs to the top gutter, the
+  left columns begin below it, and the names sit on one opaque block sized to the
+  widest of them, so nothing passes underneath them. Where the map's left edge is
+  on screen, the usual view, the block falls on the gutter's own dark background
+  and is invisible. Contig labels live on a canvas layered above the tracks, so
+  they could not be hidden by the block and instead ran across it; each is now
+  centred in the part of its contig that clears the gutter rather than in the
+  contig as a whole, which also keeps a partly scrolled-off contig labelled.
+- **Reset view is reachable on a Mac.** It was bound only to Home, which laptop
+  keyboards do not have (it is Fn + Left), and the command palette matched on
+  command names alone, so searching "home", "fit", or "zoom out" found nothing.
+  `0` now resets the view, Home still works, and the palette searches shortcuts
+  and keywords as well as names.
+- **The map now shares one vertical coordinate convention with everything drawn
+  over it.** The vertex shaders placed the map in a y-up space while the camera,
+  the overlays (tracks, contig labels, minimap, scaffold and waypoint overlays,
+  the drag-reorder indicator), and `canvasToMap`/`mapToCanvas` all worked in
+  genomic y-down coordinates. A quad texcoord flip hid the disagreement at
+  `camera.y == 0.5`, so a reset view looked correct and everything drifted from
+  there by twice the vertical offset. Dragging up moved the map down while the
+  left-edge tracks moved up (reported by Carlos at IBE Barcelona); zoom-to-cursor
+  anchored the wrong row and walked off the diagonal as you zoomed; and detail
+  tiles were placed mirrored block-by-block against the overview, so past a few
+  hundred percent the detail layer showed the anti-diagonal counterpart of the
+  region you were looking at instead of the region itself. Each vertex shader now
+  performs the single y flip that clip space needs and nothing re-flips it, which
+  also corrects click hit-testing, the contig highlight, and the minimap viewport
+  box away from center. Horizontal behaviour was never affected.
+  A saved session or waypoint written by an earlier build stores a `camera.y`
+  under the old reading, so restoring one lands at the vertically mirrored
+  position. These are not migrated on load: the old value was already pointing
+  somewhere other than where the map drew it, and carrying it forward would
+  preserve that. Any pan corrects it, and no curation data is involved.
 - **Insulation and Directionality Index are now contig-aware.** Both slid their
   windows without knowing contig boundaries, so at every contig junction the
   window averaged across into the neighboring contig and manufactured a false

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   generateCoverageTrack,
   generateGCContentTrack,
@@ -478,6 +478,147 @@ describe('TrackRenderer — coordinate mapping', () => {
         expect(renderer.mapToScreenX(mapCoord, cam, w, h)).toBeCloseTo(expectedX, 5);
         expect(renderer.mapToScreenY(mapCoord, cam, w, h)).toBeCloseTo(expectedY, 5);
       }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gutter layout
+// ---------------------------------------------------------------------------
+
+describe('TrackRenderer — gutter corner', () => {
+  // render() reads window.devicePixelRatio; this suite runs in the node env.
+  const hadWindow = 'window' in globalThis;
+  beforeAll(() => {
+    if (!hadWindow) (globalThis as any).window = { devicePixelRatio: 1 };
+  });
+  afterAll(() => {
+    if (!hadWindow) delete (globalThis as any).window;
+  });
+
+  /**
+   * Records the clip rects, fills, and text draws the renderer issues, so a
+   * test can check where each gutter claimed space and how it painted.
+   */
+  function createRecordingCanvas(width: number, height: number) {
+    const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const fills: Array<{ x: number; y: number; w: number; h: number; style: string }> = [];
+    const texts: Array<{ text: string; x: number; y: number }> = [];
+    const ctx = {
+      clearRect: () => {},
+      save: () => {},
+      restore: () => {},
+      scale: () => {},
+      beginPath: () => {},
+      rect: (x: number, y: number, w: number, h: number) => { rects.push({ x, y, w, h }); },
+      clip: () => {},
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        fills.push({ x, y, w, h, style: String(ctx.fillStyle) });
+      },
+      fillText: (text: string, x: number, y: number) => { texts.push({ text, x, y }); },
+      measureText: () => ({ width: 40 }),
+      moveTo: () => {},
+      lineTo: () => {},
+      closePath: () => {},
+      fill: () => {},
+      stroke: () => {},
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 0,
+      font: '',
+      textBaseline: '',
+      textAlign: '',
+      shadowColor: '',
+      shadowBlur: 0,
+    };
+    const canvas = { width, height, getContext: () => ctx } as unknown as HTMLCanvasElement;
+    return { canvas, rects, fills, texts };
+  }
+
+  function makeTrack(name: string): TrackConfig {
+    return {
+      name,
+      type: 'line',
+      data: new Float32Array(100),
+      color: 'rgb(255, 0, 0)',
+      height: 30,
+      visible: true,
+    };
+  }
+
+  /**
+   * The top gutter runs the full canvas width and the left gutter the full
+   * height, so they contest the top-left corner. The corner belongs to the top
+   * gutter because that is where the track name labels are drawn; left columns
+   * that reach into it cover the labels, which is what made them unreadable on
+   * a map panned so its top edge is off-screen.
+   */
+  it('left columns start below the top gutter so the labels stay clear', () => {
+    const w = 800;
+    const h = 600;
+    const { canvas, rects, fills, texts } = createRecordingCanvas(w, h);
+    const renderer = new TrackRenderer(canvas);
+    renderer.addTrack(makeTrack('Coverage'));
+    renderer.addTrack(makeTrack('Gaps'));
+
+    // Camera panned so the map's top and left edges are both off-screen, which
+    // pins both gutters to the canvas corner and makes them overlap.
+    renderer.render({
+      camera: { x: 0.9, y: 0.9, zoom: 2 },
+      canvasWidth: w,
+      canvasHeight: h,
+      textureSize: 100,
+    });
+
+    const trackH = renderer.getVisibleTrackHeight();
+    // Clip rects as tall as the column (rather than as tall as a band) are the
+    // left tracks; each must begin at or below the bottom of the top gutter.
+    const columns = rects.filter((r) => r.h > trackH);
+    expect(columns.length).toBe(2);
+    for (const c of columns) {
+      expect(c.y).toBeGreaterThanOrEqual(trackH);
+      expect(c.y + c.h).toBeLessThanOrEqual(h);
+    }
+
+    // Labels are drawn inside the top gutter, above where the columns start.
+    expect(texts.map((t) => t.text)).toEqual(['Coverage', 'Gaps']);
+    for (const t of texts) {
+      expect(t.y).toBeLessThan(trackH);
+    }
+
+    // The names sit on one opaque block covering the full gutter height, not a
+    // per-band plate: a translucent or band-height fill lets the track data and
+    // the 2px inter-band gaps show through the names.
+    const block = fills.find((f) => f.x === 0 && f.h === trackH);
+    expect(block, 'a single name block spanning the gutter').toBeDefined();
+    expect(block!.style).toBe('rgb(18, 18, 26)');
+    expect(block!.w).toBeGreaterThan(0);
+    // Every name fits on it.
+    for (const t of texts) {
+      expect(t.x).toBeGreaterThanOrEqual(0);
+      expect(t.x).toBeLessThan(block!.w);
+    }
+  });
+
+  it('draws no left column when the top gutter covers the whole canvas', () => {
+    const w = 800;
+    const h = 40; // shorter than the stacked gutter
+    const { canvas, rects } = createRecordingCanvas(w, h);
+    const renderer = new TrackRenderer(canvas);
+    renderer.addTrack(makeTrack('Coverage'));
+    renderer.addTrack(makeTrack('Gaps'));
+
+    renderer.render({
+      camera: { x: 0.5, y: 0.5, zoom: 1 },
+      canvasWidth: w,
+      canvasHeight: h,
+      textureSize: 100,
+    });
+
+    // Every recorded rect is a top band; no column was emitted with a
+    // negative or zero height.
+    for (const r of rects) {
+      expect(r.h).toBeGreaterThan(0);
     }
   });
 });

@@ -11,8 +11,10 @@
 
 import { getColorMapData, type ColorMapName } from './ColorMaps';
 
-// Vertex shader: transforms quad vertices by camera
-const VERTEX_SHADER = `#version 300 es
+// Vertex shader: transforms quad vertices by camera.
+// Exported so tests can pin the map-space y convention, which has no other
+// automated coverage — GLSL only runs on a real GL context.
+export const VERTEX_SHADER = `#version 300 es
 precision highp float;
 
 in vec2 a_position;
@@ -27,7 +29,15 @@ out vec2 v_texcoord;
 void main() {
   // Apply camera transform
   vec2 pos = (a_position - u_camera) * u_zoom;
-  
+
+  // Map space is genomic: (0,0) is the top-left of the contact matrix and y
+  // increases DOWNWARD, matching every 2D overlay (tracks, labels, minimap,
+  // scaffold/waypoint) and canvasToMap/mapToCanvas. Clip space has +y up, so
+  // the flip belongs here and nowhere else. Omitting it made camera.y mean the
+  // opposite thing to the shader and to the overlays; they agreed only at
+  // camera.y == 0.5, so any vertical pan slid the tracks off the map.
+  pos.y = -pos.y;
+
   // Maintain aspect ratio
   float aspect = u_resolution.x / u_resolution.y;
   if (aspect > 1.0) {
@@ -35,7 +45,7 @@ void main() {
   } else {
     pos.y *= aspect;
   }
-  
+
   gl_Position = vec4(pos * 2.0, 0.0, 1.0);
   v_texcoord = a_texcoord;
 }
@@ -141,7 +151,7 @@ void main() {
 
 // Tile vertex shader: maps a unit quad to a tile's region in map space,
 // then applies the same camera transform as the overview.
-const TILE_VERTEX_SHADER = `#version 300 es
+export const TILE_VERTEX_SHADER = `#version 300 es
 precision highp float;
 
 in vec2 a_position;
@@ -162,6 +172,13 @@ void main() {
   // Apply camera transform (same as overview shader)
   vec2 pos = (mapPos - u_camera) * u_zoom;
 
+  // Same single y flip as the overview shader: map space is genomic y-down,
+  // clip space is y-up. Tile row r covers map y [r/n, (r+1)/n], which is where
+  // its genomic rows actually belong — previously the tile grid was placed in
+  // a y-up space while its rows were indexed y-down, so the detail layer was
+  // mirrored block-by-block against the overview beneath it.
+  pos.y = -pos.y;
+
   float aspect = u_resolution.x / u_resolution.y;
   if (aspect > 1.0) {
     pos.x /= aspect;
@@ -170,12 +187,12 @@ void main() {
   }
 
   gl_Position = vec4(pos * 2.0, 0.0, 1.0);
-  // Flip V to match the overview quad's texcoords (data row 0 = top of map);
-  // without this the detail layer renders vertically mirrored (\\ -> /).
-  v_texcoord = vec2(a_position.x, 1.0 - a_position.y);
-  // Overview is sampled at (x, 1-y) in map space (matches the overview quad's
-  // texcoord convention), so the gate reads the same cell the overview shows.
-  v_overviewcoord = vec2(mapPos.x, 1.0 - mapPos.y);
+  // Tile texture rows are genomic top-down, same as map space, so the texcoord
+  // is the unit-quad position unchanged.
+  v_texcoord = a_position;
+  // The overview texture is indexed the same way, so the gate reads the same
+  // cell the overview shows at this fragment.
+  v_overviewcoord = mapPos;
 }
 `;
 
@@ -338,13 +355,16 @@ export class WebGLRenderer {
   private createQuad(): void {
     const gl = this.gl;
     
-    // Fullscreen quad covering 0-1 range (will be transformed by camera)
+    // Fullscreen quad covering 0-1 range (will be transformed by camera).
+    // Texcoord equals position: map space and data space are the same
+    // genomic, y-down coordinates, so data row 0 sits at map y 0. The vertex
+    // shader flips y once on the way to clip space.
     const vertices = new Float32Array([
       // position (x,y), texcoord (u,v)
-      0, 0,   0, 1,
-      1, 0,   1, 1,
-      0, 1,   0, 0,
-      1, 1,   1, 0,
+      0, 0,   0, 0,
+      1, 0,   1, 0,
+      0, 1,   0, 1,
+      1, 1,   1, 1,
     ]);
     
     this.vao = gl.createVertexArray()!;

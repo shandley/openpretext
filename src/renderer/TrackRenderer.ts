@@ -20,6 +20,10 @@
 
 export type TrackType = 'line' | 'heatmap' | 'marker';
 
+/** Shared by the name block so its width matches the text drawn on it. */
+const TRACK_LABEL_FONT = '11px -apple-system, system-ui, sans-serif';
+const TRACK_LABEL_PADDING = 5;
+
 export interface TrackConfig {
   /** Unique identifier for this track. */
   name: string;
@@ -134,6 +138,24 @@ export class TrackRenderer {
     this.onChange();
   }
 
+  /**
+   * Width (CSS px) of the track-name block, or 0 when no track is visible.
+   * LabelRenderer needs it to keep contig labels off the block: its canvas is
+   * layered above this one, so a label drawn there covers the names.
+   */
+  getLabelBlockWidth(): number {
+    const visible = this.tracks.filter(t => t.visible);
+    if (visible.length === 0) return 0;
+    this.ctx.save();
+    this.ctx.font = TRACK_LABEL_FONT;
+    let width = 0;
+    for (const track of visible) {
+      width = Math.max(width, this.ctx.measureText(track.name).width);
+    }
+    this.ctx.restore();
+    return width + TRACK_LABEL_PADDING * 2;
+  }
+
   // ─── Coordinate Transforms ─────────────────────────────────
   // These exactly match LabelRenderer's transforms so tracks align
   // with the contact map.
@@ -222,15 +244,27 @@ export class TrackRenderer {
     const trackH = this.getVisibleTrackHeight();
     const mapTop = this.mapToScreenY(0, camera, canvasWidth, canvasHeight);
     const mapLeft = this.mapToScreenX(0, camera, canvasWidth, canvasHeight);
-    let topOffset = TrackRenderer.gutterOffset(mapTop, trackH, canvasHeight);
-    let leftOffset = TrackRenderer.gutterOffset(mapLeft, trackH, canvasWidth);
+    const topStart = TrackRenderer.gutterOffset(mapTop, trackH, canvasHeight);
+    const leftStart = TrackRenderer.gutterOffset(mapLeft, trackH, canvasWidth);
 
+    // The gutters cross: top bands run the full canvas width and left columns
+    // the full height, so they contest the top-left corner and paint order
+    // decides who wins. Give the corner to the top gutter, which carries the
+    // track name labels, and start the left columns below it. Without this the
+    // left columns cover the labels whenever the map's left edge sits near the
+    // window edge (panned right, or zoomed in far enough to fill the width).
+    const leftClipTop = topStart + trackH;
+
+    let topOffset = topStart;
+    let leftOffset = leftStart;
     for (const track of visibleTracks) {
       this.renderTopTrack(ctx, track, topOffset, camera, canvasWidth, canvasHeight, textureSize);
-      this.renderLeftTrack(ctx, track, leftOffset, camera, canvasWidth, canvasHeight, textureSize);
+      this.renderLeftTrack(ctx, track, leftOffset, leftClipTop, camera, canvasWidth, canvasHeight, textureSize);
       topOffset += track.height + 2; // 2px gap between tracks
       leftOffset += track.height + 2;
     }
+
+    this.renderTrackNames(ctx, visibleTracks, topStart, trackH);
 
     ctx.restore();
   }
@@ -279,26 +313,65 @@ export class TrackRenderer {
         break;
     }
 
-    // Track name label — the single, horizontal label for this track (the
-    // matching left-edge column is intentionally left unlabelled; it mirrors
-    // these by order). Vertically centred in the band, left-aligned.
-    ctx.font = '11px -apple-system, system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.82)';
+    // Names are not drawn here. They go on one solid block painted over the
+    // whole gutter after every band, so nothing shows through them and the
+    // gaps between bands do not stripe it. See renderTrackNames.
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw the track names on a single solid block at the left of the top gutter.
+   *
+   * Each band spans the whole canvas width, so once the map's left edge is
+   * panned off-screen the track's own data runs under its name and swallows it.
+   * Drawing the names on one opaque block, after every band and sized to the
+   * widest name, gives a fixed rectangle with nothing passing beneath it rather
+   * than a ragged row of per-name plates. It costs a sliver of data at the far
+   * left of each band, which beats a name nobody can read; where the map's left
+   * edge is on screen, the usual view, the block lands on the gutter's own dark
+   * background and is invisible.
+   */
+  private renderTrackNames(
+    ctx: CanvasRenderingContext2D,
+    tracks: TrackConfig[],
+    gutterTop: number,
+    gutterHeight: number,
+  ): void {
+    ctx.save();
+    ctx.font = TRACK_LABEL_FONT;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.fillText(track.name, 5, trackTop + track.height / 2);
+
+    let blockWidth = 0;
+    for (const track of tracks) {
+      blockWidth = Math.max(blockWidth, ctx.measureText(track.name).width);
+    }
+    blockWidth += TRACK_LABEL_PADDING * 2;
+
+    ctx.fillStyle = 'rgb(18, 18, 26)';
+    ctx.fillRect(0, gutterTop, blockWidth, gutterHeight);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.82)';
+    let y = gutterTop;
+    for (const track of tracks) {
+      ctx.fillText(track.name, TRACK_LABEL_PADDING, y + track.height / 2);
+      y += track.height + 2;
+    }
 
     ctx.restore();
   }
 
   /**
    * Draw a track along the left edge (rotated). The track region spans
-   * x = [leftOffset .. leftOffset + track.height] in CSS pixels.
+   * x = [leftOffset .. leftOffset + track.height] in CSS pixels, starting at
+   * `clipTop` so the column stays clear of the top gutter and its labels.
    */
   private renderLeftTrack(
     ctx: CanvasRenderingContext2D,
     track: TrackConfig,
     leftOffset: number,
+    clipTop: number,
     cam: { x: number; y: number; zoom: number },
     w: number,
     h: number,
@@ -307,14 +380,18 @@ export class TrackRenderer {
     const trackLeft = leftOffset;
     const trackRight = leftOffset + track.height;
 
+    const top = Math.max(0, clipTop);
+    const columnHeight = h - top;
+    if (columnHeight <= 0) return;
+
     ctx.save();
     ctx.beginPath();
-    ctx.rect(trackLeft, 0, track.height, h);
+    ctx.rect(trackLeft, top, track.height, columnHeight);
     ctx.clip();
 
     // Opaque dark background so tracks don't overlap map content
     ctx.fillStyle = 'rgba(18, 18, 26, 0.92)';
-    ctx.fillRect(trackLeft, 0, track.height, h);
+    ctx.fillRect(trackLeft, top, track.height, columnHeight);
 
     switch (track.type) {
       case 'line':

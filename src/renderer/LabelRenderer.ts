@@ -6,6 +6,8 @@
  * and contig boundary indicators that would be impractical to do in GLSL.
  */
 
+import { TrackRenderer } from './TrackRenderer';
+
 export interface LabelRenderOptions {
   contigBoundaries: number[];  // normalized 0-1 positions
   contigNames: string[];
@@ -16,6 +18,11 @@ export interface LabelRenderOptions {
   /** Total thickness (CSS px) of the visible track gutters, so contig labels
    *  sit just outside them rather than overlapping the tracks. Default 0. */
   trackGutterPx?: number;
+  /** Width (CSS px) of the track-name block at the left of the top gutter.
+   *  Contig labels keep clear of it: this canvas is layered above the track
+   *  canvas, so a label drawn there sits on top of the block instead of being
+   *  hidden by it. Default 0. */
+  trackLabelBlockPx?: number;
 }
 
 export class LabelRenderer {
@@ -106,6 +113,15 @@ export class LabelRenderer {
       Math.max(fontSize / 2 + labelMargin, mapLeft - gutter - labelMargin - fontSize / 2),
     );
 
+    // The track gutter's own extent, derived the same way TrackRenderer places
+    // it so the two cannot drift apart. Contig labels stay outside it: this
+    // canvas is layered above the track canvas, so anything drawn inside the
+    // gutter lands on top of the track names rather than behind them.
+    const gutterBottom = gutter > 0
+      ? TrackRenderer.gutterOffset(mapTop, gutter, canvasHeight) + gutter
+      : 0;
+    const nameBlockRight = gutter > 0 ? (opts.trackLabelBlockPx ?? 0) : 0;
+
     // Draw labels for each contig along the top edge
     for (let i = 0; i < contigNames.length && i < contigBoundaries.length; i++) {
       const start = i === 0 ? 0 : contigBoundaries[i - 1];
@@ -126,9 +142,17 @@ export class LabelRenderer {
 
       const isHovered = i === hoveredIndex;
 
+      // Centre the name in whatever of the contig is clear of the track-name
+      // block, not in the contig as a whole, so a contig running under the
+      // block is still labelled and the label does not land on it.
+      const topSpanStart = Math.max(screenStartX, nameBlockRight);
+      const topSpan = screenEndX - topSpanStart;
+      if (topSpan < 20) continue;
+      const topLabelX = topSpanStart + topSpan / 2;
+
       // Top label
       ctx.save();
-      ctx.translate(screenX, topLabelY);
+      ctx.translate(topLabelX, topLabelY);
 
       if (isHovered) {
         ctx.fillStyle = '#ffcc00';
@@ -140,7 +164,7 @@ export class LabelRenderer {
       ctx.textAlign = 'center';
 
       // Truncate name if needed
-      const maxWidth = blockWidth - 4;
+      const maxWidth = topSpan - 4;
       let name = contigNames[i];
       const measured = ctx.measureText(name);
       if (measured.width > maxWidth) {
@@ -163,8 +187,16 @@ export class LabelRenderer {
       if (blockHeight < 20) continue;
       if (screenEndY < 0 || screenStartY > canvasHeight) continue;
 
+      // Same treatment down the left edge: the rotated name is centred in the
+      // part of the contig below the top gutter, so it no longer runs up across
+      // the track names. A contig sitting entirely under the gutter is skipped.
+      const leftSpanStart = Math.max(screenStartY, gutterBottom);
+      const leftSpan = screenEndY - leftSpanStart;
+      if (leftSpan < 20) continue;
+      const leftLabelY = leftSpanStart + leftSpan / 2;
+
       ctx.save();
-      ctx.translate(leftLabelX, screenY);
+      ctx.translate(leftLabelX, leftLabelY);
       ctx.rotate(-Math.PI / 2);
 
       if (isHovered) {
@@ -175,7 +207,7 @@ export class LabelRenderer {
       }
 
       ctx.textAlign = 'center';
-      ctx.fillText(contigNames[i], 0, 0, blockHeight - 4);
+      ctx.fillText(contigNames[i], 0, 0, leftSpan - 4);
       ctx.restore();
     }
 

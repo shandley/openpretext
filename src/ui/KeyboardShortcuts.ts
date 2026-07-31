@@ -216,6 +216,13 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
         toggleShortcutsModal();
         break;
 
+      case '0':
+        // Reset to the full-map view. Camera also binds Home, but Mac
+        // keyboards have no Home key (it is Fn + Left), which left the reset
+        // effectively unreachable on a laptop.
+        ctx.camera.resetView();
+        break;
+
       case '+':
       case '=':
         ctx.camera.zoomByFactor(1.3);

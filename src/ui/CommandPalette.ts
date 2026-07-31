@@ -75,7 +75,9 @@ function getCommands(ctx: AppContext) {
     { name: 'Toggle sidebar', shortcut: 'I', action: () => { document.getElementById('sidebar')?.classList.toggle('visible'); ctx.updateSidebarContigList(); } },
     { name: 'Cycle color map', shortcut: '\u2191/\u2193', action: () => cycleColorMap(ctx) },
     { name: 'Toggle minimap', shortcut: 'M', action: () => ctx.minimap.toggle() },
-    { name: 'Reset view', shortcut: 'Home', action: () => ctx.camera.resetView() },
+    // Mac keyboards have no dedicated Home key (it is Fn + Left), so 0 is the
+    // shortcut worth advertising; Home still works for anyone who has one.
+    { name: 'Reset view (fit whole map)', shortcut: '0', keywords: 'home fit zoom out full map overview reset zoom', action: () => ctx.camera.resetView() },
     { name: 'Jump to diagonal', shortcut: 'J', action: () => ctx.camera.jumpToDiagonal() },
     { name: 'Undo', shortcut: '\u2318Z', action: () => performUndo(ctx) },
     { name: 'Redo', shortcut: '\u2318\u21e7Z', action: () => performRedo(ctx) },
@@ -151,12 +153,24 @@ function getCommands(ctx: AppContext) {
   ];
 }
 
+/**
+ * Match a command against the palette query.
+ *
+ * Searches the shortcut and any keywords as well as the name, so a command can
+ * be found by the key that triggers it or by what someone would call it. "Reset
+ * view" was unfindable by anyone searching "home", "fit", or "zoom out".
+ */
+function matchesQuery(cmd: { name: string; shortcut?: string }, query: string): boolean {
+  const q = query.toLowerCase();
+  if (!q) return true;
+  const keywords = (cmd as { keywords?: string }).keywords ?? '';
+  return `${cmd.name} ${cmd.shortcut ?? ''} ${keywords}`.toLowerCase().includes(q);
+}
+
 function updateCommandResults(ctx: AppContext, query: string): void {
   const results = document.getElementById('command-results')!;
   const commands = getCommands(ctx);
-  const filtered = commands.filter(c =>
-    c.name.toLowerCase().includes(query.toLowerCase())
-  );
+  const filtered = commands.filter(c => matchesQuery(c, query));
 
   selectedCommandIndex = 0;
   results.innerHTML = filtered.map((cmd, i) =>
@@ -188,9 +202,7 @@ function moveCommandSelection(delta: number): void {
 function executeSelectedCommand(ctx: AppContext): void {
   const query = (document.getElementById('command-input') as HTMLInputElement).value;
   const commands = getCommands(ctx);
-  const filtered = commands.filter(c =>
-    c.name.toLowerCase().includes(query.toLowerCase())
-  );
+  const filtered = commands.filter(c => matchesQuery(c, query));
   if (filtered[selectedCommandIndex]) {
     filtered[selectedCommandIndex].action();
   }

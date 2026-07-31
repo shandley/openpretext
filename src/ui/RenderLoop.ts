@@ -124,9 +124,9 @@ export function startRenderLoop(ctx: AppContext): void {
 
     if (ctx.labelRenderer && s.map) {
       const contigNames = getContigNames();
-      const trackGutterPx = (ctx.trackRenderer && ctx.tracksVisible)
-        ? ctx.trackRenderer.getVisibleTrackHeight()
-        : 0;
+      const tracksShown = Boolean(ctx.trackRenderer && ctx.tracksVisible);
+      const trackGutterPx = tracksShown ? ctx.trackRenderer!.getVisibleTrackHeight() : 0;
+      const trackLabelBlockPx = tracksShown ? ctx.trackRenderer!.getLabelBlockWidth() : 0;
       ctx.labelRenderer.render({
         contigBoundaries: ctx.contigBoundaries,
         contigNames,
@@ -135,6 +135,7 @@ export function startRenderLoop(ctx: AppContext): void {
         canvasWidth: w,
         canvasHeight: h,
         trackGutterPx,
+        trackLabelBlockPx,
       });
 
       // Draw drag indicator on the label canvas if dragging

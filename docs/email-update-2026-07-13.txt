@@ -1,0 +1,19 @@
+Subject: Re: Pretext
+
+Hi Belen and Carlos,
+
+A short update on OpenPretext.
+
+The main new thing is a set of practice genomes from across the tree of life (a starfish, an earthworm, a mushroom, a plant, and more), each with a brief guided exercise where you curate a real, uncurated assembly yourself. They sit alongside the bird and vertebrate examples, and everything loads faster now.
+
+A few smaller items you may find useful:
+- A haplotig detector flags likely duplicate-haplotype contigs, which should help on fragmented assemblies.
+- Live quality stats (scaffold N50, auN, percent assigned) update as you curate, with a before/after view of the map.
+- For the 3D side, the analysis panel gained an observed/expected map toggle and a P(s) decay curve.
+
+Everything is live at https://shandley.github.io/openpretext/, with a plain-language guide at https://openpretext-guide.vercel.app.
+
+I would value your feedback, especially on the new exercises. No rush.
+
+Best,
+Scott
