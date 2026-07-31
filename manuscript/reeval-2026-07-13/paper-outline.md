@@ -141,13 +141,50 @@ sections describe the quantitative version.
 
 ## Pre-submission blockers
 
-In-control items, to clear before writing:
+All four cleared 2026-07-31. Two were hiding defects rather than paperwork, and both
+change what the paper can claim.
 
-- BC4 codec CI ground-truth test.
-- `MAX_UNDO_DEPTH=200` reversibility: fix or disclose.
-- README/CHANGELOG count drift. Re-check current state before acting; a later documentation
-  audit may already have resolved this.
-- AGP scaffold-name and gap-semantics disclosure.
+- **BC4 codec ground-truth test.** Done (`06d2f5f`). 19 cases derived from the Khronos
+  RGTC text and `docs/PRETEXT_FORMAT.md` rather than from the decoder's output. The
+  implementation agrees with the spec. State in the paper that the decoder is not
+  bit-exact against a GPU RGTC decoder, since it rounds an 8-bit intermediate; the error
+  is bounded at half an 8-bit step and the test enforces the bound.
+- **Undo depth.** Was a correctness bug, not a caveat (`4c95239`). Trimming split batched
+  actions, so a single auto-sort on a fragmented assembly could leave an order no undo
+  could restore, and script preview could turn a dry run into a permanent edit. Fixed:
+  trimming retreats to batch boundaries, scripts and previews suspend it, cap raised to
+  1,000 on measured cost. **The reversibility claim is safe to make now and was not
+  before.**
+- **README count drift.** Done (`296e8f7`), and it surfaced that 11 of 16 specimen contig
+  counts in the shipped catalog were wrong, mostly the post-curation count against a
+  pre-curation asset (`6805cab`).
+- **AGP disclosure.** Done, `docs/AGP_EXPORT.md` (`e4f13d8`).
+
+### Left open deliberately, both AGP export behaviour
+
+Neither is fixed, because both change output and want a decision.
+
+1. A join of two inverted contigs writes `-` on a component whose halves are not
+   reversed, contradicting the FASTA we write ourselves. A mixed-orientation join
+   collapses the strand to `+` and loses one half.
+2. After any cut or join, component names are synthesized (`a+b`, `_L`/`_R`) and resolve
+   against no input assembly. PretextView instead writes coordinate spans of the original
+   scaffolds, which is the AGP idiom the community consumes.
+
+Item 2 bears on the Results section: if the curator performs any joins, our AGP cannot be
+scored against the published one by joining on component names, which is how the
+relatability check in `revalidation/gonogo-agp-relatability.md` works. Decide before the
+quail curation happens, not after.
+
+### Also worth deciding before submission
+
+- `sortByLength` and the other batch actions push operations with no batch context, so a
+  single click on a large assembly still fills the undo stack with individually undoable
+  steps. Correct, but not one-click undoable.
+- There is no `redoBatch`: one keystroke undoes an auto-sort, N put it back. Reversibility
+  holds both ways; the interaction is asymmetric. Phrase the claim accordingly.
+- Analysis track order varies run to run, so any multi-panel figure showing tracks needs
+  that pinned first.
 
 ## Venue-fit checklist
 
