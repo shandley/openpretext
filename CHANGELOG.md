@@ -158,6 +158,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **The map now shares one vertical coordinate convention with everything drawn
+  over it.** The vertex shaders placed the map in a y-up space while the camera,
+  the overlays (tracks, contig labels, minimap, scaffold and waypoint overlays,
+  the drag-reorder indicator), and `canvasToMap`/`mapToCanvas` all worked in
+  genomic y-down coordinates. A quad texcoord flip hid the disagreement at
+  `camera.y == 0.5`, so a reset view looked correct and everything drifted from
+  there by twice the vertical offset. Dragging up moved the map down while the
+  left-edge tracks moved up (reported by Carlos at IBE Barcelona); zoom-to-cursor
+  anchored the wrong row and walked off the diagonal as you zoomed; and detail
+  tiles were placed mirrored block-by-block against the overview, so past a few
+  hundred percent the detail layer showed the anti-diagonal counterpart of the
+  region you were looking at instead of the region itself. Each vertex shader now
+  performs the single y flip that clip space needs and nothing re-flips it, which
+  also corrects click hit-testing, the contig highlight, and the minimap viewport
+  box away from center. Horizontal behaviour was never affected.
 - **Insulation and Directionality Index are now contig-aware.** Both slid their
   windows without knowing contig boundaries, so at every contig junction the
   window averaged across into the neighboring contig and manufactured a false
