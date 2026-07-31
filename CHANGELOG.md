@@ -173,6 +173,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   performs the single y flip that clip space needs and nothing re-flips it, which
   also corrects click hit-testing, the contig highlight, and the minimap viewport
   box away from center. Horizontal behaviour was never affected.
+  A saved session or waypoint written by an earlier build stores a `camera.y`
+  under the old reading, so restoring one lands at the vertically mirrored
+  position. These are not migrated on load: the old value was already pointing
+  somewhere other than where the map drew it, and carrying it forward would
+  preserve that. Any pan corrects it, and no curation data is involved.
 - **Insulation and Directionality Index are now contig-aware.** Both slid their
   windows without knowing contig boundaries, so at every contig junction the
   window averaged across into the neighboring contig and manufactured a false
