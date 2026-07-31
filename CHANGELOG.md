@@ -166,7 +166,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   left columns begin below it, and the names sit on one opaque block sized to the
   widest of them, so nothing passes underneath them. Where the map's left edge is
   on screen, the usual view, the block falls on the gutter's own dark background
-  and is invisible.
+  and is invisible. Contig labels live on a canvas layered above the tracks, so
+  they could not be hidden by the block and instead ran across it; each is now
+  centred in the part of its contig that clears the gutter rather than in the
+  contig as a whole, which also keeps a partly scrolled-off contig labelled.
 - **Reset view is reachable on a Mac.** It was bound only to Home, which laptop
   keyboards do not have (it is Fn + Left), and the command palette matched on
   command names alone, so searching "home", "fit", or "zoom out" found nothing.

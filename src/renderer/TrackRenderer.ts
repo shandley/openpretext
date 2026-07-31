@@ -138,6 +138,24 @@ export class TrackRenderer {
     this.onChange();
   }
 
+  /**
+   * Width (CSS px) of the track-name block, or 0 when no track is visible.
+   * LabelRenderer needs it to keep contig labels off the block: its canvas is
+   * layered above this one, so a label drawn there covers the names.
+   */
+  getLabelBlockWidth(): number {
+    const visible = this.tracks.filter(t => t.visible);
+    if (visible.length === 0) return 0;
+    this.ctx.save();
+    this.ctx.font = TRACK_LABEL_FONT;
+    let width = 0;
+    for (const track of visible) {
+      width = Math.max(width, this.ctx.measureText(track.name).width);
+    }
+    this.ctx.restore();
+    return width + TRACK_LABEL_PADDING * 2;
+  }
+
   // ─── Coordinate Transforms ─────────────────────────────────
   // These exactly match LabelRenderer's transforms so tracks align
   // with the contact map.
