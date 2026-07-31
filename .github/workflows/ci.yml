@@ -148,6 +148,33 @@ jobs:
       - name: Run regression benchmarks
         run: npx tsx bench/cli.ts regression --data-dir bench/data/regression
 
+      # Curation as code, gated. Runs a real DSL protocol against a real
+      # assembly with no browser, then runs it again and compares the two AGP
+      # exports byte for byte. The protocol's own assertions fail the step if
+      # curation stops behaving; the comparison fails it if curation stops being
+      # reproducible. Skipped when the specimen download was flaky, matching the
+      # regression step, so infra never blocks a deploy.
+      - name: Run curation protocol and check reproducibility
+        run: |
+          specimen=bench/data/regression/Coturnix_chinensis_post.pretext
+          if [ ! -f "$specimen" ]; then
+            echo "::warning::$specimen not present; skipping the curation protocol check"
+            exit 0
+          fi
+          mkdir -p bench/output/protocol
+          for run in 1 2; do
+            npx tsx bench/curate.ts \
+              --pretext "$specimen" \
+              --script bench/protocols/reproducibility-check.dsl \
+              --out "bench/output/protocol/run$run.agp"
+          done
+          if ! cmp -s bench/output/protocol/run1.agp bench/output/protocol/run2.agp; then
+            echo "::error::the same protocol produced different AGP on two runs"
+            diff bench/output/protocol/run1.agp bench/output/protocol/run2.agp | head -20
+            exit 1
+          fi
+          echo "curation protocol reproducible: $(wc -c < bench/output/protocol/run1.agp) bytes, identical across two runs"
+
   deploy:
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     # Gate the deploy on the regression benchmark: a genuine AutoSort/AutoCut
