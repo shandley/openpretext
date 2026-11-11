@@ -55,9 +55,6 @@ async function loadPretextFromBuffer(
 
   updateLoading('Uploading to GPU...', 92);
   ctx.renderer.uploadContactMap(contactMap, overviewSize);
-  // Gate overview = the clean overview in original order; the detail-tile gate
-  // (clean mode) samples this so it aligns with original-order tiles.
-  ctx.renderer.uploadGateOverview(contactMap, overviewSize);
   ctx.faithfulOverviewOriginal = null; // invalidate cache for the new file
   ctx.minimap.updateThumbnail(contactMap, overviewSize, undefined, contrast.floor, contrast.ceil);
   ctx.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);

@@ -7,12 +7,15 @@
  */
 
 import { state, selectContigOrder } from './State';
+import { isFileOrder } from './DisplayMapping';
 
 let cachedContigNames: string[] | null = null;
 let cachedContigScaffoldIds: (number | null)[] | null = null;
 let cachedContigBoundaries: number[] | null = null;
+let cachedIsFileOrder: boolean | null = null;
 
 function invalidateDerivedCaches(): void {
+  cachedIsFileOrder = null;
   cachedContigNames = null;
   cachedContigScaffoldIds = null;
   cachedContigBoundaries = null;
@@ -66,4 +69,16 @@ export function getContigBoundaries(): number[] {
     cachedContigBoundaries.push(accumulated / totalPixels);
   }
   return cachedContigBoundaries;
+}
+
+/**
+ * True when the displayed order still reads the file's texels in place (see
+ * DisplayMapping.isFileOrder). Cached until contigOrder or map changes.
+ */
+export function getDisplayIsFileOrder(): boolean {
+  if (cachedIsFileOrder !== null) return cachedIsFileOrder;
+  const s = state.get();
+  if (!s.map) return true;
+  cachedIsFileOrder = isFileOrder(s.map.contigs, s.contigOrder);
+  return cachedIsFileOrder;
 }

@@ -60,6 +60,7 @@ in vec2 v_texcoord;
 uniform sampler2D u_contactMap;
 uniform sampler2D u_colorMap;
 uniform vec2 u_resolution;
+uniform float u_zoom;
 uniform float u_gamma;
 uniform float u_floor;   // contrast range minimum (hidden at/below)
 uniform float u_ceil;    // contrast range maximum (saturated at/above)
@@ -69,6 +70,10 @@ uniform int u_numContigs;
 uniform float u_highlightStart;
 uniform float u_highlightEnd;
 uniform bool u_hasHighlight;
+// false: draw the contact map. true: draw only the grid and highlight, with
+// alpha, so they can be laid over whatever is already in the framebuffer
+// (the overview and any detail tiles).
+uniform bool u_overlayOnly;
 
 // Contig boundaries (normalized 0-1, sorted ascending) in an R32F texture,
 // width = u_numContigs, height = 1. Sampled via texelFetch + binary search.
@@ -109,43 +114,52 @@ float gridDistance(vec2 uv, int numContigs) {
              nearestBoundaryDist(uv.y, numContigs));
 }
 
+// Overlay accumulator: premultiplied colour and remaining transmittance.
+vec3 ovColor = vec3(0.0);
+float ovTrans = 1.0;
+void overlay(vec3 c, float a) {
+  ovColor = ovColor * (1.0 - a) + c * a;
+  ovTrans *= (1.0 - a);
+}
+
 void main() {
-  // Sample the contact map (single channel intensity)
-  float intensity = texture(u_contactMap, v_texcoord).r;
+  if (!u_overlayOnly) {
+    // Sample the contact map (single channel intensity)
+    float intensity = texture(u_contactMap, v_texcoord).r;
 
-  // Rescale to the [floor, ceil] contrast range: <=floor -> 0 (background),
-  // >=ceil -> 1 (saturated), linear in between. Then gamma correct.
-  float t = clamp((intensity - u_floor) / max(u_ceil - u_floor, 1e-5), 0.0, 1.0);
-  float mapped = applyGamma(t, u_gamma);
+    // Rescale to the [floor, ceil] contrast range: <=floor -> 0 (background),
+    // >=ceil -> 1 (saturated), linear in between. Then gamma correct.
+    float t = clamp((intensity - u_floor) / max(u_ceil - u_floor, 1e-5), 0.0, 1.0);
+    float mapped = applyGamma(t, u_gamma);
 
-  // Look up color from the 1D color map texture
-  vec4 color = texture(u_colorMap, vec2(mapped, 0.5));
+    // Look up color from the 1D color map texture
+    fragColor = texture(u_colorMap, vec2(mapped, 0.5));
+    return;
+  }
 
-  // Grid overlay with anti-aliased lines
+  // Grid overlay with anti-aliased dark lines
   if (u_showGrid) {
     float dist = gridDistance(v_texcoord, u_numContigs);
-    float lineWidth = 1.5 / max(u_resolution.x, u_resolution.y);
+    // Constant on-screen width. The map's unit square spans
+    // zoom * min(resolution) device pixels, so this is a 1.5 px falloff at
+    // every zoom. (A width fixed in map units grows into a thick band.)
+    float lineWidth = 1.5 / (u_zoom * min(u_resolution.x, u_resolution.y));
     float line = 1.0 - smoothstep(0.0, lineWidth, dist);
-    // Use a dark semi-transparent line that works on any background
-    vec4 gridColor = vec4(0.0, 0.0, 0.0, 0.6);
-    color = mix(color, gridColor, line * u_gridOpacity);
+    overlay(vec3(0.0), line * u_gridOpacity);
   }
 
   // Highlight selected/hovered contig
   if (u_hasHighlight) {
     bool inHighlightX = v_texcoord.x >= u_highlightStart && v_texcoord.x <= u_highlightEnd;
     bool inHighlightY = v_texcoord.y >= u_highlightStart && v_texcoord.y <= u_highlightEnd;
-    if (inHighlightX || inHighlightY) {
-      // Brighten the cross-hair region
-      color = mix(color, vec4(1.0, 1.0, 0.5, 1.0), 0.15);
-    }
-    if (inHighlightX && inHighlightY) {
-      // Stronger highlight at intersection
-      color = mix(color, vec4(1.0, 1.0, 0.3, 1.0), 0.12);
-    }
+    // Brighten the cross-hair region, more strongly at the intersection
+    if (inHighlightX || inHighlightY) overlay(vec3(1.0, 1.0, 0.5), 0.15);
+    if (inHighlightX && inHighlightY) overlay(vec3(1.0, 1.0, 0.3), 0.12);
   }
 
-  fragColor = color;
+  float alpha = 1.0 - ovTrans;
+  if (alpha <= 0.0) discard;
+  fragColor = vec4(ovColor / alpha, alpha);
 }
 `;
 
@@ -163,7 +177,6 @@ uniform vec2 u_tileOffset; // tile origin in map space (0-1)
 uniform vec2 u_tileScale;  // tile size in map space (1/tilesPerDim)
 
 out vec2 v_texcoord;
-out vec2 v_overviewcoord; // where to sample the overview texture for gating
 
 void main() {
   // Map unit quad [0,1] to tile's region in map space
@@ -190,48 +203,54 @@ void main() {
   // Tile texture rows are genomic top-down, same as map space, so the texcoord
   // is the unit-quad position unchanged.
   v_texcoord = a_position;
-  // The overview texture is indexed the same way, so the gate reads the same
-  // cell the overview shows at this fragment.
-  v_overviewcoord = mapPos;
 }
 `;
 
 // Tile fragment shader: samples tile texture, applies gamma + color map.
-// No grid or highlight — those come from the overview layer underneath.
+//
+// A loaded tile is authoritative for the area it covers: every fragment is
+// drawn, including empty ones, which take the colour map's zero colour. It
+// must not be masked by, or let through, the coarser overview underneath.
+// Doing either shows the reader something the file does not contain at this
+// position (hidden weak contacts in one case, empty texels painted with a
+// coarse average in the other).
+//
+// No grid or highlight here: those are drawn over the tiles by the overlay
+// pass (see renderOverlay).
 const TILE_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
 in vec2 v_texcoord;
-in vec2 v_overviewcoord;
 
 uniform sampler2D u_tileTexture;
 uniform sampler2D u_colorMap;
-uniform sampler2D u_overview;  // original-order overview, for the gate
 uniform float u_gamma;
 uniform float u_floor;   // contrast range minimum (hidden at/below)
 uniform float u_ceil;    // contrast range maximum (saturated at/above)
-uniform bool u_gateEnabled; // 'clean' mode: hide detail where the overview is empty
-uniform float u_gateThresh; // overview value below which detail is suppressed
 
 out vec4 fragColor;
 
 void main() {
-  // Overview gate (clean mode): only show detail where the coarse overview has
-  // signal. This keeps the detail layer consistent with the overview so sparse
-  // off-diagonal contacts don't "pop in" on zoom. Disabled in faithful mode.
-  if (u_gateEnabled && texture(u_overview, v_overviewcoord).r < u_gateThresh) discard;
-
   float intensity = texture(u_tileTexture, v_texcoord).r;
-  // Skip empty/zero-data fragments (so the overview shows through instead of an
-  // opaque tile) and any contact at/below the floor. The 1/255 minimum preserves
-  // the empty-tile discard when the floor is 0.
-  if (intensity <= max(u_floor, 0.0039)) discard;
   // Rescale to the [floor, ceil] contrast range, then gamma correct.
   float t = clamp((intensity - u_floor) / max(u_ceil - u_floor, 1e-5), 0.0, 1.0);
   float mapped = pow(t, u_gamma);
   fragColor = texture(u_colorMap, vec2(mapped, 0.5));
 }
 `;
+
+export interface RenderOptions {
+  gamma?: number;
+  floor?: number;
+  ceil?: number;
+  showGrid?: boolean;
+  gridOpacity?: number;
+  contigBoundaries?: number[];
+  highlightStart?: number;
+  highlightEnd?: number;
+  /** Skip the grid/highlight pass; the caller will call renderOverlay(). */
+  deferOverlay?: boolean;
+}
 
 export class WebGLRenderer {
   private gl: WebGL2RenderingContext;
@@ -241,12 +260,6 @@ export class WebGLRenderer {
   // Textures
   private contactMapTexture: WebGLTexture | null = null;
   private colorMapTexture: WebGLTexture | null = null;
-  // Clean overview in original (file) contig order — sampled by the detail-tile
-  // gate. Kept separate from contactMapTexture because the displayed overview
-  // may be reordered (curation) or max-pooled (faithful mode), while the gate
-  // must align with the original-order detail tiles.
-  private gateOverviewTexture: WebGLTexture | null = null;
-  private gateOverviewSize = 0;
 
   // Geometry
   private vao: WebGLVertexArrayObject | null = null;
@@ -317,7 +330,7 @@ export class WebGLRenderer {
     const uniformNames = [
       'u_camera', 'u_zoom', 'u_resolution', 'u_contactMap', 'u_colorMap',
       'u_gamma', 'u_floor', 'u_ceil', 'u_showGrid', 'u_gridOpacity', 'u_numContigs', 'u_boundaryTex',
-      'u_highlightStart', 'u_highlightEnd', 'u_hasHighlight'
+      'u_highlightStart', 'u_highlightEnd', 'u_hasHighlight', 'u_overlayOnly'
     ];
     for (const name of uniformNames) {
       this.uniforms[name] = gl.getUniformLocation(this.program, name);
@@ -333,8 +346,10 @@ export class WebGLRenderer {
     this.initTileProgram();
 
     // Set up blending
+    // Colour blends by source alpha; destination alpha is kept at 1 so the
+    // overlay pass never makes the canvas see-through to the page behind it.
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
 
   private compileShader(type: number, source: string): WebGLShader | null {
@@ -423,32 +438,6 @@ export class WebGLRenderer {
   }
 
   /**
-   * Upload the original-order clean overview used by the detail-tile gate.
-   * Call once per file load (with the original, un-reordered overview). The
-   * gate samples this so detail tiles (always drawn in original order) align
-   * with it regardless of how the displayed overview is reordered or pooled.
-   */
-  uploadGateOverview(data: Float32Array, size: number): void {
-    const gl = this.gl;
-    if (this.gateOverviewTexture) gl.deleteTexture(this.gateOverviewTexture);
-
-    this.gateOverviewTexture = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D, this.gateOverviewTexture);
-
-    const u8data = new Uint8Array(size * size);
-    for (let i = 0; i < data.length; i++) {
-      u8data[i] = Math.round(Math.min(1.0, Math.max(0.0, data[i])) * 255);
-    }
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, size, size, 0, gl.RED, gl.UNSIGNED_BYTE, u8data);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    this.gateOverviewSize = size;
-    this.needsRender = true;
-  }
-
-  /**
    * Set the color map used for rendering.
    */
   setColorMap(name: ColorMapName): void {
@@ -529,16 +518,7 @@ export class WebGLRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
-  render(camera: { x: number; y: number; zoom: number }, options: {
-    gamma?: number;
-    floor?: number;
-    ceil?: number;
-    showGrid?: boolean;
-    gridOpacity?: number;
-    contigBoundaries?: number[];
-    highlightStart?: number;
-    highlightEnd?: number;
-  } = {}): void {
+  render(camera: { x: number; y: number; zoom: number }, options: RenderOptions = {}): void {
     const gl = this.gl;
     
     // Resize canvas to match display size
@@ -566,9 +546,47 @@ export class WebGLRenderer {
     gl.uniform1f(this.uniforms['u_gamma']!, options.gamma ?? 0.5);
     gl.uniform1f(this.uniforms['u_floor']!, options.floor ?? 0);
     gl.uniform1f(this.uniforms['u_ceil']!, options.ceil ?? 1);
-    gl.uniform1i(this.uniforms['u_showGrid']!, (options.showGrid ?? false) ? 1 : 0);
+    gl.uniform1i(this.uniforms['u_overlayOnly']!, 0);
+
+    // Bind textures
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.contactMapTexture);
+    gl.uniform1i(this.uniforms['u_contactMap']!, 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
+    gl.uniform1i(this.uniforms['u_colorMap']!, 1);
+
+    // Draw
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+
+    if (!options.deferOverlay) this.renderOverlay(camera, options);
+  }
+
+  /**
+   * Draw the contig grid and the highlight band over whatever is already in
+   * the framebuffer. render() calls this itself unless `deferOverlay` is set;
+   * a caller that draws detail tiles defers it and calls it after the tiles,
+   * so the grid stays visible on top of them.
+   */
+  renderOverlay(camera: { x: number; y: number; zoom: number }, options: RenderOptions = {}): void {
+    const gl = this.gl;
+    if (!this.program) return;
+
+    const showGrid = options.showGrid ?? false;
+    const hasHighlight = options.highlightStart !== undefined && options.highlightEnd !== undefined;
+    if (!showGrid && !hasHighlight) return;
+
+    gl.useProgram(this.program);
+    gl.uniform2f(this.uniforms['u_camera']!, camera.x, camera.y);
+    gl.uniform1f(this.uniforms['u_zoom']!, camera.zoom);
+    gl.uniform2f(this.uniforms['u_resolution']!, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.uniform1i(this.uniforms['u_overlayOnly']!, 1);
+    gl.uniform1i(this.uniforms['u_showGrid']!, showGrid ? 1 : 0);
     gl.uniform1f(this.uniforms['u_gridOpacity']!, options.gridOpacity ?? 0.5);
-    
+
     // Contig boundaries: upload to an R32F texture only when the array
     // reference changes (DerivedState memoizes it per order/map change). The
     // shader binary-searches it, so any contig count is supported.
@@ -579,22 +597,11 @@ export class WebGLRenderer {
     }
     gl.uniform1i(this.uniforms['u_numContigs']!, this.boundaryTexCount);
 
-    // Highlight
-    const hasHighlight = options.highlightStart !== undefined && options.highlightEnd !== undefined;
     gl.uniform1i(this.uniforms['u_hasHighlight']!, hasHighlight ? 1 : 0);
     if (hasHighlight) {
       gl.uniform1f(this.uniforms['u_highlightStart']!, options.highlightStart!);
       gl.uniform1f(this.uniforms['u_highlightEnd']!, options.highlightEnd!);
     }
-    
-    // Bind textures
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.contactMapTexture);
-    gl.uniform1i(this.uniforms['u_contactMap']!, 0);
-    
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
-    gl.uniform1i(this.uniforms['u_colorMap']!, 1);
 
     if (this.boundaryTexture) {
       gl.activeTexture(gl.TEXTURE2);
@@ -602,7 +609,6 @@ export class WebGLRenderer {
       gl.uniform1i(this.uniforms['u_boundaryTex']!, 2);
     }
 
-    // Draw
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
@@ -698,8 +704,7 @@ export class WebGLRenderer {
     const tileUniformNames = [
       'u_camera', 'u_zoom', 'u_resolution',
       'u_tileOffset', 'u_tileScale',
-      'u_tileTexture', 'u_colorMap', 'u_overview', 'u_gamma', 'u_floor', 'u_ceil',
-      'u_gateEnabled', 'u_gateThresh',
+      'u_tileTexture', 'u_colorMap', 'u_gamma', 'u_floor', 'u_ceil',
     ];
     for (const name of tileUniformNames) {
       this.tileUniforms[name] = gl.getUniformLocation(this.tileProgram, name);
@@ -728,56 +733,6 @@ export class WebGLRenderer {
   }
 
   /**
-   * Render a single detail tile on top of the overview.
-   *
-   * @param texture     The tile's GL texture (R8 format).
-   * @param col         Tile column in the grid.
-   * @param row         Tile row in the grid.
-   * @param tilesPerDim Number of tiles per map dimension.
-   * @param camera      Current camera state.
-   * @param gamma       Gamma correction value.
-   */
-  renderTile(
-    texture: WebGLTexture,
-    col: number,
-    row: number,
-    tilesPerDim: number,
-    camera: { x: number; y: number; zoom: number },
-    gamma: number,
-  ): void {
-    const gl = this.gl;
-    if (!this.tileProgram || !this.tileVao) return;
-
-    gl.useProgram(this.tileProgram);
-
-    // Camera and resolution uniforms
-    gl.uniform2f(this.tileUniforms['u_camera']!, camera.x, camera.y);
-    gl.uniform1f(this.tileUniforms['u_zoom']!, camera.zoom);
-    gl.uniform2f(this.tileUniforms['u_resolution']!, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    gl.uniform1f(this.tileUniforms['u_gamma']!, gamma);
-
-    // Tile position in map space
-    const tileSize = 1.0 / tilesPerDim;
-    gl.uniform2f(this.tileUniforms['u_tileOffset']!, col * tileSize, row * tileSize);
-    gl.uniform2f(this.tileUniforms['u_tileScale']!, tileSize, tileSize);
-
-    // Bind tile texture to unit 0
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.uniform1i(this.tileUniforms['u_tileTexture']!, 0);
-
-    // Bind color map to unit 1
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
-    gl.uniform1i(this.tileUniforms['u_colorMap']!, 1);
-
-    // Draw
-    gl.bindVertexArray(this.tileVao);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    gl.bindVertexArray(null);
-  }
-
-  /**
    * Begin a batch of detail-tile draws. Binds the tile program, uploads the
    * uniforms shared by all tiles in the frame (camera, zoom, resolution, gamma),
    * binds the color map, and binds the tile VAO once. Call drawTile() per tile,
@@ -788,8 +743,6 @@ export class WebGLRenderer {
     gamma: number,
     floor: number = 0,
     ceil: number = 1,
-    gateEnabled: boolean = false,
-    gateThresh: number = 0.006,
   ): void {
     const gl = this.gl;
     if (!this.tileProgram || !this.tileVao) return;
@@ -800,16 +753,9 @@ export class WebGLRenderer {
     gl.uniform1f(this.tileUniforms['u_gamma']!, gamma);
     gl.uniform1f(this.tileUniforms['u_floor']!, floor);
     gl.uniform1f(this.tileUniforms['u_ceil']!, ceil);
-    // Gate can only run if we have an overview texture to sample.
-    const gate = gateEnabled && this.gateOverviewTexture !== null;
-    gl.uniform1i(this.tileUniforms['u_gateEnabled']!, gate ? 1 : 0);
-    gl.uniform1f(this.tileUniforms['u_gateThresh']!, gateThresh);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
     gl.uniform1i(this.tileUniforms['u_colorMap']!, 1);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.gateOverviewTexture);
-    gl.uniform1i(this.tileUniforms['u_overview']!, 2);
     gl.bindVertexArray(this.tileVao);
   }
 
@@ -835,7 +781,6 @@ export class WebGLRenderer {
     const gl = this.gl;
     if (this.contactMapTexture) gl.deleteTexture(this.contactMapTexture);
     if (this.colorMapTexture) gl.deleteTexture(this.colorMapTexture);
-    if (this.gateOverviewTexture) gl.deleteTexture(this.gateOverviewTexture);
     if (this.boundaryTexture) gl.deleteTexture(this.boundaryTexture);
     if (this.program) gl.deleteProgram(this.program);
     if (this.vao) gl.deleteVertexArray(this.vao);

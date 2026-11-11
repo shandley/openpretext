@@ -9,7 +9,7 @@ import { events } from '../core/EventBus';
 import { renderDragIndicator } from '../curation/DragReorder';
 import { renderComparisonOverlay } from './ComparisonMode';
 import type { TileKey } from '../renderer/TileManager';
-import { getContigNames, getContigScaffoldIds } from '../core/DerivedState';
+import { getContigNames, getContigScaffoldIds, getDisplayIsFileOrder } from '../core/DerivedState';
 
 /**
  * Delay before kicking off detail-tile decoding once camera motion settles.
@@ -20,6 +20,21 @@ const TILE_DECODE_DEBOUNCE_MS = 100;
 
 /** Detail tiles only stream in once zoomed past the overview. */
 const TILE_DETAIL_MIN_ZOOM = 1.5;
+
+/**
+ * Whether detail tiles may be drawn for the current state.
+ *
+ * Tiles are stored and placed in file coordinates. Once the curator has moved
+ * or inverted anything, a tile's contents no longer belong at the place it
+ * would be drawn, so the zoomed view would show pre-edit data under the
+ * post-edit grid. Until tiles are drawn through the display mapping, they are
+ * switched off in that case and the (correctly reordered) overview is shown.
+ */
+function detailTilesUsable(): boolean {
+  return getDisplayIsFileOrder();
+}
+
+const DETAIL_OFF_NOTICE = 'Overview resolution: zoom detail is off after reordering';
 
 export function startRenderLoop(ctx: AppContext): void {
   // Wake the render loop whenever something that affects the display changes.
@@ -85,7 +100,7 @@ export function startRenderLoop(ctx: AppContext): void {
       }
     }
 
-    ctx.renderer.render(cam, {
+    const renderOptions = {
       gamma: s.gamma,
       floor: s.signalFloor,
       ceil: s.signalCeil,
@@ -94,28 +109,36 @@ export function startRenderLoop(ctx: AppContext): void {
       contigBoundaries: ctx.contigBoundaries,
       highlightStart,
       highlightEnd,
-    });
+    };
+    ctx.renderer.render(cam, { ...renderOptions, deferOverlay: true });
 
     // Render detail tiles on top of the overview. Shared GL state (program,
     // camera/zoom/gamma uniforms, color map) is set once per frame, not per tile.
-    if (ctx.tileManager && s.map?.parsedHeader && cam.zoom > 1.5) {
+    const wantDetail = Boolean(ctx.tileManager && s.map?.parsedHeader && cam.zoom > TILE_DETAIL_MIN_ZOOM);
+    const detailOk = detailTilesUsable();
+    if (wantDetail && detailOk && ctx.tileManager && s.map?.parsedHeader) {
       const tilesPerDim = s.map.parsedHeader.numberOfTextures1D;
       let started = false;
       for (const key of ctx.tileManager.visibleKeys) {
         const tile = ctx.tileManager.getTile(key);
         if (tile && tile.state === 'loaded' && tile.texture) {
           if (!started) {
-            // Both modes gate the detail layer by their own overview, so detail
-            // stays consistent with the overview at every zoom (no pop-in/shift):
-            // clean suppresses faint off-diagonal; faithful keeps the max-pooled
-            // signal but not the finer-mip noise the overview doesn't carry.
-            ctx.renderer.beginTiles(cam, s.gamma, s.signalFloor, s.signalCeil, true);
+            ctx.renderer.beginTiles(cam, s.gamma, s.signalFloor, s.signalCeil);
             started = true;
           }
           ctx.renderer.drawTile(tile.texture, key.col, key.row, tilesPerDim);
         }
       }
       if (started) ctx.renderer.endTiles();
+    }
+
+    // Grid and highlight go on last so they sit above the detail tiles.
+    ctx.renderer.renderOverlay(cam, renderOptions);
+
+    const detailNotice = document.getElementById('status-detail');
+    if (detailNotice) {
+      const text = wantDetail && !detailOk ? DETAIL_OFF_NOTICE : '';
+      if (detailNotice.textContent !== text) detailNotice.textContent = text;
     }
 
     const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
@@ -273,8 +296,9 @@ export function updateDetailTiles(ctx: AppContext, cam: CameraState): void {
     ctx.tileDecodeDebounce = null;
   }
 
-  // Only stream detail tiles when zoomed in past the overview.
-  if (cam.zoom <= TILE_DETAIL_MIN_ZOOM) {
+  // Only stream detail tiles when zoomed in past the overview, and only while
+  // they can be drawn in the right place.
+  if (cam.zoom <= TILE_DETAIL_MIN_ZOOM || !detailTilesUsable()) {
     ctx.tileDecoder.cancel();
     return;
   }

@@ -158,6 +158,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **Zoomed-in detail no longer hides or invents signal.** The detail layer used
+  to be masked by the coarse overview, which hid most weak off-diagonal contact,
+  and let the overview show through wherever a detail texel was empty, which
+  painted empty texels with a coarse average. A loaded detail tile is now drawn
+  in full, and the contig grid and highlight are drawn over it.
+- **Detail tiles are switched off once the order differs from the file.** Tiles
+  are stored in file order, so after a move or invert the zoomed view showed
+  pre-edit data under the post-edit grid. Until tiles are drawn through the
+  curated order, the reordered overview is shown instead and the status bar
+  says so.
+- **Detail tiles on screen are never evicted.** The cache held at most 256
+  tiles while a wide window at 160% needs 672, which left a permanent patchwork
+  of two resolutions. The cache is now budgeted by size, exempts visible tiles,
+  and no longer keeps a float copy of every tile.
+- **Grid lines keep a constant on-screen width** instead of thickening into a
+  band at high zoom.
 - **A long batched action can no longer outrun the undo stack.** The stack was
   capped at 200 operations and trimmed from the front, on the stated assumption
   that every operation is independent. Batched ones are not: auto-sort emits an

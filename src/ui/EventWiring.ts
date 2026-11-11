@@ -138,12 +138,6 @@ function reorderAndUploadContactMap(ctx: AppContext): void {
   const mapSize = Math.round(Math.sqrt(original.length));
   if (mapSize === 0) return;
 
-  // Gate texture = the current mode's overview in ORIGINAL order (it must align
-  // with the original-order detail tiles). Both modes gate the detail layer by
-  // their own overview, so detail stays consistent with the overview at every
-  // zoom (clean suppresses faint signal; faithful keeps the max-pooled signal).
-  ctx.renderer.uploadGateOverview(original, mapSize);
-
   const reordered = reorderContactMap(original, s.map.contigs, s.contigOrder, mapSize);
   ctx.renderer.uploadContactMap(reordered, mapSize);
   ctx.minimap.updateThumbnail(reordered, mapSize, undefined, s.signalFloor, s.signalCeil);
