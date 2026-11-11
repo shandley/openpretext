@@ -388,9 +388,9 @@ describe('CurationEngine', () => {
       CurationEngine.move(0, 2); // move chr1 from index 0 to index 2
 
       const s = state.get();
-      // After removing index 0: [chr2, chr3, chr4]
-      // Insert at index 2-1=1: [chr2, chr1, chr3, chr4]
-      expect(s.contigOrder).toEqual([1, 0, 2, 3]);
+      // chr1 ends at index 2: [chr2, chr3, chr1, chr4]
+      expect(s.contigOrder).toEqual([1, 2, 0, 3]);
+      expect(s.contigOrder[2]).toBe(0);
     });
 
     it('should move a contig backward in the order', () => {
@@ -419,11 +419,39 @@ describe('CurationEngine', () => {
       CurationEngine.move(0, 3); // move chr1 to end
 
       const s = state.get();
-      // After removing index 0: [chr2, chr3, chr4]
-      // Insert at index 3-1=2: [chr2, chr3, chr1, chr4]
-      // Wait - toIndex=3 means position 3 in the original array.
-      // Remove from 0 -> [1,2,3], insert at 3-1=2 -> [1,2,0,3]
-      expect(s.contigOrder).toEqual([1, 2, 0, 3]);
+      // chr1 ends at the last index: [chr2, chr3, chr4, chr1]
+      expect(s.contigOrder).toEqual([1, 2, 3, 0]);
+    });
+
+    it('should put the contig at the requested index for every from/to pair', () => {
+      for (let from = 0; from < 4; from++) {
+        for (let to = 0; to < 4; to++) {
+          state.reset();
+          setupStandardState();
+          CurationEngine.move(from, to);
+          const order = state.get().contigOrder;
+          expect(order[to], `move(${from}, ${to})`).toBe(from);
+          // The others keep their relative order.
+          expect(order.filter((id) => id !== from)).toEqual([0, 1, 2, 3].filter((id) => id !== from));
+          // A real move is recorded once; a move to the same place is not.
+          expect(state.get().undoStack.length).toBe(from === to ? 0 : 1);
+        }
+      }
+    });
+
+    it('should move one slot to the right', () => {
+      setupStandardState();
+      CurationEngine.move(0, 1);
+      expect(state.get().contigOrder).toEqual([1, 0, 2, 3]);
+    });
+
+    it('should restore and reapply a rightward move through undo and redo', () => {
+      setupStandardState();
+      CurationEngine.move(0, 3);
+      CurationEngine.undo();
+      expect(state.get().contigOrder).toEqual([0, 1, 2, 3]);
+      CurationEngine.redo();
+      expect(state.get().contigOrder).toEqual([1, 2, 3, 0]);
     });
 
     it('should be a no-op when moving to the same position', () => {
@@ -703,10 +731,10 @@ describe('CurationEngine', () => {
       CurationEngine.move(0, 2);
 
       const s = state.get();
-      // chr1 (inverted) should now be at position 1
+      // chr1 (inverted) should now be at position 2
       const chr1Id = 0;
       expect(s.map!.contigs[chr1Id].inverted).toBe(true);
-      expect(s.contigOrder[1]).toBe(chr1Id);
+      expect(s.contigOrder[2]).toBe(chr1Id);
     });
 
     it('should undo multiple operations in reverse order', () => {

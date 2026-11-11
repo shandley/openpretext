@@ -166,6 +166,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **Cut on an inverted contig no longer rearranges the map.** The two pieces
+  were given each other's texels, so the display changed on the cut and each
+  piece exported the other end's sequence coordinates.
+- **Join keeps exactly the two contigs' texels.** Joining contigs that are not
+  neighbours in the file used to claim everything between them, so a later cut
+  at the visible seam landed in the wrong place.
+- **Moving a contig to the right lands where asked.** `move` put the contig one
+  position short of the target when moving right, could not move a contig to
+  the end, and treated a one-slot move right as nothing. This affected the
+  script commands `move ... to`, `before` and `after`, and dragging. A script
+  written to compensate for the old behaviour will now place contigs one
+  position further right.
 - **Zoomed-in detail no longer hides or invents signal.** The detail layer used
   to be masked by the coarse overview, which hid most weak off-diagonal contact,
   and let the overview show through wherever a detail texel was empty, which

@@ -416,7 +416,8 @@ export function undoInvert(op: CurationOperation): void {
  * Move relocates a contig from one position to another in the ordering.
  *
  * @param fromIndex - Current position in contigOrder.
- * @param toIndex - Target position in contigOrder (after removal of the element).
+ * @param toIndex - The position the contig occupies afterwards. `0` is the
+ *   start and `length - 1` is the end.
  */
 export function move(fromIndex: number, toIndex: number): void {
   requireMap();
@@ -424,8 +425,6 @@ export function move(fromIndex: number, toIndex: number): void {
 
   const s = state.get();
 
-  // toIndex is validated against the length after removal, so it can be
-  // [0, length-1] inclusive.
   if (!Number.isInteger(toIndex) || toIndex < 0 || toIndex >= s.contigOrder.length) {
     throw new Error(
       `Invalid toIndex: ${toIndex}. Must be an integer in [0, ${s.contigOrder.length - 1}]`
@@ -440,11 +439,9 @@ export function move(fromIndex: number, toIndex: number): void {
   const previousOrder = [...s.contigOrder];
   const newOrder = [...s.contigOrder];
   const [removed] = newOrder.splice(fromIndex, 1);
-
-  // After removal the target position may need adjustment
-  // toIndex refers to the desired position in the final array
-  const insertAt = toIndex > fromIndex ? toIndex - 1 : toIndex;
-  newOrder.splice(insertAt, 0, removed);
+  // toIndex is the final position, so it is also the insertion index into
+  // the array with the contig taken out.
+  newOrder.splice(toIndex, 0, removed);
 
   const op: CurationOperation = {
     type: 'move',
@@ -691,8 +688,7 @@ function reapplyMove(op: CurationOperation): void {
 
   const newOrder = [...previousOrder];
   const [removed] = newOrder.splice(fromIndex, 1);
-  const insertAt = toIndex > fromIndex ? toIndex - 1 : toIndex;
-  newOrder.splice(insertAt, 0, removed);
+  newOrder.splice(toIndex, 0, removed);
 
   const newOp: CurationOperation = {
     ...op,
