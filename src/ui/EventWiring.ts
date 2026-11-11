@@ -144,10 +144,10 @@ function reorderAndUploadContactMap(ctx: AppContext): void {
 }
 
 /**
- * Pick the original-order overview for the current mode. Faithful uses the
- * worker-assembled max-pooled overview cached on ctx (see applyOverviewMode);
- * if it isn't available, falls back to the clean overview so the map is never
- * blank.
+ * Pick the file-order overview for the current mode. 'faithful' uses the finer
+ * stored mip level, assembled by the tile worker and cached on ctx (see
+ * applyOverviewMode); if it isn't available, falls back to the coarsest level
+ * so the map is never blank.
  */
 function overviewForMode(ctx: AppContext, s: ReturnType<typeof state.get>): Float32Array | null {
   if (!s.map) return null;
@@ -165,11 +165,11 @@ function overviewHasSignal(a: Float32Array): boolean {
 }
 
 /**
- * Re-apply the overview for the current `overviewMode` (clean ⇄ faithful),
- * reordered to the current contig order. For faithful, lazily asks the tile
- * decode worker (which owns the raw tile bytes) to assemble the max-pooled
- * overview and caches it. If faithful can't be assembled, reverts to clean
- * rather than uploading a blank texture.
+ * Re-apply the overview for the current `overviewMode`, reordered to the
+ * current contig order. For 'faithful', lazily asks the tile decode worker
+ * (which owns the raw tile bytes) to assemble the finer mip level and caches
+ * it. If that can't be assembled, reverts to the coarsest level rather than
+ * uploading a blank texture.
  */
 export async function applyOverviewMode(ctx: AppContext): Promise<void> {
   const s = state.get();
@@ -185,7 +185,7 @@ export async function applyOverviewMode(ctx: AppContext): Promise<void> {
     if (!ctx.faithfulOverviewOriginal) {
       state.update({ overviewMode: 'clean' });
       syncOverviewModeSelect('clean');
-      ctx.showToast('Faithful overview unavailable — showing Clean');
+      ctx.showToast('Fine overview unavailable for this file; showing Coarse');
     }
   }
   reorderAndUploadContactMap(ctx);

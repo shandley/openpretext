@@ -2911,11 +2911,11 @@
           <input type="range" class="toolbar-slider" id="ceil-slider" min="0" max="1" step="0.01" value="1">
           <span id="ceil-value">1.00</span>
         </div>
-        <div class="popover-row" title="Overview detail: Clean hides sparse off-diagonal contacts consistently at every zoom; Faithful preserves them (overview matches detail)">
+        <div class="popover-row" title="Which stored resolution the whole-map view is drawn from. Fine uses the file's level about 2048 pixels across and keeps faint off-diagonal contacts. Coarse uses the file's lowest level, about 1024 pixels across, where the file itself has averaged faint contacts away.">
           <label for="overview-mode-select">Overview</label>
           <select class="toolbar-select" id="overview-mode-select">
-            <option value="clean">Clean</option>
-            <option value="faithful">Faithful</option>
+            <option value="faithful" selected>Fine</option>
+            <option value="clean">Coarse</option>
           </select>
         </div>
         <div class="popover-row" title="Observed/Expected: divide each contact by the genome-wide average at its separation, flattening distance-decay so long-range structure stands out. Overview only; raw contacts show at high zoom.">

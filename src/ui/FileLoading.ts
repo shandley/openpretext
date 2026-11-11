@@ -95,7 +95,7 @@ async function loadPretextFromBuffer(
   statusEl.textContent = filename;
   document.getElementById('status-contigs')!.textContent = `${parsed.contigs.length} contigs`;
   events.emit('file:loaded', { filename, contigs: parsed.contigs.length, textureSize: mapSize });
-  // If the user left the viewer in faithful mode, re-apply it for the new file.
+  // Draw the whole-map view from the finer stored level when that is the mode.
   if (state.get().overviewMode === 'faithful') {
     await applyOverviewMode(ctx);
   }
@@ -202,6 +202,9 @@ export async function loadExampleDataset(ctx: AppContext): Promise<void> {
 export function loadDemoData(ctx: AppContext): void {
   const { data, size, contigs } = generateSyntheticMap(1024, 12);
   ctx.renderer.uploadContactMap(data, size);
+  // The demo has no finer level; drop the previous file's so it cannot be
+  // reordered and shown under the demo's contigs.
+  ctx.faithfulOverviewOriginal = null;
   ctx.contigBoundaries = contigs.map(c => c.end / size);
 
   // Clean up tile streaming state for demo data

@@ -125,7 +125,7 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     ctx.camera.animateTo(session.camera, 300);
 
     // Restore settings
-    const overviewMode = session.settings.overviewMode ?? 'clean';
+    const overviewMode = session.settings.overviewMode ?? 'faithful';
     state.update({
       gamma: session.settings.gamma,
       signalFloor: session.settings.signalFloor ?? 0,

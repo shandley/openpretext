@@ -106,6 +106,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - CHANGELOG.md and CONTRIBUTING.md
 
 ### Changed
+- **The whole-map view is drawn from the finer stored level by default.** The
+  overview setting chooses between two resolutions stored in the file, now
+  labelled Fine (about 2048 px across, the new default) and Coarse (the file's
+  lowest level, the old default, where faint contacts are averaged away). Fine
+  suits a full window, including HiDPI displays, and matches what the detail
+  tiles show just past the zoom threshold. The overview texture is also
+  mipmapped, so in a small window faint contacts are averaged down instead of
+  appearing or vanishing with the pixel grid.
 - **A/B compartments are oriented by GC content.** The eigenvector sign is
   arbitrary, so when a reference FASTA is loaded the gene-rich, GC-rich side is
   labeled A. Without a FASTA the split is still computed but the labels are

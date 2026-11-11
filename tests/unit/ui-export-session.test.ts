@@ -606,7 +606,7 @@ describe('ExportSession', () => {
         gamma: 2.0,
         signalFloor: 0,
         signalCeil: 1,
-        overviewMode: 'clean',
+        overviewMode: 'faithful', // a session without the field gets the default
         showGrid: false,
         colorMapName: 'viridis',
       });

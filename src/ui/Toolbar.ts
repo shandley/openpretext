@@ -134,8 +134,10 @@ export function setupToolbar(ctx: AppContext): void {
     ceilValue.textContent = signalCeil.toFixed(2);
   });
 
-  // Overview mode (clean ⇄ faithful) — changes how the overview is built and
-  // whether the detail layer is gated by it.
+  // Overview mode: which stored mip level the whole-map view is drawn from.
+  // 'faithful' (shown as Fine) is the level about 2048 px across; 'clean'
+  // (shown as Coarse) is the file's coarsest level. The stored values keep
+  // their old names because session files carry them.
   const overviewModeSelect = document.getElementById('overview-mode-select') as HTMLSelectElement;
   overviewModeSelect?.addEventListener('change', async () => {
     const overviewMode = overviewModeSelect.value === 'faithful' ? 'faithful' : 'clean';
@@ -143,8 +145,8 @@ export function setupToolbar(ctx: AppContext): void {
     await applyOverviewMode(ctx);
     ctx.showToast(
       overviewMode === 'faithful'
-        ? 'Overview: Faithful — off-diagonal contacts shown at every zoom'
-        : 'Overview: Clean — sparse off-diagonal contacts suppressed',
+        ? 'Overview: Fine (about 2048 px across)'
+        : 'Overview: Coarse (the file\'s lowest level; faint contacts are averaged away)',
     );
   });
 

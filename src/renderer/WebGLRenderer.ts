@@ -421,14 +421,19 @@ export class WebGLRenderer {
       u8data[i] = Math.round(Math.min(1.0, Math.max(0.0, data[i])) * 255);
     }
 
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texImage2D(
       gl.TEXTURE_2D, 0, gl.R8,
       size, size, 0,
       gl.RED, gl.UNSIGNED_BYTE, u8data
     );
 
-    // Linear filtering (always supported for R8)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    // Mipmaps: when the map is drawn smaller than the texture, each screen
+    // pixel must show the average of the texels under it. Without them the
+    // sampler picks single texels, so isolated contacts appear or vanish
+    // depending on where the pixel grid happens to fall.
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);

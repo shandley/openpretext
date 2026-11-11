@@ -173,13 +173,14 @@ export interface AppState {
    *  layers; values at/above the ceiling saturate. Defaults 0/1 = show everything. */
   signalFloor: number;
   signalCeil: number;
-  /** Overview representation mode.
-   *  'clean'   — coarsest mip overview; sparse off-diagonal contacts are
-   *              suppressed consistently at every zoom (detail is gated by the
-   *              overview so nothing "pops in"). The curation default.
-   *  'faithful'— overview is max-pooled from a finer mip so it agrees with the
-   *              detail layer; sparse inter-contig contacts are shown honestly
-   *              at every zoom and in the minimap (detail gate disabled). */
+  /** Which stored mip level the whole-map view is drawn from. Both are the
+   *  file's own data. The names are historical and are kept because session
+   *  files carry them.
+   *  'faithful' — the finest level no wider than 2048 px (shown as "Fine").
+   *               The default: it suits a full window, including HiDPI, and is
+   *               the level the detail tiles show just past the zoom threshold.
+   *  'clean'    — the file's coarsest level (shown as "Coarse"), where the
+   *               file's own averaging has rounded faint contacts to zero. */
   overviewMode: 'clean' | 'faithful';
 
   // Selection
@@ -210,7 +211,7 @@ function createInitialState(): AppState {
     gamma: 0.35,
     signalFloor: 0,
     signalCeil: 1,
-    overviewMode: 'clean',
+    overviewMode: 'faithful',
     selectedContigs: new Set(),
     camera: { x: 0, y: 0, zoom: 1 },
     undoStack: [],
