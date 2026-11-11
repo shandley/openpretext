@@ -8,8 +8,9 @@
  *   considered for rendering.
  * - **Mipmap-level selection**: the appropriate detail level is chosen based
  *   on the camera zoom so that roughly one texel maps to one screen pixel.
- * - **LRU tile cache**: loaded GPU textures are cached and evicted in
- *   least-recently-used order when the cache is full.
+ * - **LRU tile cache**: loaded GPU textures are cached against a texel
+ *   budget. Tiles that are off screen are evicted least-recently-used first;
+ *   tiles on screen are never evicted.
  *
  * Coordinate system (matches Camera.ts / WebGLRenderer.ts):
  * - Map space: (0,0) top-left to (1,1) bottom-right.
@@ -47,8 +48,12 @@ export interface Tile {
   key: TileKey;
   /** The WebGL texture handle, or null if created without a GL context. */
   texture: WebGLTexture | null;
-  /** The raw intensity data for this tile. */
-  data: Float32Array;
+  /**
+   * Number of texels in the tile (side * side). The decoded values themselves
+   * are not kept: once uploaded they live in the GL texture, and holding a
+   * float copy of every cached tile cost about 4 bytes per texel for nothing.
+   */
+  texels: number;
   /** Timestamp (ms) of last access, used for LRU eviction. */
   lastUsed: number;
   /** Loading state. */
@@ -234,9 +239,18 @@ export function stringToTileKey(s: string): TileKey {
 // ---------------------------------------------------------------------------
 
 export interface TileManagerOptions {
-  /** Maximum number of tiles to keep in the cache. Default: 256. */
+  /**
+   * Cache budget in texels (one byte each on the GPU). Default: 256 Mi.
+   * A full screen of tiles needs a few million texels at any zoom, because
+   * the mip level tracks the zoom, so this leaves ample room for panning.
+   */
+  maxTexels?: number;
+  /** Optional cap on the number of cached tiles. Default: no cap. */
   maxTiles?: number;
 }
+
+/** Default cache budget: 256 Mi texels, i.e. 256 MiB of R8 texture. */
+export const DEFAULT_MAX_TEXELS = 256 * 1024 * 1024;
 
 /**
  * Manages a cache of loaded tiles and their GPU textures.
@@ -253,13 +267,18 @@ export class TileManager {
   private gl: WebGL2RenderingContext | null;
   private cache: Map<string, Tile> = new Map();
   private maxTiles: number;
+  private maxTexels: number;
+  private cachedTexels = 0;
 
   /** The set of tile keys that were visible after the last updateVisibleTiles call. */
   private _visibleKeys: TileKey[] = [];
+  /** Same set as strings. Visible tiles are never evicted. */
+  private visibleSet: Set<string> = new Set();
 
   constructor(gl: WebGL2RenderingContext | null, options: TileManagerOptions = {}) {
     this.gl = gl;
-    this.maxTiles = options.maxTiles ?? 256;
+    this.maxTiles = options.maxTiles ?? Infinity;
+    this.maxTexels = options.maxTexels ?? DEFAULT_MAX_TEXELS;
   }
 
   // -----------------------------------------------------------------------
@@ -287,14 +306,21 @@ export class TileManager {
       numMipMaps,
     );
 
-    // Touch all visible tiles so they are not evicted
+    // Visible tiles are exempt from eviction (see evictToFit); also touch
+    // them so they stay warm for a while after they scroll out of view.
     const now = performance.now();
+    this.visibleSet = new Set();
     for (const key of this._visibleKeys) {
-      const tile = this.cache.get(tileKeyToString(key));
+      const strKey = tileKeyToString(key);
+      this.visibleSet.add(strKey);
+      const tile = this.cache.get(strKey);
       if (tile) {
         tile.lastUsed = now;
       }
     }
+
+    // Tiles that just left the screen may now be over budget.
+    this.evictToFit(0, 0);
 
     return this._visibleKeys;
   }
@@ -318,44 +344,46 @@ export class TileManager {
   }
 
   /**
-   * Load tile data into the cache and optionally create a GL texture.
+   * Upload decoded tile data and record the tile as loaded. `data` is not
+   * retained.
    *
-   * If the cache is full, the least-recently-used tile(s) will be evicted
-   * to make room.
+   * If the cache is over budget, least-recently-used tiles that are not
+   * currently visible are evicted to make room.
    */
   loadTile(key: TileKey, data: Float32Array): Tile {
     const strKey = tileKeyToString(key);
 
-    // If already loaded, update the data
     const existing = this.cache.get(strKey);
     if (existing && existing.state === 'loaded') {
-      existing.data = data;
       existing.lastUsed = performance.now();
-      // Re-upload texture if we have a GL context
-      if (this.gl && existing.texture) {
-        this.uploadTileTexture(existing);
+      if (this.gl && existing.texture && existing.texels === data.length) {
+        this.uploadTileTexture(existing.texture, data);
+      } else {
+        this.deleteTileTexture(existing);
+        if (this.gl) existing.texture = this.createTileTexture(data);
       }
+      this.cachedTexels += data.length - existing.texels;
+      existing.texels = data.length;
       return existing;
     }
+    if (existing) {
+      // pending or error placeholder: replace it
+      this.cachedTexels -= existing.texels;
+      this.cache.delete(strKey);
+    }
 
-    // Evict if necessary
-    this.evictIfNeeded();
+    this.evictToFit(data.length);
 
-    // Create the tile
     const tile: Tile = {
       key,
-      texture: null,
-      data,
+      texture: this.gl ? this.createTileTexture(data) : null,
+      texels: data.length,
       lastUsed: performance.now(),
       state: 'loaded',
     };
 
-    // Create GL texture if we have a context
-    if (this.gl) {
-      tile.texture = this.createTileTexture(data);
-    }
-
     this.cache.set(strKey, tile);
+    this.cachedTexels += tile.texels;
     return tile;
   }
 
@@ -367,12 +395,12 @@ export class TileManager {
     const strKey = tileKeyToString(key);
     if (this.cache.has(strKey)) return;
 
-    this.evictIfNeeded();
+    this.evictToFit(0);
 
     const tile: Tile = {
       key,
       texture: null,
-      data: new Float32Array(0),
+      texels: 0,
       lastUsed: performance.now(),
       state: 'pending',
     };
@@ -397,9 +425,19 @@ export class TileManager {
     return this.cache.size;
   }
 
-  /** The maximum number of cached tiles. */
+  /** The maximum number of cached tiles (Infinity when uncapped). */
   get capacity(): number {
     return this.maxTiles;
+  }
+
+  /** The cache budget in texels. */
+  get texelBudget(): number {
+    return this.maxTexels;
+  }
+
+  /** Texels currently held by cached tiles. */
+  get texelsInUse(): number {
+    return this.cachedTexels;
   }
 
   /**
@@ -418,6 +456,7 @@ export class TileManager {
     if (!tile) return false;
 
     this.deleteTileTexture(tile);
+    this.cachedTexels -= tile.texels;
     this.cache.delete(strKey);
     return true;
   }
@@ -430,7 +469,9 @@ export class TileManager {
       this.deleteTileTexture(tile);
     }
     this.cache.clear();
+    this.cachedTexels = 0;
     this._visibleKeys = [];
+    this.visibleSet = new Set();
   }
 
   // -----------------------------------------------------------------------
@@ -438,39 +479,59 @@ export class TileManager {
   // -----------------------------------------------------------------------
 
   /**
-   * Evict the least-recently-used tile to make room, if the cache is at
-   * capacity. Continues evicting until there is at least one free slot.
+   * Evict least-recently-used tiles until `incomingTiles` more tiles totalling
+   * `incomingTexels` fit within both the texel budget and the tile-count cap.
+   *
+   * Tiles in the current visible set are never evicted. A view that needs
+   * more than the budget is allowed to exceed it: evicting a tile that is on
+   * screen leaves a hole that is refilled by evicting another visible tile,
+   * which never settles.
    */
-  private evictIfNeeded(): void {
-    while (this.cache.size >= this.maxTiles) {
-      this.evictLRU();
+  private evictToFit(incomingTexels: number, incomingTiles = 1): void {
+    while (
+      this.cache.size + incomingTiles > this.maxTiles ||
+      this.cachedTexels + incomingTexels > this.maxTexels
+    ) {
+      if (!this.evictLRU()) return;
     }
   }
 
   /**
-   * Evict the single least-recently-used tile from the cache.
+   * Evict the least-recently-used tile that is not visible.
+   * Returns false when there is nothing evictable.
    */
-  private evictLRU(): void {
+  private evictLRU(): boolean {
     let oldestKey: string | null = null;
     let oldestTime = Infinity;
 
     for (const [strKey, tile] of this.cache) {
+      if (this.visibleSet.has(strKey)) continue;
       if (tile.lastUsed < oldestTime) {
         oldestTime = tile.lastUsed;
         oldestKey = strKey;
       }
     }
 
-    if (oldestKey !== null) {
-      const tile = this.cache.get(oldestKey)!;
-      this.deleteTileTexture(tile);
-      this.cache.delete(oldestKey);
-    }
+    if (oldestKey === null) return false;
+    const tile = this.cache.get(oldestKey)!;
+    this.deleteTileTexture(tile);
+    this.cachedTexels -= tile.texels;
+    this.cache.delete(oldestKey);
+    return true;
   }
 
   // -----------------------------------------------------------------------
   // GL texture helpers
   // -----------------------------------------------------------------------
+
+  /** Convert [0,1] float intensities to the R8 bytes uploaded to the GPU. */
+  private static toR8(data: Float32Array): Uint8Array {
+    const u8 = new Uint8Array(data.length);
+    for (let i = 0; i < data.length; i++) {
+      u8[i] = Math.round(Math.min(1.0, Math.max(0.0, data[i])) * 255);
+    }
+    return u8;
+  }
 
   /**
    * Create a GL texture from tile intensity data.
@@ -492,23 +553,11 @@ export class TileManager {
     const texture = gl.createTexture();
     if (!texture) return null;
 
-    // Convert to R8 normalized
-    const u8data = new Uint8Array(data.length);
-    for (let i = 0; i < data.length; i++) {
-      u8data[i] = Math.round(Math.min(1.0, Math.max(0.0, data[i])) * 255);
-    }
-
     gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.R8,
-      size,
-      size,
-      0,
-      gl.RED,
-      gl.UNSIGNED_BYTE,
-      u8data,
+      gl.TEXTURE_2D, 0, gl.R8, size, size, 0,
+      gl.RED, gl.UNSIGNED_BYTE, TileManager.toR8(data),
     );
 
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -521,32 +570,17 @@ export class TileManager {
     return texture;
   }
 
-  /**
-   * Re-upload data into an existing tile's texture.
-   */
-  private uploadTileTexture(tile: Tile): void {
+  /** Re-upload data of the same size into an existing texture. */
+  private uploadTileTexture(texture: WebGLTexture, data: Float32Array): void {
     const gl = this.gl;
-    if (!gl || !tile.texture) return;
+    if (!gl) return;
 
-    const size = Math.round(Math.sqrt(tile.data.length));
-    const u8data = new Uint8Array(tile.data.length);
-    for (let i = 0; i < tile.data.length; i++) {
-      u8data[i] = Math.round(
-        Math.min(1.0, Math.max(0.0, tile.data[i])) * 255,
-      );
-    }
-
-    gl.bindTexture(gl.TEXTURE_2D, tile.texture);
+    const size = Math.round(Math.sqrt(data.length));
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texSubImage2D(
-      gl.TEXTURE_2D,
-      0,
-      0,
-      0,
-      size,
-      size,
-      gl.RED,
-      gl.UNSIGNED_BYTE,
-      u8data,
+      gl.TEXTURE_2D, 0, 0, 0, size, size,
+      gl.RED, gl.UNSIGNED_BYTE, TileManager.toR8(data),
     );
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
