@@ -65,14 +65,44 @@ export interface SequenceSegment {
   revComp: boolean;
 }
 
+/**
+ * A slice of the file's texels along one axis, as it appears in a contig.
+ * Lists of these are in display order, left to right, and each slice carries
+ * its own direction, so a list is self-contained.
+ */
+export interface PixelSegment {
+  /** First file texel (inclusive). */
+  start: number;
+  /** Last file texel + 1 (exclusive). */
+  end: number;
+  /** True when display-left reads the high end of the file span. */
+  reversed: boolean;
+}
+
 export interface ContigInfo {
   name: string;
   originalIndex: number;
   length: number;       // in base pairs
-  pixelStart: number;   // start pixel in the texture
-  pixelEnd: number;     // end pixel in the texture
+  /**
+   * File texel span, half-open. `pixelEnd - pixelStart` is always the contig's
+   * width in texels. It is also the contig's position in the file unless
+   * `pixelSegments` is present; read positions through
+   * DisplayMapping.getPixelSegments, never from these two fields directly.
+   */
+  pixelStart: number;
+  pixelEnd: number;
+  /**
+   * Orientation. For a contig without `pixelSegments` this decides which way
+   * its span is read; with them it is only a strand label.
+   */
   inverted: boolean;
   scaffoldId: number | null;
+  /**
+   * Present only when the contig's texels are not one contiguous file span
+   * read in one direction, which happens when a join brings together contigs
+   * that are not neighbours in the file. See DisplayMapping.
+   */
+  pixelSegments?: PixelSegment[];
   /**
    * Sequence provenance for contigs derived from cut/join. Absent on contigs
    * loaded directly from a .pretext file, whose sequence is looked up by name

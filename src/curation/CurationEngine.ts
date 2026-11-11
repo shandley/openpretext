@@ -10,6 +10,10 @@
 
 import { state, ContigInfo, CurationOperation, SequenceSegment } from '../core/State';
 import { events } from '../core/EventBus';
+import {
+  getPixelSegments, splitPixelSegments, flipPixelSegments, pixelFieldsFor,
+} from '../core/DisplayMapping';
+import type { PixelSegment } from '../core/State';
 import type { ScaffoldManager } from './ScaffoldManager';
 
 /**
@@ -131,13 +135,14 @@ function flipSegments(
 /**
  * Cut splits a contig at a given pixel position into two new contigs.
  *
- * The pixel position is relative to the contig's own pixel span
- * (i.e. an offset from pixelStart). The contig at `contigOrderIndex`
- * is replaced by two new contigs whose pixel ranges partition the
- * original span at `pixelOffset`.
+ * The pixel position is measured from the contig's display-left edge, which
+ * is where the curator sees and clicks it. The contig at `contigOrderIndex`
+ * is replaced by two new contigs: the first holds the `pixelOffset` texels
+ * displayed left of the cut, the second holds the rest. A cut never changes
+ * which file texel any display texel shows.
  *
  * @param contigOrderIndex - Index in the current contigOrder array.
- * @param pixelOffset - Pixel offset within the contig at which to cut.
+ * @param pixelOffset - Pixel offset from the contig's display-left edge.
  *   Must be > 0 and < contig pixel length.
  */
 export function cut(contigOrderIndex: number, pixelOffset: number): void {
@@ -169,14 +174,20 @@ export function cut(contigOrderIndex: number, pixelOffset: number): void {
     leftBpLength
   );
 
-  // Create two new contigs
+  // Partition the texels at the same display offset. For an inverted contig
+  // the display-left part is the high end of its file span, so the split has
+  // to go through the display-order segments, not pixelStart + offset.
+  const [leftPixels, rightPixels] = splitPixelSegments(
+    getPixelSegments(contig),
+    pixelOffset
+  );
+
+  // Create two new contigs: display-left, then display-right.
   const leftContig: ContigInfo = {
     name: `${contig.name}_L`,
     originalIndex: contig.originalIndex,
     length: leftBpLength,
-    pixelStart: contig.pixelStart,
-    pixelEnd: contig.pixelStart + pixelOffset,
-    inverted: contig.inverted,
+    ...pixelFieldsFor(leftPixels, contig.inverted),
     scaffoldId: contig.scaffoldId,
     sequenceSegments: leftSegments,
   };
@@ -185,17 +196,14 @@ export function cut(contigOrderIndex: number, pixelOffset: number): void {
     name: `${contig.name}_R`,
     originalIndex: contig.originalIndex,
     length: rightBpLength,
-    pixelStart: contig.pixelStart + pixelOffset,
-    pixelEnd: contig.pixelEnd,
-    inverted: contig.inverted,
+    ...pixelFieldsFor(rightPixels, contig.inverted),
     scaffoldId: contig.scaffoldId,
     sequenceSegments: rightSegments,
   };
 
   // If the original contig was inverted, the left/right halves in display
-  // order correspond to the right/left halves in genome order, so we swap
-  // the naming convention (but keep pixelStart/End as-is since they refer
-  // to texture coordinates).
+  // order correspond to the right/left halves in genome order, so the names
+  // swap.
   if (contig.inverted) {
     leftContig.name = `${contig.name}_R`;
     rightContig.name = `${contig.name}_L`;
@@ -249,8 +257,11 @@ export function undoCut(op: CurationOperation): void {
  * Join merges two adjacent contigs into one.
  *
  * The contig at `contigOrderIndex` is merged with the contig at
- * `contigOrderIndex + 1`. The resulting contig spans the combined
- * pixel range and base-pair length.
+ * `contigOrderIndex + 1`. The result holds exactly the texels and bases of
+ * the two inputs, in the order and orientation they are displayed. The two
+ * need not be neighbours in the file; when they are not, the merged contig
+ * records its texels as `pixelSegments`. A join never changes which file
+ * texel any display texel shows.
  *
  * @param contigOrderIndex - Index of the first of the two adjacent contigs.
  */
@@ -288,9 +299,10 @@ export function join(contigOrderIndex: number): void {
     name: `${first.name}+${second.name}`,
     originalIndex: first.originalIndex,
     length: first.length + second.length,
-    pixelStart: Math.min(first.pixelStart, second.pixelStart),
-    pixelEnd: Math.max(first.pixelEnd, second.pixelEnd),
-    inverted: mergedInverted,
+    ...pixelFieldsFor(
+      [...getPixelSegments(first), ...getPixelSegments(second)],
+      mergedInverted
+    ),
     scaffoldId: first.scaffoldId,
     sequenceSegments: mergedSegments,
   };
@@ -351,12 +363,15 @@ export function invert(contigOrderIndex: number): void {
 
   const previousInverted = contig.inverted;
   const previousSegments = contig.sequenceSegments;
+  const previousPixelSegments = contig.pixelSegments;
   const newInverted = !contig.inverted;
   // Reverse-complement the sequence provenance too, so a derived (cut/join)
-  // contig's exported sequence flips along with its strand.
+  // contig's exported sequence flips along with its strand, and mirror the
+  // texel segments of a contig that carries them.
   state.updateContig(contigId, {
     inverted: newInverted,
     sequenceSegments: flipSegments(previousSegments),
+    pixelSegments: previousPixelSegments ? flipPixelSegments(previousPixelSegments) : undefined,
   });
 
   const op: CurationOperation = {
@@ -368,6 +383,7 @@ export function invert(contigOrderIndex: number): void {
       contigId,
       previousInverted,
       previousSegments,
+      previousPixelSegments,
     },
   };
 
@@ -387,6 +403,7 @@ export function undoInvert(op: CurationOperation): void {
   state.updateContig(contigId, {
     inverted: op.data.previousInverted as boolean,
     sequenceSegments: op.data.previousSegments as SequenceSegment[] | undefined,
+    pixelSegments: op.data.previousPixelSegments as PixelSegment[] | undefined,
   });
   events.emit('render:request', {});
 }
@@ -654,6 +671,7 @@ function reapplyInvert(op: CurationOperation): void {
   state.updateContig(contigId, {
     inverted: !contig.inverted,
     sequenceSegments: flipSegments(contig.sequenceSegments),
+    pixelSegments: contig.pixelSegments ? flipPixelSegments(contig.pixelSegments) : undefined,
   });
 
   const newOp: CurationOperation = {
