@@ -229,3 +229,64 @@ describe('buildCellRemap', () => {
     expect(Array.from(buildCellRemap(runs, 64, 8))).toEqual([0, 1, -1, -1, -1, -1, -1, -1]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Consumers must agree with the mapping
+// ---------------------------------------------------------------------------
+
+import { reorderTrackData } from '../../src/analysis/EmbeddedTracks';
+import { computeContigCoverageRatios } from '../../src/analysis/HaplotigDetector';
+import type { MapData } from '../../src/core/State';
+
+describe('1D tracks follow the same mapping as the map', () => {
+  // File texel t carries value t, so a reordered track reads back as the
+  // file texel shown at each display position.
+  const ramp = (n: number) => Float32Array.from({ length: n }, (_, i) => i);
+
+  it('reorders a track exactly as displayToFileTexel says, for moved and inverted contigs', () => {
+    const cs = [contig(0, 10), contig(10, 30, true), contig(30, 40)];
+    const order = [2, 1, 0];
+    const runs = buildDisplayRuns(cs, order);
+    const out = Array.from(reorderTrackData(ramp(40), cs, order, 40));
+    expect(out).toEqual(Array.from({ length: 40 }, (_, d) => displayToFileTexel(runs, d)));
+  });
+
+  it('reorders a track through a joined contig that holds two separate file spans', () => {
+    const joined: ContigInfo = {
+      ...contig(0, 20), name: 'a+c',
+      pixelSegments: [
+        { start: 0, end: 10, reversed: false },
+        { start: 30, end: 40, reversed: true },
+      ],
+    };
+    const cs = [contig(0, 10), contig(10, 30), contig(30, 40), joined];
+    const out = Array.from(reorderTrackData(ramp(40), cs, [3, 1], 40));
+    expect(out).toEqual([
+      ...Array.from({ length: 10 }, (_, i) => i),
+      ...Array.from({ length: 10 }, (_, i) => 39 - i),
+      ...Array.from({ length: 20 }, (_, i) => 10 + i),
+    ]);
+  });
+
+  it('reads a joined contig\'s coverage from its own spans, not the gap between them', () => {
+    const joined: ContigInfo = {
+      ...contig(0, 20), name: 'a+c',
+      pixelSegments: [
+        { start: 0, end: 10, reversed: false },
+        { start: 30, end: 40, reversed: false },
+      ],
+    };
+    const cs = [contig(0, 10), contig(10, 30), contig(30, 40), joined];
+    // Coverage 10 on a and c, 50 on b. The joined contig a+c must read 10.
+    const cov = new Int32Array(40).fill(10);
+    for (let p = 10; p < 30; p++) cov[p] = 50;
+    const map = {
+      filename: 't', textureSize: 40, numMipMaps: 1, tileResolution: 40, tilesPerDimension: 1,
+      contigs: cs, contactMap: null, rawTiles: null, parsedHeader: null,
+      extensions: new Map([['coverage', cov]]),
+    } satisfies MapData;
+    const ratios = computeContigCoverageRatios(map)!;
+    expect(ratios[3]).toBeCloseTo(ratios[0], 12);
+    expect(ratios[1] / ratios[0]).toBeCloseTo(5, 12);
+  });
+});

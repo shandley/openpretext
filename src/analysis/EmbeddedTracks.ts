@@ -12,6 +12,7 @@
 
 import type { MapData, ContigInfo } from '../core/State';
 import type { TrackConfig, TrackType } from '../renderer/TrackRenderer';
+import { buildDisplayRuns } from '../core/DisplayMapping';
 
 // ---------------------------------------------------------------------------
 // Track classification
@@ -101,16 +102,14 @@ export function reorderTrackData(
   textureSize: number,
 ): Float32Array {
   const out = new Float32Array(textureSize);
-  let dest = 0;
-  for (const id of contigOrder) {
-    const c = contigs[id];
-    if (!c) continue;
-    const start = Math.max(0, Math.round(c.pixelStart));
-    const end = Math.min(textureSize, Math.round(c.pixelEnd));
-    const len = end - start;
-    for (let j = 0; j < len && dest < textureSize; j++) {
-      const srcIdx = c.inverted ? end - 1 - j : start + j;
-      out[dest++] = src[srcIdx];
+  // Same mapping the contact map is drawn with, so a track can never disagree
+  // with the map above it about where a contig is or which way it reads.
+  for (const run of buildDisplayRuns(contigs, contigOrder)) {
+    for (let j = 0; j < run.length; j++) {
+      const dest = run.displayStart + j;
+      if (dest >= textureSize) break;
+      const srcIdx = run.reversed ? run.fileStart + run.length - 1 - j : run.fileStart + j;
+      if (srcIdx >= 0 && srcIdx < src.length) out[dest] = src[srcIdx];
     }
   }
   return out;

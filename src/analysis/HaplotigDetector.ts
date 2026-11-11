@@ -27,6 +27,7 @@
 import type { ContigRange } from '../curation/AutoSort';
 import type { MapData } from '../core/State';
 import { computeExpectedContacts } from './CompartmentAnalysis';
+import { getPixelSegments } from '../core/DisplayMapping';
 
 export type HaplotigConfidence = 'high' | 'medium' | 'low';
 
@@ -105,12 +106,15 @@ export function computeContigCoverageRatios(map: MapData): Float32Array | null {
   const contigMedians = new Float32Array(map.contigs.length).fill(NaN);
   const present: number[] = [];
   for (let ci = 0; ci < map.contigs.length; ci++) {
-    const c = map.contigs[ci];
-    const lo = Math.max(0, Math.min(cov.length, c.pixelStart));
-    const hi = Math.max(lo, Math.min(cov.length, c.pixelEnd));
-    if (hi <= lo) continue;
+    // Read the contig's texels through its segments: a joined contig may hold
+    // several separate file spans.
     const vals: number[] = [];
-    for (let p = lo; p < hi; p++) vals.push(cov[p]);
+    for (const seg of getPixelSegments(map.contigs[ci])) {
+      const lo = Math.max(0, Math.min(cov.length, seg.start));
+      const hi = Math.max(lo, Math.min(cov.length, seg.end));
+      for (let p = lo; p < hi; p++) vals.push(cov[p]);
+    }
+    if (vals.length === 0) continue;
     const m = median(vals);
     contigMedians[ci] = m;
     if (m > 0) present.push(m);
