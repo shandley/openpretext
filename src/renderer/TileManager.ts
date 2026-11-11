@@ -8,9 +8,10 @@
  *   considered for rendering.
  * - **Mipmap-level selection**: the appropriate detail level is chosen based
  *   on the camera zoom so that roughly one texel maps to one screen pixel.
- * - **LRU tile cache**: loaded GPU textures are cached against a texel
- *   budget. Tiles that are off screen are evicted least-recently-used first;
- *   tiles on screen are never evicted.
+ * - **Tile store**: the tiles of the level on screen live in the layers of
+ *   one array texture, with a page table saying which tile is in which layer,
+ *   so a shader can read any loaded tile per pixel. Off-screen tiles are
+ *   evicted least-recently-used first; tiles on screen are never evicted.
  *
  * Coordinate system (matches Camera.ts / WebGLRenderer.ts):
  * - Map space: (0,0) top-left to (1,1) bottom-right.
@@ -28,6 +29,7 @@
  */
 
 import type { CameraState } from './Camera';
+import type { DisplayRun } from '../core/DisplayMapping';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,8 +48,8 @@ export interface TileKey {
 /** State of a single cached tile. */
 export interface Tile {
   key: TileKey;
-  /** The WebGL texture handle, or null if created without a GL context. */
-  texture: WebGLTexture | null;
+  /** Layer of the level's array texture holding this tile, or -1 if none. */
+  layer: number;
   /**
    * Number of texels in the tile (side * side). The decoded values themselves
    * are not kept: once uploaded they live in the GL texture, and holding a
@@ -173,6 +175,34 @@ export function selectMipLevel(
   return Math.max(0, Math.min(numMipMaps - 1, level));
 }
 
+/**
+ * Select the detail level to draw: the finest stored level whose texels are
+ * at least one screen pixel wide.
+ *
+ * Level 0 is the coarsest stored level, `coarsestSize` texels across the
+ * whole map; each level up doubles that. Choosing a level no finer than the
+ * screen means every stored value at that level reaches at least one pixel,
+ * so sampling the nearest texel never skips data. The cost is that texels
+ * are up to two pixels wide just before the next level takes over.
+ *
+ * @param zoom          Camera zoom (1 = whole map fits the shorter side).
+ * @param screenMinPx   Shorter side of the canvas in device pixels.
+ * @param coarsestSize  Texels across the whole map at level 0.
+ * @param numMipMaps    Number of stored levels.
+ */
+export function selectDetailLevel(
+  zoom: number,
+  screenMinPx: number,
+  coarsestSize: number,
+  numMipMaps: number,
+): number {
+  if (numMipMaps <= 0 || coarsestSize <= 0 || screenMinPx <= 0 || zoom <= 0) return 0;
+  const pxAcrossMap = zoom * screenMinPx;
+  // The tiny epsilon keeps an exact power of two from landing a level low.
+  const level = Math.floor(Math.log2(pxAcrossMap / coarsestSize) + 1e-9);
+  return Math.max(0, Math.min(numMipMaps - 1, level));
+}
+
 // ---------------------------------------------------------------------------
 // Visible Tile Keys
 // ---------------------------------------------------------------------------
@@ -235,33 +265,147 @@ export function stringToTileKey(s: string): TileKey {
 }
 
 // ---------------------------------------------------------------------------
+// Visible tiles through the display mapping
+// ---------------------------------------------------------------------------
+
+/**
+ * File tile indices (along one axis) that a display interval shows, nearest
+ * the interval's centre first.
+ *
+ * After curation a stretch of the display can read several separate stretches
+ * of the file, so the result is a set, not a range.
+ *
+ * @param runs         Display runs (DisplayMapping.buildDisplayRuns).
+ * @param lo           Start of the interval in display texels.
+ * @param hi           End of the interval in display texels (exclusive).
+ * @param totalTexels  Texels along one axis of the full-resolution map.
+ * @param tilesPerDim  Tiles per axis.
+ */
+export function fileTilesForDisplayInterval(
+  runs: DisplayRun[],
+  lo: number,
+  hi: number,
+  totalTexels: number,
+  tilesPerDim: number,
+): number[] {
+  if (tilesPerDim <= 0 || totalTexels <= 0 || hi <= lo) return [];
+  const texelsPerTile = totalTexels / tilesPerDim;
+  const centre = (lo + hi) / 2;
+  const found = new Map<number, number>(); // tile index -> distance from centre
+
+  for (const run of runs) {
+    const a = Math.max(lo, run.displayStart);
+    const b = Math.min(hi, run.displayStart + run.length);
+    if (b <= a) continue;
+    // File span shown by the visible part [a, b) of this run.
+    const f0 = run.reversed
+      ? run.fileStart + run.length - (b - run.displayStart)
+      : run.fileStart + (a - run.displayStart);
+    const f1 = f0 + (b - a);
+    const t0 = Math.max(0, Math.floor(f0 / texelsPerTile));
+    const t1 = Math.min(tilesPerDim - 1, Math.ceil(f1 / texelsPerTile) - 1);
+    for (let t = t0; t <= t1; t++) {
+      // Where this tile's visible part sits on the display, for ordering.
+      const tf0 = Math.max(f0, t * texelsPerTile);
+      const tf1 = Math.min(f1, (t + 1) * texelsPerTile);
+      const fMid = (tf0 + tf1) / 2;
+      const dMid = run.reversed
+        ? run.displayStart + (run.fileStart + run.length - fMid)
+        : run.displayStart + (fMid - run.fileStart);
+      const dist = Math.abs(dMid - centre);
+      const prev = found.get(t);
+      if (prev === undefined || dist < prev) found.set(t, dist);
+    }
+  }
+
+  return [...found.entries()].sort((x, y) => x[1] - y[1] || x[0] - y[0]).map((e) => e[0]);
+}
+
+/**
+ * The tiles needed to draw the current view at `level`, through the display
+ * mapping, most central first.
+ *
+ * The display rectangle's x extent shows some set of file columns and its y
+ * extent some set of file rows; every pixel in view reads a tile from their
+ * product.
+ */
+export function getVisibleTileKeysMapped(
+  runs: DisplayRun[],
+  camera: CameraState,
+  canvasWidth: number,
+  canvasHeight: number,
+  totalTexels: number,
+  tilesPerDim: number,
+  level: number,
+): TileKey[] {
+  const rect = getVisibleRect(camera, canvasWidth, canvasHeight);
+  const clamp = (v: number) => Math.max(0, Math.min(1, v)) * totalTexels;
+  const cols = fileTilesForDisplayInterval(runs, clamp(rect.minX), clamp(rect.maxX), totalTexels, tilesPerDim);
+  const rows = fileTilesForDisplayInterval(runs, clamp(rect.minY), clamp(rect.maxY), totalTexels, tilesPerDim);
+
+  // Order by combined rank so tiles near the view centre come first.
+  const ranked: Array<{ key: TileKey; rank: number }> = [];
+  rows.forEach((row, ri) => {
+    cols.forEach((col, ci) => ranked.push({ key: { level, col, row }, rank: ri + ci }));
+  });
+  ranked.sort((a, b) => a.rank - b.rank);
+  return ranked.map((r) => r.key);
+}
+
+// ---------------------------------------------------------------------------
 // TileManager
 // ---------------------------------------------------------------------------
 
 export interface TileManagerOptions {
   /**
-   * Cache budget in texels (one byte each on the GPU). Default: 256 Mi.
-   * A full screen of tiles needs a few million texels at any zoom, because
-   * the mip level tracks the zoom, so this leaves ample room for panning.
+   * GPU budget for the tile store in texels (one byte each). Default: 96 Mi.
+   * A screenful needs a few million texels at any zoom, because the level
+   * tracks the zoom, so this leaves room for panning and for scrambled orders
+   * that touch many separate parts of the file.
    */
   maxTexels?: number;
-  /** Optional cap on the number of cached tiles. Default: no cap. */
+  /** Optional cap on the number of tiles held. Default: no cap. */
   maxTiles?: number;
+  /** Tiles per axis of the map, for the page table. Default: learned from keys. */
+  tilesPerDim?: number;
 }
 
-/** Default cache budget: 256 Mi texels, i.e. 256 MiB of R8 texture. */
-export const DEFAULT_MAX_TEXELS = 256 * 1024 * 1024;
+/** Default tile store budget: 96 Mi texels, i.e. 96 MiB of R8 texture. */
+export const DEFAULT_MAX_TEXELS = 96 * 1024 * 1024;
+
+/** Array texture layers assumed available when there is no GL context. */
+const HEADLESS_MAX_LAYERS = 2048;
+
+/** Fewest layers worth allocating, however large the tiles are. */
+const MIN_LAYERS = 16;
+
+/** What the renderer needs to draw the loaded tiles of the current level. */
+export interface DetailTextures {
+  /** R8 array texture; layer = a tile, `tileRes` texels square. */
+  tiles: WebGLTexture;
+  /** R16UI texture, `tilesPerDim` square: 0 = not loaded, else layer + 1. */
+  pageTable: WebGLTexture;
+  tilesPerDim: number;
+  tileRes: number;
+  level: number;
+}
 
 /**
- * Manages a cache of loaded tiles and their GPU textures.
+ * Holds the decoded tiles of the mip level currently on screen.
+ *
+ * Tiles are stored in file coordinates. They sit in the layers of one array
+ * texture, and a page table maps (file column, file row) to a layer, so the
+ * map shader can fetch whichever tile a pixel needs after it has mapped the
+ * pixel from display to file coordinates.
+ *
+ * One level is held at a time. Changing level drops the store; the tiles for
+ * the new level are decoded on demand.
  *
  * Usage:
- * 1. Call `updateVisibleTiles()` every frame (or on camera change) to get
- *    the set of tiles that should be visible.
- * 2. For each key returned, check `getTile()`. If missing or pending,
- *    request the tile data from the parser and call `loadTile()` when ready.
- * 3. The TileManager handles LRU eviction automatically.
- * 4. Call `dispose()` when done to release all GPU resources.
+ * 1. Call `setVisibleKeys()` (or `updateVisibleTiles()`) on camera change.
+ * 2. Decode any visible key whose tile is not loaded, and call `loadTile()`.
+ * 3. Pass `getDetailTextures()` to the renderer.
+ * 4. Call `dispose()` when done.
  */
 export class TileManager {
   private gl: WebGL2RenderingContext | null;
@@ -269,8 +413,22 @@ export class TileManager {
   private maxTiles: number;
   private maxTexels: number;
   private cachedTexels = 0;
+  private tilesPerDim: number;
 
-  /** The set of tile keys that were visible after the last updateVisibleTiles call. */
+  /** Level whose tiles are held, or -1 when the store is empty. */
+  private level = -1;
+  /** Texels per side of a tile at `level`. */
+  private tileRes = 0;
+  /** Layers in the array texture at `level`. */
+  private layerCount = 0;
+  private freeLayers: number[] = [];
+  private arrayTexture: WebGLTexture | null = null;
+
+  private pageTable: Uint16Array = new Uint16Array(0);
+  private pageTableTexture: WebGLTexture | null = null;
+  private pageTableDirty = false;
+
+  /** The set of tile keys that were visible after the last update. */
   private _visibleKeys: TileKey[] = [];
   /** Same set as strings. Visible tiles are never evicted. */
   private visibleSet: Set<string> = new Set();
@@ -279,6 +437,7 @@ export class TileManager {
     this.gl = gl;
     this.maxTiles = options.maxTiles ?? Infinity;
     this.maxTexels = options.maxTexels ?? DEFAULT_MAX_TEXELS;
+    this.tilesPerDim = options.tilesPerDim ?? 0;
   }
 
   // -----------------------------------------------------------------------
@@ -286,10 +445,9 @@ export class TileManager {
   // -----------------------------------------------------------------------
 
   /**
-   * Recalculate which tiles are needed for the current camera state.
-   *
-   * Returns the list of visible TileKeys. The caller is responsible for
-   * loading any tiles that are not yet in the cache.
+   * Recalculate which tiles are needed for the current camera state, assuming
+   * display coordinates equal file coordinates. Use `setVisibleKeys` with
+   * `getVisibleTileKeysMapped` once the order has been curated.
    */
   updateVisibleTiles(
     camera: CameraState,
@@ -298,34 +456,39 @@ export class TileManager {
     tilesPerDim: number,
     numMipMaps: number,
   ): TileKey[] {
-    this._visibleKeys = getVisibleTileKeys(
-      camera,
-      canvasWidth,
-      canvasHeight,
-      tilesPerDim,
-      numMipMaps,
+    if (this.tilesPerDim === 0) this.tilesPerDim = tilesPerDim;
+    return this.setVisibleKeys(
+      getVisibleTileKeys(camera, canvasWidth, canvasHeight, tilesPerDim, numMipMaps),
     );
+  }
 
-    // Visible tiles are exempt from eviction (see evictToFit); also touch
-    // them so they stay warm for a while after they scroll out of view.
-    const now = performance.now();
+  /**
+   * Declare the tiles the current view needs. All keys must share one level.
+   * If that level differs from the one held, the store is dropped.
+   */
+  setVisibleKeys(keys: TileKey[]): TileKey[] {
+    this._visibleKeys = keys;
     this.visibleSet = new Set();
-    for (const key of this._visibleKeys) {
+    if (keys.length > 0 && this.level !== -1 && keys[0].level !== this.level) this.resetStore();
+
+    // Visible tiles are exempt from eviction; also touch them so they stay
+    // warm for a while after they scroll out of view.
+    const now = performance.now();
+    for (const key of keys) {
       const strKey = tileKeyToString(key);
       this.visibleSet.add(strKey);
       const tile = this.cache.get(strKey);
-      if (tile) {
-        tile.lastUsed = now;
-      }
+      if (tile) tile.lastUsed = now;
     }
 
-    // Tiles that just left the screen may now be over budget.
-    this.evictToFit(0, 0);
-
-    return this._visibleKeys;
+    // Tiles that just left the screen may now be over the cap.
+    while (this.cache.size > this.maxTiles) {
+      if (!this.evictLRU()) break;
+    }
+    return keys;
   }
 
-  /** Get the tile keys from the most recent `updateVisibleTiles` call. */
+  /** Get the tile keys from the most recent visibility update. */
   get visibleKeys(): TileKey[] {
     return this._visibleKeys;
   }
@@ -335,55 +498,54 @@ export class TileManager {
    * Accessing a tile updates its lastUsed timestamp for LRU purposes.
    */
   getTile(key: TileKey): Tile | undefined {
-    const strKey = tileKeyToString(key);
-    const tile = this.cache.get(strKey);
-    if (tile) {
-      tile.lastUsed = performance.now();
-    }
+    const tile = this.cache.get(tileKeyToString(key));
+    if (tile) tile.lastUsed = performance.now();
     return tile;
   }
 
   /**
-   * Upload decoded tile data and record the tile as loaded. `data` is not
-   * retained.
+   * Store decoded tile data in a layer and record the tile as loaded. `data`
+   * is not retained.
    *
-   * If the cache is over budget, least-recently-used tiles that are not
-   * currently visible are evicted to make room.
+   * Returns undefined, storing nothing, when the tile is for a level other
+   * than the one on screen (a decode that arrived late), or when every layer
+   * is held by a tile that is on screen.
    */
-  loadTile(key: TileKey, data: Float32Array): Tile {
+  loadTile(key: TileKey, data: Float32Array): Tile | undefined {
     const strKey = tileKeyToString(key);
+    const res = Math.round(Math.sqrt(data.length));
+    if (res * res !== data.length || res === 0) {
+      console.warn(`TileManager: data length ${data.length} is not a perfect square`);
+      return undefined;
+    }
+
+    // The level the view wants; with no view declared (headless use), any.
+    const wanted = this._visibleKeys.length > 0 ? this._visibleKeys[0].level : key.level;
+    if (key.level !== wanted) return undefined; // a decode that arrived late
+    if (this.level !== -1 && this.level !== key.level) this.resetStore();
+    if (this.level === -1) this.openStore(key.level, res);
+    if (res !== this.tileRes) return undefined;
 
     const existing = this.cache.get(strKey);
     if (existing && existing.state === 'loaded') {
       existing.lastUsed = performance.now();
-      if (this.gl && existing.texture && existing.texels === data.length) {
-        this.uploadTileTexture(existing.texture, data);
-      } else {
-        this.deleteTileTexture(existing);
-        if (this.gl) existing.texture = this.createTileTexture(data);
-      }
-      this.cachedTexels += data.length - existing.texels;
-      existing.texels = data.length;
+      this.uploadLayer(existing.layer, data);
       return existing;
     }
-    if (existing) {
-      // pending or error placeholder: replace it
-      this.cachedTexels -= existing.texels;
-      this.cache.delete(strKey);
+    if (existing) this.dropTile(strKey, existing); // pending or error placeholder
+
+    while (this.freeLayers.length === 0 || this.cache.size + 1 > this.maxTiles) {
+      if (!this.evictLRU()) return undefined;
     }
 
-    this.evictToFit(data.length);
-
+    const layer = this.freeLayers.pop()!;
     const tile: Tile = {
-      key,
-      texture: this.gl ? this.createTileTexture(data) : null,
-      texels: data.length,
-      lastUsed: performance.now(),
-      state: 'loaded',
+      key, layer, texels: data.length, lastUsed: performance.now(), state: 'loaded',
     };
-
+    this.uploadLayer(layer, data);
     this.cache.set(strKey, tile);
     this.cachedTexels += tile.texels;
+    this.setPageEntry(key, layer + 1);
     return tile;
   }
 
@@ -394,26 +556,14 @@ export class TileManager {
   markPending(key: TileKey): void {
     const strKey = tileKeyToString(key);
     if (this.cache.has(strKey)) return;
-
-    this.evictToFit(0);
-
-    const tile: Tile = {
-      key,
-      texture: null,
-      texels: 0,
-      lastUsed: performance.now(),
-      state: 'pending',
-    };
-
-    this.cache.set(strKey, tile);
+    this.cache.set(strKey, {
+      key, layer: -1, texels: 0, lastUsed: performance.now(), state: 'pending',
+    });
   }
 
-  /**
-   * Mark a tile as having failed to load.
-   */
+  /** Mark a tile as having failed to load. */
   markError(key: TileKey): void {
-    const strKey = tileKeyToString(key);
-    const tile = this.cache.get(strKey);
+    const tile = this.cache.get(tileKeyToString(key));
     if (tile) {
       tile.state = 'error';
       tile.lastUsed = performance.now();
@@ -430,80 +580,183 @@ export class TileManager {
     return this.maxTiles;
   }
 
-  /** The cache budget in texels. */
+  /** The store's budget in texels. */
   get texelBudget(): number {
     return this.maxTexels;
   }
 
-  /** Texels currently held by cached tiles. */
+  /** Texels currently held by loaded tiles. */
   get texelsInUse(): number {
     return this.cachedTexels;
   }
 
+  /** Level whose tiles are held, or -1 when empty. */
+  get currentLevel(): number {
+    return this.level;
+  }
+
+  /** Layers available at the current level (0 when empty). */
+  get layers(): number {
+    return this.layerCount;
+  }
+
   /**
-   * Check if a tile is cached (any state: pending, loaded, or error).
+   * The page table for the current level: entry [row * tilesPerDim + col] is
+   * 0 when that tile is not loaded, else its layer + 1.
    */
+  getPageTable(): Uint16Array {
+    return this.pageTable;
+  }
+
+  /**
+   * Textures for drawing the loaded tiles, or null when there is nothing to
+   * draw (no GL context, or no tile loaded). Uploads the page table if it
+   * changed since the last call.
+   */
+  getDetailTextures(): DetailTextures | null {
+    const gl = this.gl;
+    if (!gl || !this.arrayTexture || this.cachedTexels === 0 || this.tilesPerDim <= 0) return null;
+
+    if (!this.pageTableTexture) {
+      this.pageTableTexture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, this.pageTableTexture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.pageTableDirty = true;
+    }
+    if (this.pageTableDirty && this.pageTableTexture) {
+      gl.bindTexture(gl.TEXTURE_2D, this.pageTableTexture);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage2D(
+        gl.TEXTURE_2D, 0, gl.R16UI, this.tilesPerDim, this.tilesPerDim, 0,
+        gl.RED_INTEGER, gl.UNSIGNED_SHORT, this.pageTable,
+      );
+      this.pageTableDirty = false;
+    }
+    if (!this.pageTableTexture) return null;
+
+    return {
+      tiles: this.arrayTexture,
+      pageTable: this.pageTableTexture,
+      tilesPerDim: this.tilesPerDim,
+      tileRes: this.tileRes,
+      level: this.level,
+    };
+  }
+
+  /** Check if a tile is cached (any state: pending, loaded, or error). */
   hasTile(key: TileKey): boolean {
     return this.cache.has(tileKeyToString(key));
   }
 
-  /**
-   * Remove a specific tile from the cache and delete its GL texture.
-   */
+  /** Remove a specific tile from the cache and free its layer. */
   removeTile(key: TileKey): boolean {
     const strKey = tileKeyToString(key);
     const tile = this.cache.get(strKey);
     if (!tile) return false;
-
-    this.deleteTileTexture(tile);
-    this.cachedTexels -= tile.texels;
-    this.cache.delete(strKey);
+    this.dropTile(strKey, tile);
     return true;
   }
 
-  /**
-   * Clean up all cached tiles and release GL textures.
-   */
+  /** Release every tile and all GL resources. */
   dispose(): void {
-    for (const tile of this.cache.values()) {
-      this.deleteTileTexture(tile);
-    }
-    this.cache.clear();
-    this.cachedTexels = 0;
+    this.resetStore();
+    if (this.gl && this.pageTableTexture) this.gl.deleteTexture(this.pageTableTexture);
+    this.pageTableTexture = null;
     this._visibleKeys = [];
     this.visibleSet = new Set();
   }
 
   // -----------------------------------------------------------------------
-  // Eviction
+  // Store lifecycle
   // -----------------------------------------------------------------------
 
-  /**
-   * Evict least-recently-used tiles until `incomingTiles` more tiles totalling
-   * `incomingTexels` fit within both the texel budget and the tile-count cap.
-   *
-   * Tiles in the current visible set are never evicted. A view that needs
-   * more than the budget is allowed to exceed it: evicting a tile that is on
-   * screen leaves a hole that is refilled by evicting another visible tile,
-   * which never settles.
-   */
-  private evictToFit(incomingTexels: number, incomingTiles = 1): void {
-    while (
-      this.cache.size + incomingTiles > this.maxTiles ||
-      this.cachedTexels + incomingTexels > this.maxTexels
-    ) {
-      if (!this.evictLRU()) return;
+  /** Drop every tile and the array texture; the store becomes empty. */
+  private resetStore(): void {
+    if (this.gl && this.arrayTexture) this.gl.deleteTexture(this.arrayTexture);
+    this.arrayTexture = null;
+    this.cache.clear();
+    this.cachedTexels = 0;
+    this.level = -1;
+    this.tileRes = 0;
+    this.layerCount = 0;
+    this.freeLayers = [];
+    if (this.pageTable.length > 0) {
+      this.pageTable.fill(0);
+      this.pageTableDirty = true;
     }
+  }
+
+  /** Allocate the array texture for a level whose tiles are `res` square. */
+  private openStore(level: number, res: number): void {
+    const gl = this.gl;
+    const maxLayers = gl
+      ? (gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number)
+      : HEADLESS_MAX_LAYERS;
+    const byBudget = Math.floor(this.maxTexels / (res * res));
+    const layers = Math.max(1, Math.min(maxLayers, Math.max(MIN_LAYERS, byBudget)));
+
+    this.level = level;
+    this.tileRes = res;
+    this.layerCount = layers;
+    this.freeLayers = Array.from({ length: layers }, (_, i) => layers - 1 - i);
+
+    if (gl) {
+      this.arrayTexture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.arrayTexture);
+      gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R8, res, res, layers);
+      // Tiles are read with texelFetch, which ignores filtering; NEAREST
+      // states the intent and keeps the texture complete.
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
+    }
+  }
+
+  private setPageEntry(key: TileKey, value: number): void {
+    const n = Math.max(this.tilesPerDim, key.col + 1, key.row + 1);
+    if (n !== this.tilesPerDim || this.pageTable.length !== n * n) {
+      // Grow (or first-size) the table, keeping existing entries.
+      const next = new Uint16Array(n * n);
+      const old = this.tilesPerDim;
+      if (this.pageTable.length === old * old) {
+        for (let r = 0; r < old; r++) {
+          for (let c = 0; c < old; c++) next[r * n + c] = this.pageTable[r * old + c];
+        }
+      }
+      this.pageTable = next;
+      this.tilesPerDim = n;
+    }
+    this.pageTable[key.row * n + key.col] = value;
+    this.pageTableDirty = true;
+  }
+
+  private dropTile(strKey: string, tile: Tile): void {
+    if (tile.layer >= 0) {
+      this.freeLayers.push(tile.layer);
+      this.setPageEntry(tile.key, 0);
+    }
+    this.cachedTexels -= tile.texels;
+    this.cache.delete(strKey);
   }
 
   /**
    * Evict the least-recently-used tile that is not visible.
    * Returns false when there is nothing evictable.
+   *
+   * Visible tiles are never evicted: evicting a tile that is on screen leaves
+   * a hole that is refilled by evicting another visible tile, which never
+   * settles. A view needing more tiles than there are layers keeps the ones
+   * it has (the most central, since those are requested first) and shows the
+   * overview for the rest.
    */
   private evictLRU(): boolean {
     let oldestKey: string | null = null;
     let oldestTime = Infinity;
-
     for (const [strKey, tile] of this.cache) {
       if (this.visibleSet.has(strKey)) continue;
       if (tile.lastUsed < oldestTime) {
@@ -511,87 +764,29 @@ export class TileManager {
         oldestKey = strKey;
       }
     }
-
     if (oldestKey === null) return false;
-    const tile = this.cache.get(oldestKey)!;
-    this.deleteTileTexture(tile);
-    this.cachedTexels -= tile.texels;
-    this.cache.delete(oldestKey);
+    this.dropTile(oldestKey, this.cache.get(oldestKey)!);
     return true;
   }
 
   // -----------------------------------------------------------------------
-  // GL texture helpers
+  // GL upload
   // -----------------------------------------------------------------------
 
-  /** Convert [0,1] float intensities to the R8 bytes uploaded to the GPU. */
-  private static toR8(data: Float32Array): Uint8Array {
+  /** Write [0,1] float intensities into one layer as R8 bytes. */
+  private uploadLayer(layer: number, data: Float32Array): void {
+    const gl = this.gl;
+    if (!gl || !this.arrayTexture) return;
     const u8 = new Uint8Array(data.length);
     for (let i = 0; i < data.length; i++) {
       u8[i] = Math.round(Math.min(1.0, Math.max(0.0, data[i])) * 255);
     }
-    return u8;
-  }
-
-  /**
-   * Create a GL texture from tile intensity data.
-   * The texture is a single-channel R8 normalized format, matching the
-   * approach in WebGLRenderer.uploadContactMap.
-   */
-  private createTileTexture(data: Float32Array): WebGLTexture | null {
-    const gl = this.gl;
-    if (!gl) return null;
-
-    const size = Math.round(Math.sqrt(data.length));
-    if (size * size !== data.length) {
-      console.warn(
-        `TileManager: data length ${data.length} is not a perfect square`,
-      );
-      return null;
-    }
-
-    const texture = gl.createTexture();
-    if (!texture) return null;
-
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.arrayTexture);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.texImage2D(
-      gl.TEXTURE_2D, 0, gl.R8, size, size, 0,
-      gl.RED, gl.UNSIGNED_BYTE, TileManager.toR8(data),
+    gl.texSubImage3D(
+      gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, this.tileRes, this.tileRes, 1,
+      gl.RED, gl.UNSIGNED_BYTE, u8,
     );
-
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-    gl.bindTexture(gl.TEXTURE_2D, null);
-
-    return texture;
-  }
-
-  /** Re-upload data of the same size into an existing texture. */
-  private uploadTileTexture(texture: WebGLTexture, data: Float32Array): void {
-    const gl = this.gl;
-    if (!gl) return;
-
-    const size = Math.round(Math.sqrt(data.length));
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.texSubImage2D(
-      gl.TEXTURE_2D, 0, 0, 0, size, size,
-      gl.RED, gl.UNSIGNED_BYTE, TileManager.toR8(data),
-    );
-    gl.bindTexture(gl.TEXTURE_2D, null);
-  }
-
-  /**
-   * Delete a tile's GL texture if it exists.
-   */
-  private deleteTileTexture(tile: Tile): void {
-    if (this.gl && tile.texture) {
-      this.gl.deleteTexture(tile.texture);
-      tile.texture = null;
-    }
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
   }
 }

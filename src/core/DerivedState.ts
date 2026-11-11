@@ -7,15 +7,15 @@
  */
 
 import { state, selectContigOrder } from './State';
-import { isFileOrder } from './DisplayMapping';
+import { buildDisplayRuns, type DisplayRun } from './DisplayMapping';
 
 let cachedContigNames: string[] | null = null;
 let cachedContigScaffoldIds: (number | null)[] | null = null;
 let cachedContigBoundaries: number[] | null = null;
-let cachedIsFileOrder: boolean | null = null;
+let cachedDisplayRuns: DisplayRun[] | null = null;
 
 function invalidateDerivedCaches(): void {
-  cachedIsFileOrder = null;
+  cachedDisplayRuns = null;
   cachedContigNames = null;
   cachedContigScaffoldIds = null;
   cachedContigBoundaries = null;
@@ -72,13 +72,14 @@ export function getContigBoundaries(): number[] {
 }
 
 /**
- * True when the displayed order still reads the file's texels in place (see
- * DisplayMapping.isFileOrder). Cached until contigOrder or map changes.
+ * The curated layout as display runs (see DisplayMapping). Cached until
+ * contigOrder or map changes; the renderer re-uploads its runs texture only
+ * when this array's identity changes.
  */
-export function getDisplayIsFileOrder(): boolean {
-  if (cachedIsFileOrder !== null) return cachedIsFileOrder;
+export function getDisplayRuns(): DisplayRun[] {
+  if (cachedDisplayRuns !== null) return cachedDisplayRuns;
   const s = state.get();
-  if (!s.map) return true;
-  cachedIsFileOrder = isFileOrder(s.map.contigs, s.contigOrder);
-  return cachedIsFileOrder;
+  if (!s.map) return [];
+  cachedDisplayRuns = buildDisplayRuns(s.map.contigs, s.contigOrder);
+  return cachedDisplayRuns;
 }

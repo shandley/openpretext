@@ -63,7 +63,7 @@ async function loadPretextFromBuffer(
   if (ctx.tileDecodeDebounce !== null) { clearTimeout(ctx.tileDecodeDebounce); ctx.tileDecodeDebounce = null; }
   ctx.tileDecoder?.cancel();
   if (ctx.tileManager) { ctx.tileManager.dispose(); }
-  ctx.tileManager = new TileManager(ctx.renderer.getGL());
+  ctx.tileManager = new TileManager(ctx.renderer.getGL(), { tilesPerDim: h.numberOfTextures1D });
 
   updateLoading('Finalizing...', 98);
   state.update({

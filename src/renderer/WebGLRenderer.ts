@@ -1,15 +1,31 @@
 /**
  * WebGL2 renderer for Hi-C contact maps.
- * 
- * Renders the contact matrix as a textured quad with:
- * - Multi-resolution tiled rendering (mipmap-like)
- * - Configurable color maps applied in the fragment shader
- * - Smooth pan/zoom via camera transforms
- * - Contig grid overlay
- * - Selection highlighting
+ *
+ * The map is drawn in one pass over a unit quad. Textures hold the file's
+ * data in file order and are never rearranged. For each screen pixel the
+ * fragment shader:
+ *
+ *   1. takes the pixel's display coordinate (curated order),
+ *   2. maps it to a file coordinate through the display runs
+ *      (core/DisplayMapping), one axis at a time,
+ *   3. reads the detail tile holding that file texel if one is loaded,
+ *      and the whole-map overview otherwise.
+ *
+ * Because the overview and the tiles share step 2, they cannot disagree about
+ * where a contig is, and a curation edit changes only the small runs texture.
+ *
+ * A second pass draws the contig grid and the highlight band on top.
  */
 
 import { getColorMapData, type ColorMapName } from './ColorMaps';
+import type { DisplayRun } from '../core/DisplayMapping';
+import type { DetailTextures } from './TileManager';
+
+/** Width of the runs texture; runs wrap onto further rows past this. */
+const RUNS_TEX_WIDTH = 1024;
+
+/** Whether an uploaded map texture is laid out in file or display order. */
+export type MapOrder = 'file' | 'display';
 
 // Vertex shader: transforms quad vertices by camera.
 // Exported so tests can pin the map-space y convention, which has no other
@@ -51,13 +67,17 @@ void main() {
 }
 `;
 
-// Fragment shader: samples contact map and applies color map
-const FRAGMENT_SHADER = `#version 300 es
+// Fragment shader: maps display to file coordinates, samples, colours.
+// Exported so tests can check its structure; GLSL only runs on a real context.
+export const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
+precision highp int;
+precision highp sampler2DArray;
+precision highp usampler2D;
 
-in vec2 v_texcoord;
+in vec2 v_texcoord;   // display coordinate, 0-1 on each axis
 
-uniform sampler2D u_contactMap;
+uniform sampler2D u_contactMap;   // whole-map overview, R8, mipmapped
 uniform sampler2D u_colorMap;
 uniform vec2 u_resolution;
 uniform float u_zoom;
@@ -71,13 +91,32 @@ uniform float u_highlightStart;
 uniform float u_highlightEnd;
 uniform bool u_hasHighlight;
 // false: draw the contact map. true: draw only the grid and highlight, with
-// alpha, so they can be laid over whatever is already in the framebuffer
-// (the overview and any detail tiles).
+// alpha, so they can be laid over what is already in the framebuffer.
 uniform bool u_overlayOnly;
 
 // Contig boundaries (normalized 0-1, sorted ascending) in an R32F texture,
 // width = u_numContigs, height = 1. Sampled via texelFetch + binary search.
 uniform highp sampler2D u_boundaryTex;
+
+// Display runs, one RGBA32F texel each, laid out row-major in rows of
+// ${RUNS_TEX_WIDTH}: (displayStart, length, fileStart, reversed), in
+// full-resolution texels. Sorted by displayStart. See core/DisplayMapping.
+uniform highp sampler2D u_runsTex;
+uniform int u_numRuns;
+uniform float u_totalTexels;      // texels along one axis of the full map
+
+// Overview sampling.
+uniform bool u_baseInFileOrder;   // false for views computed in display order
+uniform float u_baseSize;         // overview texels per side
+uniform bool u_baseSnap;          // magnified: read the single nearest texel
+uniform float u_baseLod;          // minified: mip level that averages a pixel
+
+// Detail tiles of the level on screen, in file coordinates.
+uniform bool u_detailEnabled;
+uniform highp sampler2DArray u_tiles;
+uniform highp usampler2D u_pageTable;   // 0 = not loaded, else layer + 1
+uniform int u_tilesPerDim;
+uniform int u_tileRes;
 
 out vec4 fragColor;
 
@@ -114,6 +153,31 @@ float gridDistance(vec2 uv, int numContigs) {
              nearestBoundaryDist(uv.y, numContigs));
 }
 
+vec4 runAt(int i) {
+  return texelFetch(u_runsTex, ivec2(i % ${RUNS_TEX_WIDTH}, i / ${RUNS_TEX_WIDTH}), 0);
+}
+
+// Display texel coordinate -> file texel coordinate along one axis. Must
+// match DisplayMapping.displayToFileCoord. With no runs it is the identity.
+float displayToFile(float u) {
+  if (u_numRuns <= 0) return u;
+  // Last run whose displayStart <= u.
+  int lo = 0;
+  int hi = u_numRuns - 1;
+  for (int iter = 0; iter < 24; iter++) {
+    if (lo >= hi) break;
+    int mid = (lo + hi + 1) / 2;
+    if (runAt(mid).r <= u) lo = mid;
+    else hi = mid - 1;
+  }
+  vec4 run = runAt(lo);
+  float t = clamp(u - run.r, 0.0, run.g);
+  float f = run.a > 0.5 ? run.b + run.g - t : run.b + t;
+  // Keep the result inside the run's own file span, so a pixel centre that
+  // lands exactly on a run edge never reads the neighbouring texel.
+  return clamp(f, run.b, run.b + run.g - 0.015625);
+}
+
 // Overlay accumulator: premultiplied colour and remaining transmittance.
 vec3 ovColor = vec3(0.0);
 float ovTrans = 1.0;
@@ -124,8 +188,38 @@ void overlay(vec3 c, float a) {
 
 void main() {
   if (!u_overlayOnly) {
-    // Sample the contact map (single channel intensity)
-    float intensity = texture(u_contactMap, v_texcoord).r;
+    vec2 uDisplay = v_texcoord * u_totalTexels;
+    vec2 uFile = vec2(displayToFile(uDisplay.x), displayToFile(uDisplay.y));
+
+    float intensity = 0.0;
+    bool haveDetail = false;
+
+    // A loaded detail tile is authoritative for the texels it holds. It is
+    // read with texelFetch: one stored value per fragment, never a blend
+    // with a neighbouring texel, which after curation may belong to a
+    // different contig.
+    if (u_detailEnabled) {
+      float texelsPerTile = u_totalTexels / float(u_tilesPerDim);
+      vec2 tileCoord = uFile / texelsPerTile;
+      ivec2 tile = clamp(ivec2(floor(tileCoord)), ivec2(0), ivec2(u_tilesPerDim - 1));
+      uint slot = texelFetch(u_pageTable, tile, 0).r;
+      if (slot > 0u) {
+        vec2 within = tileCoord - vec2(tile);
+        ivec2 px = clamp(ivec2(floor(within * float(u_tileRes))), ivec2(0), ivec2(u_tileRes - 1));
+        intensity = texelFetch(u_tiles, ivec3(px, int(slot) - 1), 0).r;
+        haveDetail = true;
+      }
+    }
+
+    if (!haveDetail) {
+      vec2 b = (u_baseInFileOrder ? uFile : uDisplay) / u_totalTexels;
+      // Magnified: snap to the texel centre so the result is that one stored
+      // value. Minified: average the texels under the pixel with an explicit
+      // mip level. (Derivative-based level selection would misfire at run
+      // seams, where the file coordinate jumps.)
+      if (u_baseSnap) b = (floor(b * u_baseSize) + 0.5) / u_baseSize;
+      intensity = textureLod(u_contactMap, b, u_baseLod).r;
+    }
 
     // Rescale to the [floor, ceil] contrast range: <=floor -> 0 (background),
     // >=ceil -> 1 (saturated), linear in between. Then gamma correct.
@@ -163,82 +257,6 @@ void main() {
 }
 `;
 
-// Tile vertex shader: maps a unit quad to a tile's region in map space,
-// then applies the same camera transform as the overview.
-export const TILE_VERTEX_SHADER = `#version 300 es
-precision highp float;
-
-in vec2 a_position;
-
-uniform vec2 u_camera;
-uniform float u_zoom;
-uniform vec2 u_resolution;
-uniform vec2 u_tileOffset; // tile origin in map space (0-1)
-uniform vec2 u_tileScale;  // tile size in map space (1/tilesPerDim)
-
-out vec2 v_texcoord;
-
-void main() {
-  // Map unit quad [0,1] to tile's region in map space
-  vec2 mapPos = u_tileOffset + a_position * u_tileScale;
-
-  // Apply camera transform (same as overview shader)
-  vec2 pos = (mapPos - u_camera) * u_zoom;
-
-  // Same single y flip as the overview shader: map space is genomic y-down,
-  // clip space is y-up. Tile row r covers map y [r/n, (r+1)/n], which is where
-  // its genomic rows actually belong — previously the tile grid was placed in
-  // a y-up space while its rows were indexed y-down, so the detail layer was
-  // mirrored block-by-block against the overview beneath it.
-  pos.y = -pos.y;
-
-  float aspect = u_resolution.x / u_resolution.y;
-  if (aspect > 1.0) {
-    pos.x /= aspect;
-  } else {
-    pos.y *= aspect;
-  }
-
-  gl_Position = vec4(pos * 2.0, 0.0, 1.0);
-  // Tile texture rows are genomic top-down, same as map space, so the texcoord
-  // is the unit-quad position unchanged.
-  v_texcoord = a_position;
-}
-`;
-
-// Tile fragment shader: samples tile texture, applies gamma + color map.
-//
-// A loaded tile is authoritative for the area it covers: every fragment is
-// drawn, including empty ones, which take the colour map's zero colour. It
-// must not be masked by, or let through, the coarser overview underneath.
-// Doing either shows the reader something the file does not contain at this
-// position (hidden weak contacts in one case, empty texels painted with a
-// coarse average in the other).
-//
-// No grid or highlight here: those are drawn over the tiles by the overlay
-// pass (see renderOverlay).
-const TILE_FRAGMENT_SHADER = `#version 300 es
-precision highp float;
-
-in vec2 v_texcoord;
-
-uniform sampler2D u_tileTexture;
-uniform sampler2D u_colorMap;
-uniform float u_gamma;
-uniform float u_floor;   // contrast range minimum (hidden at/below)
-uniform float u_ceil;    // contrast range maximum (saturated at/above)
-
-out vec4 fragColor;
-
-void main() {
-  float intensity = texture(u_tileTexture, v_texcoord).r;
-  // Rescale to the [floor, ceil] contrast range, then gamma correct.
-  float t = clamp((intensity - u_floor) / max(u_ceil - u_floor, 1e-5), 0.0, 1.0);
-  float mapped = pow(t, u_gamma);
-  fragColor = texture(u_colorMap, vec2(mapped, 0.5));
-}
-`;
-
 export interface RenderOptions {
   gamma?: number;
   floor?: number;
@@ -248,8 +266,14 @@ export interface RenderOptions {
   contigBoundaries?: number[];
   highlightStart?: number;
   highlightEnd?: number;
-  /** Skip the grid/highlight pass; the caller will call renderOverlay(). */
-  deferOverlay?: boolean;
+  /**
+   * The curated layout (DerivedState.getDisplayRuns) and the map's width in
+   * full-resolution texels. Omitted: display equals file order.
+   */
+  displayRuns?: DisplayRun[];
+  totalTexels?: number;
+  /** Loaded detail tiles to draw in place of the overview where present. */
+  detail?: DetailTextures | null;
 }
 
 export class WebGLRenderer {
@@ -267,10 +291,21 @@ export class WebGLRenderer {
   // Uniforms
   private uniforms: Record<string, WebGLUniformLocation | null> = {};
 
-  // Tile detail program
-  private tileProgram: WebGLProgram | null = null;
-  private tileVao: WebGLVertexArrayObject | null = null;
-  private tileUniforms: Record<string, WebGLUniformLocation | null> = {};
+  // Display runs live in an RGBA32F texture, re-uploaded only when the runs
+  // array reference changes (DerivedState memoizes it per order/map change).
+  private runsTexture: WebGLTexture | null = null;
+  private runsCount = 0;
+  private lastRunsRef: DisplayRun[] | null = null;
+
+  // Placeholders bound to the detail samplers when no tiles are drawn, so
+  // every sampler always has a complete texture of its own type.
+  private emptyArrayTexture: WebGLTexture | null = null;
+  private emptyPageTable: WebGLTexture | null = null;
+
+  /** Layout of the uploaded map texture. */
+  private baseOrder: MapOrder = 'file';
+  /** The data last uploaded, so callers can skip a redundant re-upload. */
+  private baseDataRef: Float32Array | null = null;
 
   // State
   private textureSize: number = 0;
@@ -330,7 +365,10 @@ export class WebGLRenderer {
     const uniformNames = [
       'u_camera', 'u_zoom', 'u_resolution', 'u_contactMap', 'u_colorMap',
       'u_gamma', 'u_floor', 'u_ceil', 'u_showGrid', 'u_gridOpacity', 'u_numContigs', 'u_boundaryTex',
-      'u_highlightStart', 'u_highlightEnd', 'u_hasHighlight', 'u_overlayOnly'
+      'u_highlightStart', 'u_highlightEnd', 'u_hasHighlight', 'u_overlayOnly',
+      'u_runsTex', 'u_numRuns', 'u_totalTexels',
+      'u_baseInFileOrder', 'u_baseSize', 'u_baseSnap', 'u_baseLod',
+      'u_detailEnabled', 'u_tiles', 'u_pageTable', 'u_tilesPerDim', 'u_tileRes',
     ];
     for (const name of uniformNames) {
       this.uniforms[name] = gl.getUniformLocation(this.program, name);
@@ -342,8 +380,7 @@ export class WebGLRenderer {
     // Create default color map texture
     this.setColorMap('red-white');
 
-    // Initialize tile detail program
-    this.initTileProgram();
+    this.createPlaceholders();
 
     // Set up blending
     // Colour blends by source alpha; destination alpha is kept at 1 so the
@@ -402,11 +439,17 @@ export class WebGLRenderer {
   }
 
   /**
-   * Upload contact map data as a texture.
+   * Upload the whole-map texture.
    * Data should be a Float32Array of intensity values [0,1] in row-major order.
+   *
+   * @param order 'file' for the file's own data, which the shader lays out in
+   *   the curated order itself. 'display' for a view already computed in the
+   *   curated order (for example observed/expected), which is drawn as is.
    */
-  uploadContactMap(data: Float32Array, size: number): void {
+  uploadContactMap(data: Float32Array, size: number, order: MapOrder = 'file'): void {
     const gl = this.gl;
+    this.baseOrder = order;
+    this.baseDataRef = data;
     
     if (this.contactMapTexture) {
       gl.deleteTexture(this.contactMapTexture);
@@ -440,6 +483,65 @@ export class WebGLRenderer {
     
     this.textureSize = size;
     this.needsRender = true;
+  }
+
+  /** Side of the uploaded map texture in texels (0 before any upload). */
+  get mapTextureSize(): number {
+    return this.textureSize;
+  }
+
+  /** True when `data` is the array currently uploaded as the map texture. */
+  isCurrentMap(data: Float32Array): boolean {
+    return this.baseDataRef === data;
+  }
+
+  /** 1x1 textures for the detail samplers when no tiles are being drawn. */
+  private createPlaceholders(): void {
+    const gl = this.gl;
+    this.emptyArrayTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.emptyArrayTexture);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R8, 1, 1, 1);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
+
+    this.emptyPageTable = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.emptyPageTable);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, 1, 1, 0, gl.RED_INTEGER, gl.UNSIGNED_SHORT, new Uint16Array([0]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  /**
+   * Upload the display runs into an RGBA32F texture the shader binary
+   * searches. A count of 0 makes the shader treat display as file order.
+   */
+  private uploadRunsTexture(runs: DisplayRun[]): void {
+    const gl = this.gl;
+    if (this.runsTexture) {
+      gl.deleteTexture(this.runsTexture);
+      this.runsTexture = null;
+    }
+    this.runsCount = runs.length;
+    if (runs.length === 0) return;
+
+    const rows = Math.ceil(runs.length / RUNS_TEX_WIDTH);
+    const data = new Float32Array(RUNS_TEX_WIDTH * rows * 4);
+    runs.forEach((run, i) => {
+      data[i * 4] = run.displayStart;
+      data[i * 4 + 1] = run.length;
+      data[i * 4 + 2] = run.fileStart;
+      data[i * 4 + 3] = run.reversed ? 1 : 0;
+    });
+    this.runsTexture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, this.runsTexture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, RUNS_TEX_WIDTH, rows, 0, gl.RGBA, gl.FLOAT, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
 
   /**
@@ -553,7 +655,28 @@ export class WebGLRenderer {
     gl.uniform1f(this.uniforms['u_ceil']!, options.ceil ?? 1);
     gl.uniform1i(this.uniforms['u_overlayOnly']!, 0);
 
-    // Bind textures
+    // Display mapping.
+    const runs = options.displayRuns ?? [];
+    if (runs !== this.lastRunsRef) {
+      this.uploadRunsTexture(runs);
+      this.lastRunsRef = runs;
+    }
+    const totalTexels = options.totalTexels ?? this.textureSize;
+    gl.uniform1i(this.uniforms['u_numRuns']!, this.runsCount);
+    gl.uniform1f(this.uniforms['u_totalTexels']!, totalTexels);
+
+    // Overview sampling: one texel per fragment when magnified, an averaging
+    // mip level when minified.
+    const pxAcrossMap = camera.zoom * Math.min(gl.drawingBufferWidth, gl.drawingBufferHeight);
+    const texelPx = pxAcrossMap / Math.max(1, this.textureSize);
+    const snap = texelPx >= 1;
+    gl.uniform1i(this.uniforms['u_baseInFileOrder']!, this.baseOrder === 'file' ? 1 : 0);
+    gl.uniform1f(this.uniforms['u_baseSize']!, this.textureSize);
+    gl.uniform1i(this.uniforms['u_baseSnap']!, snap ? 1 : 0);
+    gl.uniform1f(this.uniforms['u_baseLod']!, snap ? 0 : Math.log2(1 / texelPx));
+
+    // Bind textures. Every sampler gets its own unit and a texture of its own
+    // type, whether or not this frame uses it.
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.contactMapTexture);
     gl.uniform1i(this.uniforms['u_contactMap']!, 0);
@@ -562,19 +685,36 @@ export class WebGLRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
     gl.uniform1i(this.uniforms['u_colorMap']!, 1);
 
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.boundaryTexture);
+    gl.uniform1i(this.uniforms['u_boundaryTex']!, 2);
+
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.runsTexture);
+    gl.uniform1i(this.uniforms['u_runsTex']!, 3);
+
+    const detail = options.detail ?? null;
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, detail ? detail.tiles : this.emptyArrayTexture);
+    gl.uniform1i(this.uniforms['u_tiles']!, 4);
+    gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_2D, detail ? detail.pageTable : this.emptyPageTable);
+    gl.uniform1i(this.uniforms['u_pageTable']!, 5);
+    gl.uniform1i(this.uniforms['u_detailEnabled']!, detail ? 1 : 0);
+    gl.uniform1i(this.uniforms['u_tilesPerDim']!, detail ? detail.tilesPerDim : 1);
+    gl.uniform1i(this.uniforms['u_tileRes']!, detail ? detail.tileRes : 1);
+
     // Draw
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
 
-    if (!options.deferOverlay) this.renderOverlay(camera, options);
+    this.renderOverlay(camera, options);
   }
 
   /**
-   * Draw the contig grid and the highlight band over whatever is already in
-   * the framebuffer. render() calls this itself unless `deferOverlay` is set;
-   * a caller that draws detail tiles defers it and calls it after the tiles,
-   * so the grid stays visible on top of them.
+   * Draw the contig grid and the highlight band over the map already in the
+   * framebuffer. render() calls this itself.
    */
   renderOverlay(camera: { x: number; y: number; zoom: number }, options: RenderOptions = {}): void {
     const gl = this.gl;
@@ -608,11 +748,19 @@ export class WebGLRenderer {
       gl.uniform1f(this.uniforms['u_highlightEnd']!, options.highlightEnd!);
     }
 
-    if (this.boundaryTexture) {
-      gl.activeTexture(gl.TEXTURE2);
-      gl.bindTexture(gl.TEXTURE_2D, this.boundaryTexture);
-      gl.uniform1i(this.uniforms['u_boundaryTex']!, 2);
-    }
+    // Same sampler-to-unit assignment as the map pass.
+    gl.uniform1i(this.uniforms['u_contactMap']!, 0);
+    gl.uniform1i(this.uniforms['u_colorMap']!, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.boundaryTexture);
+    gl.uniform1i(this.uniforms['u_boundaryTex']!, 2);
+    gl.uniform1i(this.uniforms['u_runsTex']!, 3);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.emptyArrayTexture);
+    gl.uniform1i(this.uniforms['u_tiles']!, 4);
+    gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_2D, this.emptyPageTable);
+    gl.uniform1i(this.uniforms['u_pageTable']!, 5);
 
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -680,106 +828,11 @@ export class WebGLRenderer {
     return { x: canvasX, y: canvasY };
   }
 
-  // ─── Tile Detail Rendering ─────────────────────────────────
-
   /**
    * Expose the GL context so TileManager can create textures.
    */
   getGL(): WebGL2RenderingContext {
     return this.gl;
-  }
-
-  private initTileProgram(): void {
-    const gl = this.gl;
-
-    const vs = this.compileShader(gl.VERTEX_SHADER, TILE_VERTEX_SHADER);
-    const fs = this.compileShader(gl.FRAGMENT_SHADER, TILE_FRAGMENT_SHADER);
-    if (!vs || !fs) return;
-
-    this.tileProgram = gl.createProgram()!;
-    gl.attachShader(this.tileProgram, vs);
-    gl.attachShader(this.tileProgram, fs);
-    gl.linkProgram(this.tileProgram);
-
-    if (!gl.getProgramParameter(this.tileProgram, gl.LINK_STATUS)) {
-      console.error('Tile program link error:', gl.getProgramInfoLog(this.tileProgram));
-      return;
-    }
-
-    const tileUniformNames = [
-      'u_camera', 'u_zoom', 'u_resolution',
-      'u_tileOffset', 'u_tileScale',
-      'u_tileTexture', 'u_colorMap', 'u_gamma', 'u_floor', 'u_ceil',
-    ];
-    for (const name of tileUniformNames) {
-      this.tileUniforms[name] = gl.getUniformLocation(this.tileProgram, name);
-    }
-
-    // Create tile VAO (same unit quad geometry as the overview)
-    const vertices = new Float32Array([
-      0, 0,
-      1, 0,
-      0, 1,
-      1, 1,
-    ]);
-
-    this.tileVao = gl.createVertexArray()!;
-    gl.bindVertexArray(this.tileVao);
-
-    const buffer = gl.createBuffer()!;
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-
-    const posLoc = gl.getAttribLocation(this.tileProgram, 'a_position');
-    gl.enableVertexAttribArray(posLoc);
-    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-    gl.bindVertexArray(null);
-  }
-
-  /**
-   * Begin a batch of detail-tile draws. Binds the tile program, uploads the
-   * uniforms shared by all tiles in the frame (camera, zoom, resolution, gamma),
-   * binds the color map, and binds the tile VAO once. Call drawTile() per tile,
-   * then endTiles().
-   */
-  beginTiles(
-    camera: { x: number; y: number; zoom: number },
-    gamma: number,
-    floor: number = 0,
-    ceil: number = 1,
-  ): void {
-    const gl = this.gl;
-    if (!this.tileProgram || !this.tileVao) return;
-    gl.useProgram(this.tileProgram);
-    gl.uniform2f(this.tileUniforms['u_camera']!, camera.x, camera.y);
-    gl.uniform1f(this.tileUniforms['u_zoom']!, camera.zoom);
-    gl.uniform2f(this.tileUniforms['u_resolution']!, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    gl.uniform1f(this.tileUniforms['u_gamma']!, gamma);
-    gl.uniform1f(this.tileUniforms['u_floor']!, floor);
-    gl.uniform1f(this.tileUniforms['u_ceil']!, ceil);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.colorMapTexture);
-    gl.uniform1i(this.tileUniforms['u_colorMap']!, 1);
-    gl.bindVertexArray(this.tileVao);
-  }
-
-  /** Draw one tile within a beginTiles()/endTiles() batch. */
-  drawTile(texture: WebGLTexture, col: number, row: number, tilesPerDim: number): void {
-    const gl = this.gl;
-    if (!this.tileProgram || !this.tileVao) return;
-    const tileSize = 1.0 / tilesPerDim;
-    gl.uniform2f(this.tileUniforms['u_tileOffset']!, col * tileSize, row * tileSize);
-    gl.uniform2f(this.tileUniforms['u_tileScale']!, tileSize, tileSize);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.uniform1i(this.tileUniforms['u_tileTexture']!, 0);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  }
-
-  /** End a detail-tile draw batch. */
-  endTiles(): void {
-    this.gl.bindVertexArray(null);
   }
 
   destroy(): void {
@@ -789,7 +842,8 @@ export class WebGLRenderer {
     if (this.boundaryTexture) gl.deleteTexture(this.boundaryTexture);
     if (this.program) gl.deleteProgram(this.program);
     if (this.vao) gl.deleteVertexArray(this.vao);
-    if (this.tileProgram) gl.deleteProgram(this.tileProgram);
-    if (this.tileVao) gl.deleteVertexArray(this.tileVao);
+    if (this.runsTexture) gl.deleteTexture(this.runsTexture);
+    if (this.emptyArrayTexture) gl.deleteTexture(this.emptyArrayTexture);
+    if (this.emptyPageTable) gl.deleteTexture(this.emptyPageTable);
   }
 }

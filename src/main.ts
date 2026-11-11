@@ -18,6 +18,7 @@ import { DragReorder } from './curation/DragReorder';
 import { ScaffoldManager } from './curation/ScaffoldManager';
 import { WaypointManager } from './curation/WaypointManager';
 import { CurationEngine } from './curation/CurationEngine';
+import { state } from './core/State';
 import { MetricsTracker } from './curation/QualityMetrics';
 import { TutorialManager } from './ui/TutorialManager';
 import { setupTutorialOverlay } from './ui/TutorialOverlay';
@@ -215,6 +216,13 @@ class OpenPretextApp {
     setupAnalysisPanel(ctx);
     setupStatsPanel();
     setupOEToggle(ctx);
+
+    // Development-only handle for end-to-end tests that need to set the
+    // camera exactly and read state back (tests/e2e/pixel-truth.spec.ts).
+    // Vite removes this branch from production builds.
+    if (import.meta.env.DEV) {
+      (window as unknown as { __openpretext?: unknown }).__openpretext = { ctx, state, CurationEngine };
+    }
 
     console.log('OpenPretext initialized');
   }

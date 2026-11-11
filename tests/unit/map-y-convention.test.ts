@@ -18,12 +18,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { VERTEX_SHADER, TILE_VERTEX_SHADER } from '../../src/renderer/WebGLRenderer';
+import { VERTEX_SHADER } from '../../src/renderer/WebGLRenderer';
 import { TrackRenderer } from '../../src/renderer/TrackRenderer';
 
 const SHADERS: Array<[string, string]> = [
-  ['overview', VERTEX_SHADER],
-  ['tile', TILE_VERTEX_SHADER],
+  // The map (overview and detail tiles together) is drawn by one shader.
+  ['map', VERTEX_SHADER],
 ];
 
 describe('map-space y convention', () => {

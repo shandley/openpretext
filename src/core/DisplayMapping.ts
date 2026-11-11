@@ -215,24 +215,6 @@ export function displayToFileTexel(runs: DisplayRun[], d: number): number {
   return Number.isNaN(f) ? -1 : Math.floor(f);
 }
 
-/**
- * True when the displayed order reads the file's texels left to right with
- * nothing moved or flipped, so a display coordinate equals its file
- * coordinate.
- *
- * Detail tiles are stored and drawn in file coordinates. Until they are drawn
- * through the display mapping, they are only correct while this holds.
- */
-export function isFileOrder(contigs: ContigInfo[], contigOrder: number[]): boolean {
-  let runs: DisplayRun[];
-  try {
-    runs = buildDisplayRuns(contigs, contigOrder);
-  } catch {
-    return false;
-  }
-  return runs.every((r) => !r.reversed && r.fileStart === r.displayStart);
-}
-
 // ---------------------------------------------------------------------------
 // Coarse (overview) resampling
 // ---------------------------------------------------------------------------

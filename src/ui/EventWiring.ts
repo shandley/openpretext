@@ -14,7 +14,8 @@ import { getContigBoundaries } from '../core/DerivedState';
 import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel, clearEnhancedMap } from './AnalysisPanel';
 import { resetOEMap } from './OEMapToggle';
 import { updateComparisonSummary } from './ComparisonMode';
-import { reorderContactMap } from '../renderer/ContactMapReorder';
+import { showBaseOverview } from './BaseOverview';
+import { updateDetailTiles } from './RenderLoop';
 import { syncOverviewModeSelect } from './ColorMapControls';
 import { refreshCuratorTracks } from './CuratorTracks';
 
@@ -103,7 +104,13 @@ function flashContig(ctx: AppContext, contigIndex?: number): void {
  */
 export function refreshAfterCuration(ctx: AppContext): void {
   rebuildContigBoundaries(ctx);
-  reorderAndUploadContactMap(ctx);
+  // The edit changed the layout, not the data. The renderer picks the new
+  // layout up from the display runs; this restores the file's own view if a
+  // derived one (O/E, model output) was showing, and redraws the minimap.
+  showBaseOverview(ctx);
+  // The same view now shows different parts of the file, so ask for the
+  // detail tiles it needs. (Otherwise they would wait for the next pan.)
+  if (ctx.camera) updateDetailTiles(ctx, ctx.camera.getState());
   refreshCuratorTracks(ctx);
   ctx.updateSidebarContigList();
   ctx.updateSidebarScaffoldList();
@@ -118,44 +125,12 @@ export function refreshAfterCuration(ctx: AppContext): void {
   updateComparisonSummary(ctx);
   // Clear enhanced map on curation (ordering changed, enhancement is stale)
   clearEnhancedMap();
-  // Curation re-uploaded the raw map above; drop O/E and restore the colour map.
+  // The file's view is back on screen; drop O/E state and restore the colour map.
   resetOEMap(ctx);
   // Update curation progress panel
   updateProgressPanel(ctx);
   // Schedule debounced analysis recompute (insulation + P(s) only)
   scheduleAnalysisRecompute(ctx);
-}
-
-/**
- * Reorder the contact map to match the current contig display order
- * and re-upload the texture to the GPU.
- */
-function reorderAndUploadContactMap(ctx: AppContext): void {
-  const s = state.get();
-  if (!s.map) return;
-  const original = overviewForMode(ctx, s);
-  if (!original) return;
-  const mapSize = Math.round(Math.sqrt(original.length));
-  if (mapSize === 0) return;
-
-  const reordered = reorderContactMap(original, s.map.contigs, s.contigOrder, mapSize);
-  ctx.renderer.uploadContactMap(reordered, mapSize);
-  ctx.minimap.updateThumbnail(reordered, mapSize, undefined, s.signalFloor, s.signalCeil);
-}
-
-/**
- * Pick the file-order overview for the current mode. 'faithful' uses the finer
- * stored mip level, assembled by the tile worker and cached on ctx (see
- * applyOverviewMode); if it isn't available, falls back to the coarsest level
- * so the map is never blank.
- */
-function overviewForMode(ctx: AppContext, s: ReturnType<typeof state.get>): Float32Array | null {
-  if (!s.map) return null;
-  const clean = s.map.originalContactMap ?? null;
-  if (s.overviewMode === 'faithful' && ctx.faithfulOverviewOriginal) {
-    return ctx.faithfulOverviewOriginal;
-  }
-  return clean;
 }
 
 /** Cheap check that an assembled overview actually carries signal. */
@@ -165,8 +140,8 @@ function overviewHasSignal(a: Float32Array): boolean {
 }
 
 /**
- * Re-apply the overview for the current `overviewMode`, reordered to the
- * current contig order. For 'faithful', lazily asks the tile decode worker
+ * Re-apply the overview for the current `overviewMode`. For 'faithful', lazily
+ * asks the tile decode worker
  * (which owns the raw tile bytes) to assemble the finer mip level and caches
  * it. If that can't be assembled, reverts to the coarsest level rather than
  * uploading a blank texture.
@@ -188,7 +163,7 @@ export async function applyOverviewMode(ctx: AppContext): Promise<void> {
       ctx.showToast('Fine overview unavailable for this file; showing Coarse');
     }
   }
-  reorderAndUploadContactMap(ctx);
+  showBaseOverview(ctx);
   ctx.requestRender();
 }
 

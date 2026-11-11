@@ -69,6 +69,7 @@ import { Evo2HiCClient, getStoredServerUrl as getEvoUrl, setStoredServerUrl as s
 import { HiCFoundationClient, getStoredServerUrl as getHicfUrl, setStoredServerUrl as setHicfUrl } from '../analysis/HiCFoundationClient';
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
+import { showBaseOverview } from './BaseOverview';
 import { computeJoinSupport, type JoinSupportResult, type JunctionSupport } from '../analysis/JoinSupport';
 import { computeContigCoverageRatios, detectHaplotigs, type HaplotigResult } from '../analysis/HaplotigDetector';
 import { metaTags } from '../curation/MetaTagManager';
@@ -2371,7 +2372,7 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
       cachedEnhancedOverview = decodeContactMap(data.enhancement.enhancedOverviewBase64, overviewSz);
       enhancedMapActive = data.enhancement.active ?? false;
       if (enhancedMapActive && cachedEnhancedOverview) {
-        ctx.renderer.uploadContactMap(cachedEnhancedOverview, overviewSz);
+        ctx.renderer.uploadContactMap(cachedEnhancedOverview, overviewSz, 'display');
         ctx.minimap.updateThumbnail(cachedEnhancedOverview, overviewSz);
       }
     } catch {
@@ -2757,17 +2758,12 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     const overviewSz = getOverviewSize();
 
     if (enhancedMapActive) {
-      ctx.renderer.uploadContactMap(cachedEnhancedOverview, overviewSz);
+      ctx.renderer.uploadContactMap(cachedEnhancedOverview, overviewSz, 'display');
       ctx.minimap.updateThumbnail(cachedEnhancedOverview, overviewSz);
       btnToggle.textContent = 'Show Original';
       btnToggle.classList.add('enhance-active');
     } else {
-      const original = s2.map.originalContactMap;
-      if (original) {
-        const reordered = reorderContactMap(original, s2.map.contigs, s2.contigOrder, overviewSz);
-        ctx.renderer.uploadContactMap(reordered, overviewSz);
-        ctx.minimap.updateThumbnail(reordered, overviewSz);
-      }
+      showBaseOverview(ctx);
       btnToggle.textContent = 'Toggle Enhanced View';
       btnToggle.classList.remove('enhance-active');
     }
@@ -2868,17 +2864,12 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     const overviewSz = getOverviewSize();
 
     if (predictedHiCActive) {
-      ctx.renderer.uploadContactMap(cachedPredictedHiC, overviewSz);
+      ctx.renderer.uploadContactMap(cachedPredictedHiC, overviewSz, 'display');
       ctx.minimap.updateThumbnail(cachedPredictedHiC, overviewSz);
       btnTogglePredicted.textContent = 'Show Observed';
       btnTogglePredicted.classList.add('enhance-active');
     } else {
-      const original = s2.map.originalContactMap;
-      if (original) {
-        const reordered = reorderContactMap(original, s2.map.contigs, s2.contigOrder, overviewSz);
-        ctx.renderer.uploadContactMap(reordered, overviewSz);
-        ctx.minimap.updateThumbnail(reordered, overviewSz);
-      }
+      showBaseOverview(ctx);
       btnTogglePredicted.textContent = 'Toggle Predicted vs Observed';
       btnTogglePredicted.classList.remove('enhance-active');
     }

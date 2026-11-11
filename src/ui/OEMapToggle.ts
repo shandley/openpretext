@@ -20,6 +20,7 @@
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { reorderContactMap } from '../renderer/ContactMapReorder';
+import { showBaseOverview } from './BaseOverview';
 import { computeExpectedContacts, computeOEMatrix } from '../analysis/CompartmentAnalysis';
 import { getColorMapData, type ColorMapName } from '../renderer/ColorMaps';
 import { syncColormapDropdown } from './ColorMapControls';
@@ -88,7 +89,8 @@ function applyOE(ctx: AppContext): boolean {
   prevFloor = s.signalFloor;
   prevCeil = s.signalCeil;
 
-  ctx.renderer.uploadContactMap(oeDisplay, size);
+  // Computed in the curated order, so it is drawn as is.
+  ctx.renderer.uploadContactMap(oeDisplay, size, 'display');
   const sampler = lutSampler(OE_COLORMAP);
   ctx.minimap.updateThumbnail(oeDisplay, size, (v) => sampler(v));
 
@@ -105,14 +107,7 @@ function applyOE(ctx: AppContext): boolean {
 }
 
 function restoreView(ctx: AppContext): void {
-  const s = state.get();
-  const original = s.map?.originalContactMap;
-  const size = overviewSize();
-  if (original && size >= 2) {
-    const reordered = reorderContactMap(original, s.map!.contigs, s.contigOrder, size);
-    ctx.renderer.uploadContactMap(reordered, size);
-    ctx.minimap.updateThumbnail(reordered, size);
-  }
+  showBaseOverview(ctx);
   if (prevColorMap) {
     ctx.currentColorMap = prevColorMap;
     ctx.renderer.setColorMap(prevColorMap);

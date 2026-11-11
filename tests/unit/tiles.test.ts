@@ -331,7 +331,7 @@ describe('TileManager', () => {
       expect(tile!.state).toBe('loaded');
       expect(tile!.texels).toBe(data.length);
       expect(tile!.key).toEqual(key);
-      expect(tile!.texture).toBeNull(); // no GL context
+      expect(tile!.layer).toBeGreaterThanOrEqual(0);
     });
 
     it('should return undefined for missing tiles', () => {
@@ -348,12 +348,18 @@ describe('TileManager', () => {
 
     it('should replace an already-loaded tile without growing the cache', () => {
       const key: TileKey = { level: 0, col: 0, row: 0 };
-      manager.loadTile(key, makeTileData(16, 0, 0, 0));
-      manager.loadTile(key, makeTileData(32, 1, 1, 1));
+      const first = manager.loadTile(key, makeTileData(16, 0, 0, 0))!;
+      const second = manager.loadTile(key, makeTileData(16, 1, 1, 1))!;
 
-      expect(manager.getTile(key)!.texels).toBe(32 * 32);
+      expect(second.layer).toBe(first.layer);
       expect(manager.size).toBe(1);
-      expect(manager.texelsInUse).toBe(32 * 32);
+      expect(manager.texelsInUse).toBe(16 * 16);
+    });
+
+    it('should refuse a tile whose size differs from the level being held', () => {
+      manager.loadTile({ level: 0, col: 0, row: 0 }, makeTileData(16));
+      expect(manager.loadTile({ level: 0, col: 1, row: 0 }, makeTileData(32))).toBeUndefined();
+      expect(manager.size).toBe(1);
     });
 
     it('should not keep the decoded data once a tile is loaded', () => {
@@ -470,56 +476,100 @@ describe('TileManager', () => {
       expect(small.hasTile({ level: 0, col: 4, row: 0 })).toBe(true);
     });
 
-    it('should default to a 256 Mi texel budget with no tile-count cap', () => {
+    it('should default to a 96 Mi texel budget with no tile-count cap', () => {
       const defaultManager = new TileManager(null);
       expect(defaultManager.texelBudget).toBe(DEFAULT_MAX_TEXELS);
-      expect(DEFAULT_MAX_TEXELS).toBe(256 * 1024 * 1024);
+      expect(DEFAULT_MAX_TEXELS).toBe(96 * 1024 * 1024);
       expect(defaultManager.capacity).toBe(Infinity);
     });
 
-    it('should evict off-screen tiles to stay within the texel budget', () => {
-      // Budget of 3 tiles of 16x16
-      const m = new TileManager(null, { maxTexels: 3 * 256 });
-      for (let i = 0; i < 5; i++) {
+    it('should size the store from the texel budget and evict off-screen tiles to fit', () => {
+      // Budget of 20 tiles of 16x16 -> 20 layers.
+      const m = new TileManager(null, { maxTexels: 20 * 256 });
+      for (let i = 0; i < 25; i++) {
         m.loadTile({ level: 0, col: i, row: 0 }, makeTileData(16, i));
       }
-      expect(m.size).toBe(3);
-      expect(m.texelsInUse).toBe(3 * 256);
-      expect(m.hasTile({ level: 0, col: 0, row: 0 })).toBe(false);
-      expect(m.hasTile({ level: 0, col: 4, row: 0 })).toBe(true);
+      expect(m.layers).toBe(20);
+      expect(m.size).toBe(20);
+      expect(m.texelsInUse).toBe(20 * 256);
+      expect(m.hasTile({ level: 0, col: 4, row: 0 })).toBe(false);
+      expect(m.hasTile({ level: 0, col: 5, row: 0 })).toBe(true);
+      expect(m.hasTile({ level: 0, col: 24, row: 0 })).toBe(true);
     });
 
-    it('should never evict a tile that is on screen, even over budget', () => {
-      // 4x4 grid fully visible at zoom 1 = 16 visible tiles, cap of 4.
-      const m = new TileManager(null, { maxTiles: 4, maxTexels: 4 * 256 });
+    it('should never displace a tile that is on screen', () => {
+      // 4x4 grid fully visible at zoom 1 = 16 visible tiles, room for 4.
+      const m = new TileManager(null, { maxTiles: 4 });
       const keys = m.updateVisibleTiles({ x: 0.5, y: 0.5, zoom: 1.0 }, 800, 800, 4, 3);
       expect(keys.length).toBe(16);
-      for (const key of keys) m.loadTile(key, makeTileData(16, key.col, key.row));
-      for (const key of keys) expect(m.getTile(key)?.state).toBe('loaded');
-      expect(m.size).toBe(16);
+      const loaded = keys.map((key) => m.loadTile(key, makeTileData(16, key.col, key.row)));
+
+      // The first four requested stay; the rest are refused, not swapped in.
+      expect(loaded.slice(0, 4).every((t) => t !== undefined)).toBe(true);
+      expect(loaded.slice(4).every((t) => t === undefined)).toBe(true);
+      for (const key of keys.slice(0, 4)) expect(m.getTile(key)?.state).toBe('loaded');
+      expect(m.size).toBe(4);
     });
 
-    it('should evict tiles once they leave the screen', () => {
-      const m = new TileManager(null, { maxTiles: 4 });
+    it('should drop the store when the view moves to another level', () => {
+      const m = new TileManager(null);
       const first = m.updateVisibleTiles({ x: 0.5, y: 0.5, zoom: 1.0 }, 800, 800, 4, 3);
       for (const key of first) m.loadTile(key, makeTileData(16, key.col, key.row));
       expect(m.size).toBe(16);
+      expect(m.currentLevel).toBe(0);
 
-      // Zoom to one corner: a different level, so none of the 16 are visible.
       const second = m.updateVisibleTiles({ x: 0.1, y: 0.1, zoom: 8.0 }, 800, 800, 4, 4);
-      for (const key of second) m.loadTile(key, makeTileData(16, key.col, key.row, key.level));
+      expect(second[0].level).toBe(3);
+      expect(m.size).toBe(0);
+      for (const key of second) m.loadTile(key, makeTileData(32, key.col, key.row, key.level));
       for (const key of second) expect(m.getTile(key)?.state).toBe('loaded');
-      expect(m.size).toBeLessThanOrEqual(Math.max(4, second.length));
+      expect(m.currentLevel).toBe(3);
     });
 
-    it('should hold a wide view at 160% zoom on a 32-tile grid', () => {
-      // 1600x900 at zoom 1.6 needs 672 level-1 tiles. The old fixed cap of
-      // 256 tiles left a permanent patchwork here.
+    it('should ignore a decode that arrives for a level no longer on screen', () => {
+      const m = new TileManager(null);
+      m.updateVisibleTiles({ x: 0.5, y: 0.5, zoom: 4.0 }, 800, 800, 4, 4); // level 2
+      expect(m.loadTile({ level: 0, col: 0, row: 0 }, makeTileData(16))).toBeUndefined();
+      expect(m.size).toBe(0);
+    });
+
+    it('should hold a wide view of a 32-tile grid', () => {
+      // 1600x900 at zoom 1.6 touches 672 tiles of a 32x32 grid.
       const m = new TileManager(null);
       const keys = m.updateVisibleTiles({ x: 0.5, y: 0.5, zoom: 1.6 }, 1600, 900, 32, 6);
       expect(keys.length).toBe(672);
       for (const key of keys) m.loadTile(key, makeTileData(64, key.col, key.row, key.level));
       for (const key of keys) expect(m.getTile(key)?.state).toBe('loaded');
+    });
+  });
+
+  describe('page table', () => {
+    it('should record each loaded tile as layer + 1 at [row * n + col]', () => {
+      const m = new TileManager(null, { tilesPerDim: 4 });
+      const a = m.loadTile({ level: 2, col: 1, row: 3 }, makeTileData(8))!;
+      const b = m.loadTile({ level: 2, col: 2, row: 0 }, makeTileData(8))!;
+      const table = m.getPageTable();
+      expect(table.length).toBe(16);
+      expect(table[3 * 4 + 1]).toBe(a.layer + 1);
+      expect(table[0 * 4 + 2]).toBe(b.layer + 1);
+      expect(Array.from(table).filter((v) => v !== 0).length).toBe(2);
+      expect(a.layer).not.toBe(b.layer);
+    });
+
+    it('should clear the entry and reuse the layer when a tile is removed', () => {
+      const m = new TileManager(null, { tilesPerDim: 4 });
+      const a = m.loadTile({ level: 2, col: 1, row: 3 }, makeTileData(8))!;
+      m.removeTile({ level: 2, col: 1, row: 3 });
+      expect(m.getPageTable()[3 * 4 + 1]).toBe(0);
+      const c = m.loadTile({ level: 2, col: 0, row: 0 }, makeTileData(8))!;
+      expect(c.layer).toBe(a.layer);
+    });
+
+    it('should be empty after the level changes', () => {
+      const m = new TileManager(null, { tilesPerDim: 4 });
+      m.loadTile({ level: 2, col: 1, row: 3 }, makeTileData(8));
+      m.setVisibleKeys([{ level: 3, col: 0, row: 0 }]);
+      expect(Array.from(m.getPageTable()).every((v) => v === 0)).toBe(true);
     });
   });
 
@@ -628,10 +678,10 @@ describe('TileManager integration patterns', () => {
         }
       }
 
-      // Everything on screen stays loaded, and nothing off screen is kept
-      // beyond the cap.
-      for (const key of keys) expect(manager.getTile(key)?.state).toBe('loaded');
-      expect(manager.size).toBeLessThanOrEqual(Math.max(16, keys.length));
+      // The cap holds, and what is loaded is what is on screen.
+      expect(manager.size).toBeLessThanOrEqual(16);
+      const loadedVisible = keys.filter((key) => manager.getTile(key)?.state === 'loaded').length;
+      expect(loadedVisible).toBe(Math.min(16, keys.length));
     }
   });
 });

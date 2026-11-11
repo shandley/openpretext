@@ -111,7 +111,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     scaffoldOverlay: {} as any,
     waypointOverlay: {} as any,
     minimap: {} as any,
-    camera: { resetViewImmediate: vi.fn() } as any,
+    camera: { resetViewImmediate: vi.fn(), getState: vi.fn(() => ({ x: 0.5, y: 0.5, zoom: 1 })) } as any,
     dragReorder: {} as any,
     scaffoldManager: {} as any,
     waypointManager: {} as any,

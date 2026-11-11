@@ -106,6 +106,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - CHANGELOG.md and CONTRIBUTING.md
 
 ### Changed
+- **Each screen pixel shows one stored value when zoomed in.** Magnified views
+  read the nearest texel instead of blending neighbours, so bins appear as
+  crisp squares and a contig's edge is never mixed with whatever sits next to
+  it in the file. The level drawn is the finest whose texels are at least one
+  screen pixel wide, so no stored value at that level is skipped. When the map
+  is drawn smaller than its texture, texels are averaged.
 - **The whole-map view is drawn from the finer stored level by default.** The
   overview setting chooses between two resolutions stored in the file, now
   labelled Fine (about 2048 px across, the new default) and Coarse (the file's
@@ -183,15 +189,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   and let the overview show through wherever a detail texel was empty, which
   painted empty texels with a coarse average. A loaded detail tile is now drawn
   in full, and the contig grid and highlight are drawn over it.
-- **Detail tiles are switched off once the order differs from the file.** Tiles
-  are stored in file order, so after a move or invert the zoomed view showed
-  pre-edit data under the post-edit grid. Until tiles are drawn through the
-  curated order, the reordered overview is shown instead and the status bar
-  says so.
+- **The zoomed-in map follows curation.** Detail tiles are stored in file
+  order and used to be drawn there, so after a move or invert the zoomed view
+  showed pre-edit data under the post-edit grid. The map is now drawn in one
+  pass that maps every screen pixel from the curated layout to the file, and
+  the overview and the detail tiles share that mapping, so they cannot
+  disagree. Textures are no longer rebuilt on each edit.
 - **Detail tiles on screen are never evicted.** The cache held at most 256
-  tiles while a wide window at 160% needs 672, which left a permanent patchwork
-  of two resolutions. The cache is now budgeted by size, exempts visible tiles,
-  and no longer keeps a float copy of every tile.
+  tiles while a wide window could need 672, which left a permanent patchwork of
+  two resolutions. Tiles now live in one array texture sized from a memory
+  budget, visible tiles are never displaced, and no float copy of each tile is
+  kept.
 - **Grid lines keep a constant on-screen width** instead of thickening into a
   band at high zoom.
 - **A long batched action can no longer outrun the undo stack.** The stack was

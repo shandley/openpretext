@@ -8,8 +8,8 @@ import { state } from '../core/State';
 import { events } from '../core/EventBus';
 import { renderDragIndicator } from '../curation/DragReorder';
 import { renderComparisonOverlay } from './ComparisonMode';
-import type { TileKey } from '../renderer/TileManager';
-import { getContigNames, getContigScaffoldIds, getDisplayIsFileOrder } from '../core/DerivedState';
+import { selectDetailLevel, getVisibleTileKeysMapped, type TileKey } from '../renderer/TileManager';
+import { getContigNames, getContigScaffoldIds, getDisplayRuns } from '../core/DerivedState';
 
 /**
  * Delay before kicking off detail-tile decoding once camera motion settles.
@@ -18,23 +18,26 @@ import { getContigNames, getContigScaffoldIds, getDisplayIsFileOrder } from '../
  */
 const TILE_DECODE_DEBOUNCE_MS = 100;
 
-/** Detail tiles only stream in once zoomed past the overview. */
-const TILE_DETAIL_MIN_ZOOM = 1.5;
-
 /**
- * Whether detail tiles may be drawn for the current state.
+ * The detail level the current view calls for, or -1 when the overview is
+ * already at least as fine and no tiles are needed.
  *
- * Tiles are stored and placed in file coordinates. Once the curator has moved
- * or inverted anything, a tile's contents no longer belong at the place it
- * would be drawn, so the zoomed view would show pre-edit data under the
- * post-edit grid. Until tiles are drawn through the display mapping, they are
- * switched off in that case and the (correctly reordered) overview is shown.
+ * Levels count up from the coarsest stored level (0). The overview on screen
+ * is itself one of the stored levels, so tiles only add something above it.
  */
-function detailTilesUsable(): boolean {
-  return getDisplayIsFileOrder();
-}
+function wantedDetailLevel(ctx: AppContext, zoom: number): number {
+  const s = state.get();
+  const header = s.map?.parsedHeader;
+  if (!s.map || !header) return -1;
+  const canvas = document.getElementById('map-canvas') as HTMLCanvasElement | null;
+  if (!canvas) return -1;
 
-const DETAIL_OFF_NOTICE = 'Overview resolution: zoom detail is off after reordering';
+  const coarsestSize = header.numberOfTextures1D * (header.textureResolution >> (header.mipMapLevels - 1));
+  const screenMinPx = Math.min(canvas.width, canvas.height);
+  const level = selectDetailLevel(zoom, screenMinPx, coarsestSize, header.mipMapLevels);
+  const overviewLevel = Math.max(0, Math.round(Math.log2(ctx.renderer.mapTextureSize / coarsestSize)));
+  return level > overviewLevel ? level : -1;
+}
 
 export function startRenderLoop(ctx: AppContext): void {
   // Wake the render loop whenever something that affects the display changes.
@@ -100,7 +103,12 @@ export function startRenderLoop(ctx: AppContext): void {
       }
     }
 
-    const renderOptions = {
+    // One pass draws the map: the overview, and the loaded detail tiles in
+    // place of it, both laid out through the same display runs.
+    const detail = wantedDetailLevel(ctx, cam.zoom) >= 0
+      ? ctx.tileManager?.getDetailTextures() ?? null
+      : null;
+    ctx.renderer.render(cam, {
       gamma: s.gamma,
       floor: s.signalFloor,
       ceil: s.signalCeil,
@@ -109,37 +117,10 @@ export function startRenderLoop(ctx: AppContext): void {
       contigBoundaries: ctx.contigBoundaries,
       highlightStart,
       highlightEnd,
-    };
-    ctx.renderer.render(cam, { ...renderOptions, deferOverlay: true });
-
-    // Render detail tiles on top of the overview. Shared GL state (program,
-    // camera/zoom/gamma uniforms, color map) is set once per frame, not per tile.
-    const wantDetail = Boolean(ctx.tileManager && s.map?.parsedHeader && cam.zoom > TILE_DETAIL_MIN_ZOOM);
-    const detailOk = detailTilesUsable();
-    if (wantDetail && detailOk && ctx.tileManager && s.map?.parsedHeader) {
-      const tilesPerDim = s.map.parsedHeader.numberOfTextures1D;
-      let started = false;
-      for (const key of ctx.tileManager.visibleKeys) {
-        const tile = ctx.tileManager.getTile(key);
-        if (tile && tile.state === 'loaded' && tile.texture) {
-          if (!started) {
-            ctx.renderer.beginTiles(cam, s.gamma, s.signalFloor, s.signalCeil);
-            started = true;
-          }
-          ctx.renderer.drawTile(tile.texture, key.col, key.row, tilesPerDim);
-        }
-      }
-      if (started) ctx.renderer.endTiles();
-    }
-
-    // Grid and highlight go on last so they sit above the detail tiles.
-    ctx.renderer.renderOverlay(cam, renderOptions);
-
-    const detailNotice = document.getElementById('status-detail');
-    if (detailNotice) {
-      const text = wantDetail && !detailOk ? DETAIL_OFF_NOTICE : '';
-      if (detailNotice.textContent !== text) detailNotice.textContent = text;
-    }
+      displayRuns: getDisplayRuns(),
+      totalTexels: s.map.textureSize,
+      detail,
+    });
 
     const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
     const w = mapCanvas.clientWidth;
@@ -296,9 +277,8 @@ export function updateDetailTiles(ctx: AppContext, cam: CameraState): void {
     ctx.tileDecodeDebounce = null;
   }
 
-  // Only stream detail tiles when zoomed in past the overview, and only while
-  // they can be drawn in the right place.
-  if (cam.zoom <= TILE_DETAIL_MIN_ZOOM || !detailTilesUsable()) {
+  const level = wantedDetailLevel(ctx, cam.zoom);
+  if (level < 0) {
     ctx.tileDecoder.cancel();
     return;
   }
@@ -306,17 +286,18 @@ export function updateDetailTiles(ctx: AppContext, cam: CameraState): void {
   const canvas = document.getElementById('map-canvas') as HTMLCanvasElement;
   if (!canvas) return;
 
-  const header = s.map.parsedHeader;
-
-  // Recompute which tiles are visible every call (cheap) so the render loop
-  // draws the right loaded tiles and visible tiles are kept warm in the LRU.
-  ctx.tileManager.updateVisibleTiles(
+  // Recompute which tiles the view needs every call (cheap). The display
+  // rectangle is mapped through the curated layout, so after a reorder this
+  // asks for the file tiles actually shown, wherever they sit in the file.
+  ctx.tileManager.setVisibleKeys(getVisibleTileKeysMapped(
+    getDisplayRuns(),
     cam,
     canvas.clientWidth,
     canvas.clientHeight,
-    header.numberOfTextures1D,
-    header.mipMapLevels,
-  );
+    s.map.textureSize,
+    s.map.parsedHeader.numberOfTextures1D,
+    level,
+  ));
 
   // Defer the actual (expensive) decode until camera motion settles. The
   // overview keeps the map visible in the meantime.
