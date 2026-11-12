@@ -65,11 +65,33 @@ async function prepare(page: Page): Promise<void> {
   await page.mouse.move(5, 5);
 }
 
+/** Resolve once the app has drawn `n` more frames (it draws inside requestAnimationFrame). */
+async function framesDrawn(page: Page, n = 2): Promise<void> {
+  await page.evaluate((count) => new Promise<void>((resolve) => {
+    (window as any).__openpretext.ctx.renderDirty = true;
+    let left = count;
+    const tick = () => {
+      (window as any).__openpretext.ctx.renderDirty = true;
+      if (--left <= 0) resolve(); else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }), n);
+}
+
+/**
+ * Move the camera and wait until it is there and the view has been redrawn.
+ * Waits on the app's own state and frames, not on the clock, so a loaded
+ * machine makes the test slower instead of making it read a stale canvas.
+ */
 async function setCamera(page: Page, x: number, y: number, zoom: number): Promise<void> {
   await page.evaluate(([cx, cy, cz]) => {
     (window as any).__openpretext.ctx.camera.animateTo({ x: cx, y: cy, zoom: cz }, 1);
   }, [x, y, zoom]);
-  await page.waitForTimeout(150);
+  await page.waitForFunction(([cx, cy, cz]) => {
+    const c = (window as any).__openpretext.ctx.camera.getState();
+    return Math.abs(c.x - cx) < 1e-9 && Math.abs(c.y - cy) < 1e-9 && Math.abs(c.zoom - cz) < 1e-9;
+  }, [x, y, zoom], { timeout: 20_000 });
+  await framesDrawn(page, 3);
 }
 
 /** Wait until every tile the view asked for is loaded, or the view wants none. */
@@ -80,8 +102,8 @@ async function waitForTiles(page: Page): Promise<void> {
     const keys = tm.visibleKeys as Array<{ level: number; col: number; row: number }>;
     return keys.every((k) => tm.getTile(k)?.state === 'loaded');
   }, null, { timeout: 20_000 });
-  // One more frame so the last tile is on screen.
-  await page.waitForTimeout(250);
+  // Frames after the last tile arrived, so it is on screen.
+  await framesDrawn(page, 3);
 }
 
 async function snapshot(page: Page, points: Array<[number, number]>): Promise<Snapshot> {
@@ -186,7 +208,7 @@ async function checkView(
 ): Promise<void> {
   await setCamera(page, cam.x, cam.y, cam.zoom);
   if (expectDetail) await waitForTiles(page);
-  else await page.waitForTimeout(400);
+  else await framesDrawn(page, 3);
 
   const size = await page.evaluate(() => {
     const c = document.getElementById('map-canvas') as HTMLCanvasElement;
