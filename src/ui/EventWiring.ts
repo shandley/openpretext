@@ -8,10 +8,8 @@
 import type { AppContext } from './AppContext';
 import { events } from '../core/EventBus';
 import { state } from '../core/State';
-import { contigExclusion } from '../curation/ContigExclusion';
-import { metaTags } from '../curation/MetaTagManager';
 import { getContigBoundaries } from '../core/DerivedState';
-import { clearAnalysisTracks, runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel, clearEnhancedMap } from './AnalysisPanel';
+import { runAllAnalyses, scheduleAnalysisRecompute, updateProgressPanel, clearEnhancedMap } from './AnalysisPanel';
 import { resetOEMap } from './OEMapToggle';
 import { updateComparisonSummary } from './ComparisonMode';
 import { showBaseOverview } from './BaseOverview';
@@ -28,9 +26,6 @@ export function setupEventListeners(ctx: AppContext): void {
     // Reset the view to fit so a newly loaded genome isn't shown at the
     // previous file's zoom/pan (which can leave the fresh map off-screen).
     ctx.camera?.resetViewImmediate();
-    // A new assembly replaces the overview texture; drop any O/E view.
-    resetOEMap(ctx);
-
     ctx.updateSidebarContigList();
     ctx.updateSidebarScaffoldList();
     // Take initial metrics snapshot
@@ -44,19 +39,15 @@ export function setupEventListeners(ctx: AppContext): void {
         s.contigOrder.map(id => [id, s.map!.contigs[id]?.inverted ?? false])
       );
       ctx.comparisonVisible = false;
-      contigExclusion.clearAll();
-      metaTags.clearAll();
-      // A newly loaded file has no FASTA-derived tracks yet; clear any from the
-      // previous file so they aren't reused against the new assembly.
-      ctx.fastaTrackData = null;
       // Set progress reference to initial contig order
       ctx.progressReference = [...s.contigOrder];
       ctx.previousProgress = null;
     }
     ctx.updateStatsPanel();
+    ctx.updateUndoHistoryPanel();
 
-    // Auto-compute 3D analysis tracks
-    clearAnalysisTracks(ctx);
+    // Auto-compute 3D analysis tracks. (The previous assembly's results were
+    // dropped by resetForNewAssembly before this one was installed.)
     runAllAnalyses(ctx);
 
     // Surface the curator tracks (coverage, gaps, telomeres, ...) embedded in

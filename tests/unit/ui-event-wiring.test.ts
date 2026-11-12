@@ -335,7 +335,9 @@ describe('EventWiring', () => {
       expect(ctx.comparisonVisible).toBe(false);
     });
 
-    it('file:loaded handler should call contigExclusion.clearAll when map is loaded', () => {
+    // Clearing the previous assembly's state is resetForNewAssembly's job
+    // (tests/unit/assembly-reset.test.ts), not this handler's.
+    it('file:loaded handler should refresh the undo history panel', () => {
       (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
         map: { contigs: [], textureSize: 100 },
         contigOrder: [],
@@ -350,7 +352,7 @@ describe('EventWiring', () => {
       const handler = fileLoadedCall![1];
       handler();
 
-      expect(contigExclusion.clearAll).toHaveBeenCalled();
+      expect(ctx.updateUndoHistoryPanel).toHaveBeenCalled();
     });
 
     it('file:loaded handler should not take metrics snapshot when no map', () => {

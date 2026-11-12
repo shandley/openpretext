@@ -133,6 +133,13 @@ export interface MapData {
   tilesPerDimension: number;
   contigs: ContigInfo[];
   /**
+   * How many contigs the file itself defines. They are `contigs[0..n)` and
+   * keep their names and texel spans for the life of the map; cut and join
+   * append new entries after them. Absent only on maps built by hand in
+   * tests, where every contig is taken to be the file's.
+   */
+  fileContigCount?: number;
+  /**
    * Assembled full-resolution contact map as Float32Array (textureSize x textureSize).
    * This is reconstructed from the per-tile decoded data.
    */
@@ -431,6 +438,23 @@ class StateManager {
       i >= from ? { ...op, batchId } : op
     );
     this.state = { ...this.state, undoStack };
+    this.notify();
+  }
+
+  /**
+   * Forget all curation history and selection. Used when the assembly the
+   * history describes is being replaced (a new file, or a restored session):
+   * every stored operation refers to contig ids and orders of the old one.
+   */
+  clearHistory(): void {
+    this.state = {
+      ...this.state,
+      undoStack: [],
+      redoStack: [],
+      selectedContigs: new Set(),
+    };
+    this.batchContext = null;
+    this.undoDropped = 0;
     this.notify();
   }
 

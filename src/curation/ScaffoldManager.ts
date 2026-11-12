@@ -394,6 +394,26 @@ export class ScaffoldManager {
     }
   }
 
+  /**
+   * Forget every scaffold and start numbering again, without touching contig
+   * assignments or the undo stack. For when the assembly itself is replaced.
+   */
+  clear(): void {
+    this.scaffolds.clear();
+    this.nextId = 1;
+    this.activeScaffoldId = null;
+  }
+
+  /**
+   * Replace the scaffold set with saved definitions, keeping their ids, names
+   * and colours. Contig assignments are the caller's to restore. Not recorded
+   * on the undo stack.
+   */
+  restoreScaffolds(scaffolds: Scaffold[]): void {
+    this.clear();
+    for (const sc of scaffolds) this.restoreScaffold(sc);
+  }
+
   /** Capture the full scaffold state (scaffolds + every contig assignment). */
   private snapshotState(): ScaffoldSnapshot {
     const s = state.get();

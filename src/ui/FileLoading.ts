@@ -15,10 +15,8 @@ import { TileManager } from '../renderer/TileManager';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 import { loadSession, loadReferenceFasta, loadBedGraphTrack, loadAGPFile } from './ExportSession';
 import { applyOverviewMode } from './EventWiring';
-import { contigExclusion } from '../curation/ContigExclusion';
-import { metaTags } from '../curation/MetaTagManager';
-import { misassemblyFlags } from '../curation/MisassemblyFlags';
-import { resetOEMap } from './OEMapToggle';
+import { resetForNewAssembly } from './AssemblyReset';
+import { computeFastaTrackData } from '../analysis/FastaTracks';
 import { computeAutoContrast } from '../renderer/AutoContrast';
 import { syncFloorSlider, syncCeilSlider } from './ColorMapControls';
 
@@ -53,16 +51,15 @@ async function loadPretextFromBuffer(
   // Pick sensible default contrast so dense/compact genomes don't load saturated.
   const contrast = computeAutoContrast(contactMap);
 
+  // The file parsed, so it will replace whatever is loaded. Nothing of the
+  // previous assembly may survive past this point.
+  resetForNewAssembly(ctx);
+
   updateLoading('Uploading to GPU...', 92);
   ctx.renderer.uploadContactMap(contactMap, overviewSize);
-  ctx.faithfulOverviewOriginal = null; // invalidate cache for the new file
   ctx.minimap.updateThumbnail(contactMap, overviewSize, undefined, contrast.floor, contrast.ceil);
   ctx.contigBoundaries = parsed.contigs.map(c => c.pixelEnd / mapSize);
 
-  // Dispose previous tile manager and cancel in-flight decodes
-  if (ctx.tileDecodeDebounce !== null) { clearTimeout(ctx.tileDecodeDebounce); ctx.tileDecodeDebounce = null; }
-  ctx.tileDecoder?.cancel();
-  if (ctx.tileManager) { ctx.tileManager.dispose(); }
   ctx.tileManager = new TileManager(ctx.renderer.getGL(), { tilesPerDim: h.numberOfTextures1D });
 
   updateLoading('Finalizing...', 98);
@@ -80,6 +77,7 @@ async function loadPretextFromBuffer(
         pixelStart: c.pixelStart, pixelEnd: c.pixelEnd,
         inverted: false, scaffoldId: null,
       })),
+      fileContigCount: parsed.contigs.length,
       contactMap,
       originalContactMap: new Float32Array(contactMap),
       rawTiles: parsed.tiles,
@@ -90,6 +88,11 @@ async function loadPretextFromBuffer(
   });
   // Hand the raw BC4 tile bytes to the background decoder (transfers buffers).
   ctx.tileDecoder?.setSource(parsed.tiles, h);
+  // A FASTA loaded before the map: derive its tracks now that there is one.
+  const loaded = state.get().map;
+  if (ctx.referenceSequences && loaded) {
+    ctx.fastaTrackData = computeFastaTrackData(loaded, ctx.referenceSequences);
+  }
   syncFloorSlider(contrast.floor);
   syncCeilSlider(contrast.ceil);
   statusEl.textContent = filename;
@@ -201,16 +204,10 @@ export async function loadExampleDataset(ctx: AppContext): Promise<void> {
 
 export function loadDemoData(ctx: AppContext): void {
   const { data, size, contigs } = generateSyntheticMap(1024, 12);
+  // Also drops the tile store: the demo has no stored levels to stream.
+  resetForNewAssembly(ctx);
   ctx.renderer.uploadContactMap(data, size);
-  // The demo has no finer level; drop the previous file's so it cannot be
-  // reordered and shown under the demo's contigs.
-  ctx.faithfulOverviewOriginal = null;
   ctx.contigBoundaries = contigs.map(c => c.end / size);
-
-  // Clean up tile streaming state for demo data
-  if (ctx.tileDecodeDebounce !== null) { clearTimeout(ctx.tileDecodeDebounce); ctx.tileDecodeDebounce = null; }
-  ctx.tileDecoder?.cancel();
-  if (ctx.tileManager) { ctx.tileManager.dispose(); ctx.tileManager = null; }
 
   const demoContrast = computeAutoContrast(data);
   state.update({
@@ -228,6 +225,7 @@ export function loadDemoData(ctx: AppContext): void {
         pixelStart: c.start, pixelEnd: c.end,
         inverted: false, scaffoldId: null,
       })),
+      fileContigCount: contigs.length,
       contactMap: data,
       originalContactMap: new Float32Array(data),
       rawTiles: null,
@@ -274,21 +272,8 @@ export function returnToLanding(ctx: AppContext): void {
     if (!ok) return;
   }
 
-  // Tear down tile streaming for the current file.
-  if (ctx.tileDecodeDebounce !== null) { clearTimeout(ctx.tileDecodeDebounce); ctx.tileDecodeDebounce = null; }
-  ctx.tileDecoder?.cancel();
-  if (ctx.tileManager) { ctx.tileManager.dispose(); ctx.tileManager = null; }
-
-  // Clear per-file curation singletons, tracks, and derived views so nothing
-  // leaks into the next loaded assembly.
-  contigExclusion.clearAll();
-  metaTags.clearAll();
-  misassemblyFlags.clearAll();
-  ctx.waypointManager.clearAll();
-  ctx.currentWaypointId = null;
-  ctx.trackRenderer?.clearTracks();
-  ctx.fastaTrackData = null;
-  resetOEMap(ctx);
+  // Drop everything held about the assembly, so nothing leaks into the next.
+  resetForNewAssembly(ctx);
 
   // Reset app state (map -> null, undo/redo cleared) and refresh the (now empty)
   // panels. Mark dirty so the render loop runs once and blanks the canvas (the
