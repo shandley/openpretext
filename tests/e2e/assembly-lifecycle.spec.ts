@@ -148,6 +148,24 @@ test('a session saved after cuts and joins restores the same assembly', async ({
     ctx.scaffoldManager.deleteScaffold(x);  // leaves ids non-contiguous
     ctx.scaffoldManager.paintContigs([0, 2], y);
   });
+  // Tag and exclude contigs by what they are, then move one of them.
+  const marksSaved = await page.evaluate(() => {
+    const { state, CurationEngine, metaTags, contigExclusion } = (window as any).__openpretext;
+    const order = state.get().contigOrder as number[];
+    metaTags.setTag(order[1], 'haplotig');
+    metaTags.setTag(order[3], 'contaminant', 'bacterial');
+    contigExclusion.toggle(order[3]);
+    contigExclusion.toggle(order[4]);
+    CurationEngine.move(1, 4);
+    const s = state.get();
+    const name = (id: number) => s.map.contigs[id].name;
+    return {
+      tags: [...metaTags.getAllTags()].map(([id, t]: [number, any]) => [name(id), t.tag, t.notes ?? null]).sort(),
+      excluded: [...contigExclusion.getExcluded()].map(name).sort(),
+    };
+  });
+  expect(marksSaved.tags).toHaveLength(2);
+  expect(marksSaved.excluded).toHaveLength(2);
   const saved = await assembly(page);
 
   const [download] = await Promise.all([
@@ -169,6 +187,22 @@ test('a session saved after cuts and joins restores the same assembly', async ({
   expect(shown(restored)).toEqual(shown(saved));
   expect(restored.scaffolds).toEqual(saved.scaffolds);
   expect(restored.undo, 'restored history must not point at another state').toBe(0);
+
+  // Tags and exclusions are on the same contigs as when saved.
+  const marksRestored = await page.evaluate(() => {
+    const { state, metaTags, contigExclusion } = (window as any).__openpretext;
+    const s = state.get();
+    const name = (id: number) => s.map.contigs[id].name;
+    return {
+      tags: [...metaTags.getAllTags()].map(([id, t]: [number, any]) => [name(id), t.tag, t.notes ?? null]).sort(),
+      excluded: [...contigExclusion.getExcluded()].map(name).sort(),
+    };
+  });
+  expect(marksRestored).toEqual(marksSaved);
+  await page.keyboard.press('i');
+  await expect(page.locator('#contig-list .contig-badge.excluded')).toHaveCount(2);
+  await expect(page.locator('#contig-list .contig-badge.metatag-haplotig')).toHaveCount(1);
+  await expect(page.locator('#contig-list .contig-badge.metatag-contaminant')).toHaveCount(1);
 
   // The restored assembly is editable and reversible.
   await page.evaluate(() => {

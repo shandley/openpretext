@@ -290,7 +290,13 @@ describe('ExportSession', () => {
       expect(downloadSession).not.toHaveBeenCalled();
     });
 
-    it('should call exportSession and downloadSession when map is loaded', () => {
+    it('should call exportSession (with the current tags and exclusions) and downloadSession', async () => {
+      const { metaTags } = await import('../../src/curation/MetaTagManager');
+      const { contigExclusion } = await import('../../src/curation/ContigExclusion');
+      metaTags.clearAll();
+      contigExclusion.clearAll();
+      metaTags.setTag(0, 'haplotig');
+      contigExclusion.toggle(0);
       const fakeState = { map: { filename: 'test.pretext' }, contigOrder: [0] };
       (state.get as ReturnType<typeof vi.fn>).mockReturnValue(fakeState);
       const sessionData = { version: 1, filename: 'test.pretext' };
@@ -298,8 +304,13 @@ describe('ExportSession', () => {
       const ctx = createMockCtx();
 
       saveSession(ctx);
+      metaTags.clearAll();
+      contigExclusion.clearAll();
 
-      expect(exportSession).toHaveBeenCalledWith(fakeState, ctx.scaffoldManager, ctx.waypointManager);
+      expect(exportSession).toHaveBeenCalledWith(fakeState, ctx.scaffoldManager, ctx.waypointManager, {
+        tags: new Map([[0, { tag: 'haplotig' }]]),
+        excluded: new Set([0]),
+      });
       expect(downloadSession).toHaveBeenCalledWith(sessionData);
       expect(ctx.showToast).toHaveBeenCalledWith('Session saved');
     });
@@ -492,6 +503,26 @@ describe('ExportSession', () => {
 
       expect(ctx.refreshAfterCuration).toHaveBeenCalled();
       expect(ctx.updateSidebarScaffoldList).toHaveBeenCalled();
+    });
+
+    it('puts tags and exclusions back on their contigs, replacing what was there', async () => {
+      const { metaTags } = await import('../../src/curation/MetaTagManager');
+      const { contigExclusion } = await import('../../src/curation/ContigExclusion');
+      metaTags.clearAll();
+      contigExclusion.clearAll();
+      metaTags.setTag(1, 'unlocalised');   // from before the restore
+      contigExclusion.toggle(1);
+
+      const ctx = await restore({
+        contigTags: { '0': { tag: 'haplotig', notes: 'dup of c2' } },
+        excludedContigs: [0],
+      });
+
+      expect([...metaTags.getAllTags()]).toEqual([[0, { tag: 'haplotig', notes: 'dup of c2' }]]);
+      expect([...contigExclusion.getExcluded()]).toEqual([0]);
+      expect(ctx.showToast).toHaveBeenCalledWith('Session restored (2 contigs, 1 scaffolds, 1 tagged, 1 excluded)');
+      metaTags.clearAll();
+      contigExclusion.clearAll();
     });
 
     it('should show a success toast with what was restored', async () => {

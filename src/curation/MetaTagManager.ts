@@ -5,13 +5,18 @@
  * sex chromosome contigs. Mirrors the ContigExclusion / MisassemblyFlags
  * singleton pattern.
  *
- * Indices refer to positions in the contigOrder array (order indices),
- * not to contig IDs in the map.contigs array.
+ * Keys are contig IDs (the values in the contigOrder array, i.e. indices into
+ * map.contigs), NOT positions in contigOrder, so a tag follows its contig
+ * when it is moved. Every caller passes ids; the parameters below are still
+ * named `orderIndex` from an earlier design.
  */
 
 import { events } from '../core/EventBus';
 
 export type MetaTagType = 'haplotig' | 'contaminant' | 'unlocalised' | 'sex_chromosome';
+
+/** Every tag type, for validating tags read from a file. */
+export const META_TAG_TYPES: readonly MetaTagType[] = ['haplotig', 'contaminant', 'unlocalised', 'sex_chromosome'];
 
 export interface MetaTagInfo {
   tag: MetaTagType;

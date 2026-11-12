@@ -11,7 +11,10 @@ import { state, type ContigInfo, type MapData } from '../../src/core/State';
 import { CurationEngine } from '../../src/curation/CurationEngine';
 import { ScaffoldManager } from '../../src/curation/ScaffoldManager';
 import { buildDisplayRuns, displayToFileTexel, displayWidth } from '../../src/core/DisplayMapping';
-import { exportSession, importSession, SESSION_VERSION, type SessionData } from '../../src/io/SessionManager';
+import {
+  exportSession, importSession, validateSession, SESSION_VERSION, type SessionData, type SessionContigMarks,
+} from '../../src/io/SessionManager';
+import type { MetaTagInfo } from '../../src/curation/MetaTagManager';
 import { planSessionRestore } from '../../src/io/SessionRestore';
 
 function mulberry32(seed: number): () => number {
@@ -253,5 +256,89 @@ describe('version 1 sessions', () => {
   it('keeps the file order when the session has none', () => {
     const plan = planSessionRestore(legacy({ contigOrder: [] }), freshMap(WIDTHS));
     expect(plan.contigOrder).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+});
+
+describe('tags and exclusions', () => {
+  let scaffolds: ScaffoldManager;
+  beforeEach(() => {
+    scaffolds = new ScaffoldManager();
+    CurationEngine.setScaffoldManager(scaffolds);
+    load(WIDTHS);
+    CurationEngine.cut(1, 10);   // contig 1 -> contigs 6 and 7
+    CurationEngine.move(4, 0);
+  });
+
+  function marks(tags: Array<[number, MetaTagInfo]>, excluded: number[]): SessionContigMarks {
+    return { tags: new Map(tags), excluded: new Set(excluded) };
+  }
+
+  const save = (m: SessionContigMarks) =>
+    importSession(JSON.stringify(exportSession(state.get(), scaffolds, undefined, m)));
+
+  it('come back on the contigs they were put on, wherever those now sit', () => {
+    const order = state.get().contigOrder;
+    const session = save(marks(
+      [[6, { tag: 'haplotig' }], [order[0], { tag: 'contaminant', notes: 'bacterial, see blast' }]],
+      [7, 3],
+    ));
+    expect(session.contigTags).toEqual({
+      6: { tag: 'haplotig' },
+      [order[0]]: { tag: 'contaminant', notes: 'bacterial, see blast' },
+    });
+    expect(session.excludedContigs).toEqual([3, 7]);
+
+    const plan = planSessionRestore(session, freshMap(WIDTHS));
+    expect(new Map(plan.tags)).toEqual(new Map<number, MetaTagInfo>([
+      [6, { tag: 'haplotig' }],
+      [order[0], { tag: 'contaminant', notes: 'bacterial, see blast' }],
+    ]));
+    expect(plan.excluded.sort()).toEqual([3, 7]);
+    // The tagged ids are the same contigs after restore.
+    expect(plan.contigs[6].name).toBe(state.get().map!.contigs[6].name);
+  });
+
+  it('does not save a mark left on a contig that a cut has replaced', () => {
+    // Contig 1 was cut and is no longer placed.
+    const session = save(marks([[1, { tag: 'haplotig' }], [2, { tag: 'unlocalised' }]], [1, 2]));
+    expect(session.contigTags).toEqual({ 2: { tag: 'unlocalised' } });
+    expect(session.excludedContigs).toEqual([2]);
+  });
+
+  it('saves empty marks as empty, and restores nothing from them', () => {
+    const session = save(marks([], []));
+    const plan = planSessionRestore(session, freshMap(WIDTHS));
+    expect(plan.tags).toEqual([]);
+    expect(plan.excluded).toEqual([]);
+  });
+
+  it('reads a session written before tags and exclusions were saved', () => {
+    const session = save(marks([], []));
+    delete session.contigTags;
+    delete session.excludedContigs;
+    expect(validateSession(session)).toBe(true);
+    const plan = planSessionRestore(session, freshMap(WIDTHS));
+    expect(plan.tags).toEqual([]);
+    expect(plan.excluded).toEqual([]);
+  });
+
+  it('refuses a tag or exclusion on a contig the session does not place', () => {
+    const session = save(marks([], []));
+    expect(() => planSessionRestore({ ...session, contigTags: { 1: { tag: 'haplotig' } } }, freshMap(WIDTHS)))
+      .toThrow(/tags contig 1, which it does not place/);
+    expect(() => planSessionRestore({ ...session, excludedContigs: [99] }, freshMap(WIDTHS)))
+      .toThrow(/excludes contig 99/);
+  });
+
+  it('rejects malformed marks at import', () => {
+    const session = save(marks([[6, { tag: 'haplotig' }]], [7]));
+    const bad = (patch: object) => validateSession({ ...session, ...patch });
+    expect(bad({ contigTags: { 6: { tag: 'virus' } } })).toBe(false);
+    expect(bad({ contigTags: { 6: { tag: 'haplotig', notes: 5 } } })).toBe(false);
+    expect(bad({ contigTags: { x: { tag: 'haplotig' } } })).toBe(false);
+    expect(bad({ contigTags: [] })).toBe(false);
+    expect(bad({ excludedContigs: [1.5] })).toBe(false);
+    expect(bad({ excludedContigs: 'all' })).toBe(false);
+    expect(validateSession(session)).toBe(true);
   });
 });

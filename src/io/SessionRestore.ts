@@ -11,11 +11,18 @@
 import type { ContigInfo, MapData, PixelSegment } from '../core/State';
 import { getPixelSegments } from '../core/DisplayMapping';
 import type { SessionData } from './SessionManager';
+import type { MetaTagInfo } from '../curation/MetaTagManager';
 
 export interface SessionRestorePlan {
   contigs: ContigInfo[];
   contigOrder: number[];
+  /** Classification tags to restore, by contig id. */
+  tags: Array<[number, MetaTagInfo]>;
+  /** Contig ids excluded from export. */
+  excluded: number[];
 }
+
+type SessionLayout = Pick<SessionRestorePlan, 'contigs' | 'contigOrder'>;
 
 /** The contigs the file defines, as loaded (orientation and scaffold cleared). */
 function fileContigs(map: MapData): ContigInfo[] {
@@ -75,7 +82,7 @@ function checkCoverage(contigs: ContigInfo[], order: number[], file: ContigInfo[
   if (i !== shown.length) throw fail();
 }
 
-function planFromContigTable(session: SessionData, map: MapData): SessionRestorePlan {
+function planFromContigTable(session: SessionData, map: MapData): SessionLayout {
   const file = fileContigs(map);
   const saved = session.contigs!;
   const assembly = session.assembly!;
@@ -134,7 +141,7 @@ function planFromContigTable(session: SessionData, map: MapData): SessionRestore
  * scaffold. That describes the assembly completely only if nothing was cut or
  * joined, in which case the order is a permutation of the file's contigs.
  */
-function planFromLegacy(session: SessionData, map: MapData): SessionRestorePlan {
+function planFromLegacy(session: SessionData, map: MapData): SessionLayout {
   const file = fileContigs(map);
   const order = session.contigOrder.length > 0 ? [...session.contigOrder] : file.map((_, i) => i);
 
@@ -168,7 +175,23 @@ function planFromLegacy(session: SessionData, map: MapData): SessionRestorePlan 
  * @throws Error whose message completes "This session cannot be restored: ..."
  */
 export function planSessionRestore(session: SessionData, map: MapData): SessionRestorePlan {
-  return session.contigs && session.assembly
+  const layout = session.contigs && session.assembly
     ? planFromContigTable(session, map)
     : planFromLegacy(session, map);
+
+  // Tags and exclusions attach to contigs the session places. One that names
+  // any other contig means the file is not what it claims to be.
+  const placed = new Set(layout.contigOrder);
+  const tags: Array<[number, MetaTagInfo]> = [];
+  for (const [key, info] of Object.entries(session.contigTags ?? {})) {
+    const id = Number(key);
+    if (!placed.has(id)) throw new Error(`it tags contig ${key}, which it does not place`);
+    tags.push([id, info.notes !== undefined ? { tag: info.tag, notes: info.notes } : { tag: info.tag }]);
+  }
+  const excluded: number[] = [];
+  for (const id of session.excludedContigs ?? []) {
+    if (!placed.has(id)) throw new Error(`it excludes contig ${id}, which it does not place`);
+    if (!excluded.includes(id)) excluded.push(id);
+  }
+  return { ...layout, tags, excluded };
 }

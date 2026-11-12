@@ -61,7 +61,10 @@ export function saveSession(ctx: AppContext): void {
     return;
   }
   try {
-    const sessionData: SessionData = exportSession(s, ctx.scaffoldManager, ctx.waypointManager);
+    const sessionData: SessionData = exportSession(s, ctx.scaffoldManager, ctx.waypointManager, {
+      tags: metaTags.getAllTags(),
+      excluded: contigExclusion.getExcluded(),
+    });
     const analysisState = exportAnalysisState();
     if (analysisState) {
       sessionData.analysis = analysisState;
@@ -118,6 +121,8 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
       map: { ...s.map, contigs: plan.contigs },
       contigOrder: plan.contigOrder,
     });
+    for (const [id, info] of plan.tags) metaTags.setTag(id, info.tag, info.notes);
+    contigExclusion.excludeMany(plan.excluded);
     // Redraw everything that follows the layout (grid, tiles, tracks, lists,
     // counts, metrics) before anything below yields to a frame.
     ctx.refreshAfterCuration();
@@ -161,7 +166,11 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     }
 
     updateLoading('Finalizing...', 98);
-    ctx.showToast(`Session restored (${plan.contigOrder.length} contigs, ${session.scaffolds.length} scaffolds)`);
+    const marks = [
+      plan.tags.length > 0 ? `, ${plan.tags.length} tagged` : '',
+      plan.excluded.length > 0 ? `, ${plan.excluded.length} excluded` : '',
+    ].join('');
+    ctx.showToast(`Session restored (${plan.contigOrder.length} contigs, ${session.scaffolds.length} scaffolds${marks})`);
   } catch (err) {
     console.error('Session load error:', err);
     ctx.showToast(`Load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);

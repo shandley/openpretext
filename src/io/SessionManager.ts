@@ -15,6 +15,7 @@
 
 import type { AppState, ContigInfo, CurationOperation } from '../core/State';
 import type { ScaffoldManager, Scaffold } from '../curation/ScaffoldManager';
+import { META_TAG_TYPES, type MetaTagInfo } from '../curation/MetaTagManager';
 
 // ---------------------------------------------------------------------------
 // Session data types
@@ -254,6 +255,13 @@ export interface SessionData {
   contigs?: ContigInfo[];
   /** Version 2: the assembly the session belongs to. */
   assembly?: SessionAssembly;
+  /**
+   * Classification tags (haplotig, contaminant, ...) by contig id. Optional:
+   * absent in version 1 and in early version 2 files.
+   */
+  contigTags?: { [contigId: number]: MetaTagInfo };
+  /** Ids of contigs excluded from export. Optional, as above. */
+  excludedContigs?: number[];
   scaffolds: SessionScaffold[];
   waypoints: SessionWaypoint[];
   camera: SessionCamera;
@@ -269,6 +277,15 @@ export interface SessionData {
  */
 export interface WaypointManagerLike {
   getAllWaypoints(): SessionWaypoint[];
+}
+
+/**
+ * Per-contig curation that lives outside AppState: tags and exclusions, both
+ * keyed by contig id.
+ */
+export interface SessionContigMarks {
+  tags: Map<number, MetaTagInfo>;
+  excluded: Set<number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -510,7 +527,8 @@ function validateSessionAnalysis(v: unknown): boolean {
 export function exportSession(
   appState: AppState,
   scaffoldManager: ScaffoldManager,
-  waypointManager?: WaypointManagerLike
+  waypointManager?: WaypointManagerLike,
+  marks?: SessionContigMarks,
 ): SessionData {
   const filename = appState.map?.filename ?? 'unknown.pretext';
 
@@ -550,6 +568,19 @@ export function exportSession(
     })
   );
 
+  // Tags and exclusions of the contigs on screen. A mark left on a contig that
+  // a cut or join has since replaced has nothing to attach to and is not saved.
+  const placed = new Set(appState.contigOrder);
+  const contigTags: { [contigId: number]: MetaTagInfo } = {};
+  const excludedContigs: number[] = [];
+  if (marks) {
+    for (const [id, info] of marks.tags) {
+      if (placed.has(id)) contigTags[id] = info.notes !== undefined ? { tag: info.tag, notes: info.notes } : { tag: info.tag };
+    }
+    for (const id of marks.excluded) if (placed.has(id)) excludedContigs.push(id);
+    excludedContigs.sort((a, b) => a - b);
+  }
+
   return {
     version: SESSION_VERSION,
     filename,
@@ -561,6 +592,8 @@ export function exportSession(
       textureSize: appState.map?.textureSize ?? 0,
       fileContigCount: appState.map?.fileContigCount ?? contigs.length,
     },
+    contigTags,
+    excludedContigs,
     scaffolds,
     waypoints,
     camera: { ...appState.camera },
@@ -684,6 +717,21 @@ export function validateSession(data: unknown): data is SessionData {
     if (!isObject(data.assembly)) return false;
     if (!isNonNegativeInteger(data.assembly.textureSize)) return false;
     if (!isNonNegativeInteger(data.assembly.fileContigCount)) return false;
+  }
+
+  // -- tags and exclusions (optional) --
+  if (data.contigTags !== undefined) {
+    if (!isObject(data.contigTags)) return false;
+    for (const [key, value] of Object.entries(data.contigTags)) {
+      if (!isNonNegativeInteger(Number(key))) return false;
+      if (!isObject(value)) return false;
+      if (!(META_TAG_TYPES as readonly unknown[]).includes(value.tag)) return false;
+      if (value.notes !== undefined && typeof value.notes !== 'string') return false;
+    }
+  }
+  if (data.excludedContigs !== undefined) {
+    if (!Array.isArray(data.excludedContigs)) return false;
+    for (const id of data.excludedContigs) if (!isNonNegativeInteger(id)) return false;
   }
 
   // -- scaffolds --

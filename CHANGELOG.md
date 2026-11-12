@@ -206,6 +206,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   assembly or does not show every part of the map exactly once. Sessions from
   earlier versions still load when nothing in them was cut or joined; one that
   was is refused with the reason, because it never recorded the pieces.
+- **Sessions keep contig tags and exclusions.** Haplotig, contaminant,
+  unlocalised and sex-chromosome tags (with their notes) and the contigs
+  excluded from export are saved with the session and put back on the same
+  contigs when it is restored. They were dropped before, so a restored session
+  exported contigs the curator had excluded.
 - **Restoring a session clears the undo history** instead of leaving operations
   that referred to the assembly it replaced. Scaffolds come back with their
   saved ids and colours.

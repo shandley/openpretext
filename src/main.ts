@@ -17,6 +17,8 @@ import { TileDecodeWorkerClient } from './renderer/TileDecodeWorkerClient';
 import { DragReorder } from './curation/DragReorder';
 import { ScaffoldManager } from './curation/ScaffoldManager';
 import { WaypointManager } from './curation/WaypointManager';
+import { metaTags } from './curation/MetaTagManager';
+import { contigExclusion } from './curation/ContigExclusion';
 import { CurationEngine } from './curation/CurationEngine';
 import { state } from './core/State';
 import { MetricsTracker } from './curation/QualityMetrics';
@@ -221,7 +223,7 @@ class OpenPretextApp {
     // camera exactly and read state back (tests/e2e/pixel-truth.spec.ts).
     // Vite removes this branch from production builds.
     if (import.meta.env.DEV) {
-      (window as unknown as { __openpretext?: unknown }).__openpretext = { ctx, state, CurationEngine };
+      (window as unknown as { __openpretext?: unknown }).__openpretext = { ctx, state, CurationEngine, metaTags, contigExclusion };
     }
 
     console.log('OpenPretext initialized');
