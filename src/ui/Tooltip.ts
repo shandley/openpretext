@@ -4,6 +4,7 @@
  * Module-local state: tooltipVisible flag.
  */
 
+import { escapeHtml, cssColor } from './Html';
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { formatBp } from './Sidebar';
@@ -36,13 +37,13 @@ export function updateTooltip(ctx: AppContext, clientX: number, clientY: number)
     ? ctx.scaffoldManager.getScaffold(contig.scaffoldId)
     : null;
 
-  let html = `<div class="tooltip-name">${contig.name}</div>`;
+  let html = `<div class="tooltip-name">${escapeHtml(contig.name)}</div>`;
   html += `<div class="tooltip-row"><span class="label">Length</span><span class="value">${lengthStr}</span></div>`;
   html += `<div class="tooltip-row"><span class="label">Pixels</span><span class="value">${pixelSpan} px</span></div>`;
   html += `<div class="tooltip-row"><span class="label">Order</span><span class="value">${orderStr}</span></div>`;
   html += `<div class="tooltip-row"><span class="label">Orient.</span><span class="value">${orientStr}</span></div>`;
   if (scaffoldInfo) {
-    html += `<div class="tooltip-row"><span class="label">Scaffold</span><span class="value"><span class="tooltip-badge" style="background:${scaffoldInfo.color};color:#fff;">${scaffoldInfo.name}</span></span></div>`;
+    html += `<div class="tooltip-row"><span class="label">Scaffold</span><span class="value"><span class="tooltip-badge" style="background:${cssColor(scaffoldInfo.color)};color:#fff;">${escapeHtml(scaffoldInfo.name)}</span></span></div>`;
   }
 
   // Show position in map space

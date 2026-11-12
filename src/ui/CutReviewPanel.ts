@@ -7,6 +7,7 @@
  * After each accepted cut the queue rebuilds from fresh detection.
  */
 
+import { escapeHtml } from './Html';
 import type { AppContext } from './AppContext';
 import type { CutSuggestion } from '../analysis/MisassemblyDetector';
 import { buildCutSuggestions } from '../analysis/MisassemblyDetector';
@@ -127,7 +128,7 @@ function renderReviewPanel(ctx: AppContext): void {
     </div>
     <div class="review-body">
       <div class="review-card">
-        <div class="review-contig-name">${suggestion.contigName}</div>
+        <div class="review-contig-name">${escapeHtml(suggestion.contigName)}</div>
         <div class="review-detail">${reasonLabel}</div>
         <div class="review-detail">Offset: ${suggestion.pixelOffset}px</div>
         <div class="review-detail">Strength: <span style="color:${strengthColor}">${strengthPct}%</span></div>

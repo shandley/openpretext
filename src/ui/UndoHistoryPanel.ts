@@ -3,6 +3,7 @@
  * with click-to-revert and batch grouping.
  */
 
+import { escapeHtml } from './Html';
 import type { AppContext } from './AppContext';
 import { state, MAX_UNDO_DEPTH } from '../core/State';
 import type { CurationOperation } from '../core/State';
@@ -117,7 +118,7 @@ export function updateUndoHistoryPanel(ctx: AppContext): void {
       : '';
     html += `<div class="history-item" data-stack="undo" data-count="${undoCumulative}">
       <span class="history-icon">${icon}</span>
-      <span class="history-desc">${g.label}${badge}</span>
+      <span class="history-desc">${escapeHtml(g.label)}${badge}</span>
       <span class="history-time">${relativeTime(g.timestamp)}</span>
     </div>`;
   }
@@ -138,7 +139,7 @@ export function updateUndoHistoryPanel(ctx: AppContext): void {
       : '';
     html += `<div class="history-item redo" data-stack="redo" data-count="${redoCumulative}">
       <span class="history-icon">${icon}</span>
-      <span class="history-desc">${g.label}${badge}</span>
+      <span class="history-desc">${escapeHtml(g.label)}${badge}</span>
       <span class="history-time">${relativeTime(g.timestamp)}</span>
     </div>`;
   }

@@ -62,3 +62,38 @@ test('built bundle renders the demo map', async ({ page }) => {
   await expect(page.locator('#welcome')).toBeHidden();
   await expect(page.locator('#map-canvas')).toBeVisible();
 });
+
+test('built bundle parses a .pretext file and streams detail tiles under the page policy', async ({ page }) => {
+  // The parse worker, the tile decode worker and the analysis worker all have
+  // to load and run in the minified build, under the content security policy
+  // in index.html. A synthetic file keeps this off the network.
+  const { buildSyntheticPretext, patternTexel } = await import('../helpers/pretextWriter');
+  const bytes = Buffer.from(buildSyntheticPretext({
+    textureResLog2: 8, tilesLog2: 2, mipMapLevels: 2,
+    contigs: [300, 400, 324].map((texels, i) => ({ name: `ctg${i + 1}`, texels })),
+    texel: patternTexel,
+  }));
+
+  const problems: string[] = [];
+  page.on('console', (msg) => { if (msg.type() === 'error') problems.push(msg.text()); });
+  page.on('pageerror', (e) => problems.push(e.message));
+
+  await page.goto(BASE);
+  await page.locator('#file-input').setInputFiles({
+    name: 'smoke.pretext', mimeType: 'application/octet-stream', buffer: bytes,
+  });
+  await expect(page.locator('#status-contigs')).toHaveText('3 contigs', { timeout: 30_000 });
+  await expect(page.locator('#welcome')).toBeHidden();
+
+  // The analysis worker produced tracks.
+  await page.keyboard.press('i');
+  await expect(page.locator('#track-config-list')).toContainText('Insulation Score', { timeout: 20_000 });
+
+  // Zoom in far enough to ask for detail tiles; none may fail.
+  const box = (await page.locator('#map-canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let i = 0; i < 12; i++) await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(2500);
+
+  expect(problems, 'no errors or policy violations').toEqual([]);
+});

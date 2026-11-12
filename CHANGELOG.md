@@ -409,6 +409,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - Track color values now consistently use `#hex` format (fixes console warnings
   on `<input type="color">` elements)
 
+### Security
+- **Names from files are shown as text.** Contig names from a `.pretext` file,
+  track names from a BedGraph file, and scaffold names and colours from a
+  session or AGP file were written into several panels as HTML. A crafted file
+  could run script in the page, where a stored AI API key is readable. They are
+  now escaped everywhere they are shown (contig and scaffold lists, tooltip,
+  undo history, track list, cut suggestions and review, pattern list, command
+  palette, P(s) legend).
+- **Content security policy.** The page now allows script only from its own
+  origin: no inline script, inline event handlers or eval. If markup from a
+  file ever reaches the page again, it cannot execute.
+
 ## [0.4.0] — 2026-02-22
 
 ### Added

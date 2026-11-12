@@ -2,6 +2,7 @@
  * Sidebar — contig list, scaffold list, search, and formatBp utility.
  */
 
+import { escapeHtml, cssColor } from './Html';
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { getDisplayContactMap } from '../core/DisplayMatrix';
@@ -113,7 +114,7 @@ export function updateSidebarContigList(ctx: AppContext): void {
       ? ` style="border-left:3px solid ${metricColors.get(orderIdx)}"`
       : '';
     return `<div class="contig-item ${isSelected ? 'selected' : ''}" data-order-index="${orderIdx}"${draggable}${metricStyle}>
-      <span class="contig-name">${contig.name}</span>
+      <span class="contig-name">${escapeHtml(contig.name)}</span>
       <span class="contig-meta">${lengthStr} ${invertedBadge}${excludedBadge}${misassemblyBadge}${metatagBadge}${scaffoldBadge}</span>
     </div>`;
   }).join('');
@@ -264,8 +265,8 @@ export function updateSidebarScaffoldList(ctx: AppContext): void {
     const isActive = sc.id === activeId;
     const count = ctx.scaffoldManager.getContigsInScaffold(sc.id).length;
     return `<div class="contig-item ${isActive ? 'selected' : ''}" data-scaffold-id="${sc.id}">
-      <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${sc.color};margin-right:6px;flex-shrink:0;"></span>
-      <span class="contig-name">${sc.name}</span>
+      <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${cssColor(sc.color)};margin-right:6px;flex-shrink:0;"></span>
+      <span class="contig-name">${escapeHtml(sc.name)}</span>
       <span class="contig-meta">${count} contigs</span>
     </div>`;
   }).join('');

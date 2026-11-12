@@ -4,6 +4,7 @@
  * Module-local state: commandPaletteVisible, selectedCommandIndex.
  */
 
+import { escapeHtml } from './Html';
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { SelectionManager } from '../curation/SelectionManager';
@@ -175,8 +176,8 @@ function updateCommandResults(ctx: AppContext, query: string): void {
   selectedCommandIndex = 0;
   results.innerHTML = filtered.map((cmd, i) =>
     `<div class="result-item ${i === 0 ? 'selected' : ''}" data-index="${i}">
-      <span>${cmd.name}</span>
-      <kbd>${cmd.shortcut ?? ''}</kbd>
+      <span>${escapeHtml(cmd.name)}</span>
+      <kbd>${escapeHtml(cmd.shortcut ?? '')}</kbd>
     </div>`
   ).join('');
 

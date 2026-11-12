@@ -8,6 +8,7 @@
  * Includes inline P(s) decay chart and export buttons.
  */
 
+import { escapeHtml, cssColor } from './Html';
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import type { ContigRange } from '../curation/AutoSort';
@@ -909,7 +910,7 @@ function renderSuggestionCards(ctx: AppContext): void {
       : '';
     html += `<div class="cut-suggestion-card" data-idx="${i}">
       <div class="cut-suggestion-info">
-        <span class="cut-suggestion-name">${s.contigName}</span>
+        <span class="cut-suggestion-name">${escapeHtml(s.contigName)}</span>
         <span class="cut-suggestion-detail">${reasonLabel} \u00b7 offset ${s.pixelOffset}px${conf ? ` \u00b7 <span class="confidence-badge" style="color:${badgeColor}" title="${badgeTitle}">${badgeLabel}</span>` : ''}</span>
       </div>
       <div class="cut-suggestion-actions">
@@ -1150,13 +1151,13 @@ function renderDecayChart(
         const sIntercept = computeRegressionIntercept(d.logDistances, d.logContacts, d.decayExponent);
         const sLineY0 = d.decayExponent * d.logDistances[0] + sIntercept;
         const sLineYn = d.decayExponent * d.logDistances[sn - 1] + sIntercept;
-        svg += `<line x1="${sx(d.logDistances[0])}" y1="${sy(sLineY0)}" x2="${sx(d.logDistances[sn - 1])}" y2="${sy(sLineYn)}" stroke="${sr.color}" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.6"/>`;
+        svg += `<line x1="${sx(d.logDistances[0])}" y1="${sy(sLineY0)}" x2="${sx(d.logDistances[sn - 1])}" y2="${sy(sLineYn)}" stroke="${cssColor(sr.color)}" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.6"/>`;
       }
 
       // Scaffold P(s) curve (connect the points)
       let spts = '';
       for (let i = 0; i < sn; i++) spts += `${sx(d.logDistances[i]).toFixed(1)},${sy(d.logContacts[i]).toFixed(1)} `;
-      svg += `<polyline points="${spts.trim()}" fill="none" stroke="${sr.color}" stroke-width="0.8" opacity="0.55"/>`;
+      svg += `<polyline points="${spts.trim()}" fill="none" stroke="${cssColor(sr.color)}" stroke-width="0.8" opacity="0.55"/>`;
     }
   }
 
@@ -1189,7 +1190,7 @@ function renderDecayChart(
     svg += '<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="#f4741e"/></svg> Genome</span>';
     if (hasScaffolds) {
       for (const sr of scaffolds) {
-        svg += `<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="${sr.color}"/></svg> ${sr.scaffoldName}</span>`;
+        svg += `<span><svg width="8" height="8"><circle cx="4" cy="4" r="3" fill="${cssColor(sr.color)}"/></svg> ${escapeHtml(sr.scaffoldName)}</span>`;
       }
     }
     svg += '</div>';
@@ -1434,7 +1435,7 @@ function updateResultsDisplay(ctx: AppContext): void {
         const expStr = fitted ? exp.toFixed(2) : '\u2014';
         const r2Str = Number.isFinite(r2) ? r2.toFixed(2) : '\u2014';
         html += `<div class="scaffold-decay-row">`;
-        html += `<span style="color:${sr.color}">${sr.scaffoldName} (${sr.contigCount})</span>`;
+        html += `<span style="color:${cssColor(sr.color)}">${escapeHtml(sr.scaffoldName)} (${sr.contigCount})</span>`;
         html += `<span style="color:${expColor}">${expStr} <span style="color:var(--text-secondary);font-size:9px;">R\u00B2=${r2Str}</span></span>`;
         html += '</div>';
       }
@@ -1500,7 +1501,7 @@ function updateResultsDisplay(ctx: AppContext): void {
       html += `<div style="font-size:10px;color:var(--text-secondary);margin:2px 0;padding:4px 6px;background:rgba(108,92,231,0.1);border-radius:4px;">`;
       html += `<div style="margin-bottom:2px;"><strong>vs 1,025 species</strong> <span style="font-style:italic;">(Che et al. 2025)</span></div>`;
       html += `<div>Nearest: <em>${closestLandmark}</em></div>`;
-      html += `<div>Similar to: ${bestGroup.name} (median)</div>`;
+      html += `<div>Similar to: ${escapeHtml(bestGroup.name)} (median)</div>`;
       html += `<div>Stronger than ~${pct.toFixed(0)}% of species</div>`;
       html += `</div>`;
     }
@@ -1963,7 +1964,7 @@ function renderPatternCards(ctx: AppContext): void {
     html += `<div class="pattern-card" data-pattern-idx="${i}">
       <span class="pattern-icon">${icon}</span>
       <div class="pattern-info">
-        <span class="pattern-desc">${p.description}</span>
+        <span class="pattern-desc">${escapeHtml(p.description)}</span>
         <span class="pattern-strength" style="color:${strengthColor}">${strengthPct}%</span>
       </div>
       <button class="pattern-nav-btn" data-pattern-idx="${i}">Go</button>

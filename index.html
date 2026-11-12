@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Content security policy. Scripts run only from this origin: no inline
+       script, no inline event handlers, no eval. That is the backstop if a
+       name from a loaded file ever reaches the page as markup (see
+       src/ui/Html.ts). Styles stay inline-permitted because the app sets them
+       throughout. connect-src is open because the specimen host, the AI API
+       and a user-supplied model server are all legitimate destinations.
+       GitHub Pages cannot send headers, so this is a meta tag. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src *; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
   <title>OpenPretext — Hi-C Contact Map Viewer</title>
   <!-- Inline SVG favicon (Hi-C contact-map motif): a data URI so it needs no
        asset path under the deploy base and stops the /favicon.ico 404 probe. -->

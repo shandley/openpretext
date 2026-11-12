@@ -2,6 +2,7 @@
  * TrackConfig — track configuration panel (visibility, color, type, removal).
  */
 
+import { escapeHtml, cssColor } from './Html';
 import type { AppContext } from './AppContext';
 
 export function updateTrackConfigPanel(ctx: AppContext): void {
@@ -17,17 +18,17 @@ export function updateTrackConfigPanel(ctx: AppContext): void {
   const html = tracks.map((track, i) =>
     `<div class="track-config-item" data-track-index="${i}">
       <label class="track-config-toggle">
-        <input type="checkbox" ${track.visible ? 'checked' : ''} data-track-name="${track.name}" class="track-vis-checkbox">
-        <span class="track-config-name" style="border-left: 3px solid ${track.color}; padding-left: 6px;">${track.name}</span>
+        <input type="checkbox" ${track.visible ? 'checked' : ''} data-track-name="${escapeHtml(track.name)}" class="track-vis-checkbox">
+        <span class="track-config-name" style="border-left: 3px solid ${cssColor(track.color)}; padding-left: 6px;">${escapeHtml(track.name)}</span>
       </label>
       <div class="track-config-controls">
-        <input type="color" value="${track.color}" data-track-name="${track.name}" class="track-color-input" title="Track color">
-        <select data-track-name="${track.name}" class="track-type-select" title="Track type">
+        <input type="color" value="${escapeHtml(track.color)}" data-track-name="${escapeHtml(track.name)}" class="track-color-input" title="Track color">
+        <select data-track-name="${escapeHtml(track.name)}" class="track-type-select" title="Track type">
           <option value="line" ${track.type === 'line' ? 'selected' : ''}>Line</option>
           <option value="heatmap" ${track.type === 'heatmap' ? 'selected' : ''}>Heatmap</option>
           <option value="marker" ${track.type === 'marker' ? 'selected' : ''}>Marker</option>
         </select>
-        <button class="track-remove-btn" data-track-name="${track.name}" title="Remove track">&times;</button>
+        <button class="track-remove-btn" data-track-name="${escapeHtml(track.name)}" title="Remove track">&times;</button>
       </div>
     </div>`
   ).join('');
