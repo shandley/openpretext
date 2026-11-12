@@ -4,7 +4,7 @@
 
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
-import { CurationEngine, undoBatch } from '../curation/CurationEngine';
+import { CurationEngine, undoBatch, redoBatch } from '../curation/CurationEngine';
 import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
 
@@ -31,6 +31,21 @@ export function performUndo(ctx: AppContext): void {
 }
 
 export function performRedo(ctx: AppContext): void {
+  // Mirror of performUndo: a batch that was undone as one action is redone as one.
+  const redoStack = state.get().redoStack ?? [];
+  const next = redoStack[redoStack.length - 1];
+  if (next?.batchId) {
+    ctx.suppressCurationRefresh = true;
+    let count = 0;
+    try {
+      count = redoBatch(next.batchId);
+    } finally {
+      ctx.suppressCurationRefresh = false;
+    }
+    ctx.refreshAfterCuration();
+    ctx.showToast(count > 1 ? `Redo (${count} operations)` : 'Redo');
+    return;
+  }
   if (CurationEngine.redo()) {
     ctx.showToast('Redo');
   }

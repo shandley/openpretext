@@ -604,6 +604,25 @@ export function undoBatch(batchId: string): number {
   return count;
 }
 
+/**
+ * Redo all operations of a batch (by batchId): the inverse of `undoBatch`.
+ * Reapplies while the next operation to redo carries the batchId, so a batch
+ * that was undone as one action comes back as one, and still carries its id
+ * on the undo stack afterwards.
+ */
+export function redoBatch(batchId: string): number {
+  let count = 0;
+  while (true) {
+    const s = state.get();
+    if (s.redoStack.length === 0) break;
+    const next = s.redoStack[s.redoStack.length - 1];
+    if (next.batchId !== batchId) break;
+    redo();
+    count++;
+  }
+  return count;
+}
+
 // ---------------------------------------------------------------------------
 // Redo helpers - re-apply an operation from stored data
 // ---------------------------------------------------------------------------
@@ -713,5 +732,6 @@ export const CurationEngine = {
   undo,
   redo,
   undoBatch,
+  redoBatch,
   setScaffoldManager,
 };

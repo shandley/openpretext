@@ -14,6 +14,7 @@ vi.mock('../../src/curation/CurationEngine', () => ({
     move: vi.fn(),
   },
   undoBatch: vi.fn(() => 0),
+  redoBatch: vi.fn(() => 0),
 }));
 
 vi.mock('../../src/curation/SelectionManager', () => ({
@@ -51,7 +52,7 @@ import {
   toggleContigExclusion,
 } from '../../src/ui/CurationActions';
 
-import { CurationEngine, undoBatch } from '../../src/curation/CurationEngine';
+import { CurationEngine, undoBatch, redoBatch } from '../../src/curation/CurationEngine';
 import { SelectionManager } from '../../src/curation/SelectionManager';
 import { contigExclusion } from '../../src/curation/ContigExclusion';
 import { state } from '../../src/core/State';
@@ -176,6 +177,25 @@ describe('CurationActions', () => {
 
       expect(CurationEngine.redo).toHaveBeenCalled();
       expect(ctx.showToast).not.toHaveBeenCalled();
+    });
+
+    it('should redo the whole batch (not one op) when the next operation is batched', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        map: null,
+        contigOrder: [0, 1, 2],
+        selectedContigs: new Set(),
+        undoStack: [],
+        redoStack: [{ type: 'invert', batchId: 'script-1' }],
+      });
+      (redoBatch as ReturnType<typeof vi.fn>).mockReturnValue(3);
+      const ctx = createMockCtx();
+
+      performRedo(ctx);
+
+      expect(redoBatch).toHaveBeenCalledWith('script-1');
+      expect(CurationEngine.redo).not.toHaveBeenCalled();
+      expect(ctx.refreshAfterCuration).toHaveBeenCalled();
+      expect(ctx.showToast).toHaveBeenCalledWith('Redo (3 operations)');
     });
   });
 

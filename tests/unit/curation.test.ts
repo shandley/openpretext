@@ -1058,6 +1058,61 @@ describe('batch grouping (assignBatchId + undoBatch)', () => {
   });
 });
 
+describe('redoBatch', () => {
+  beforeEach(() => {
+    state.reset();
+  });
+
+  const view = () => {
+    const s = state.get();
+    return JSON.stringify({ order: s.contigOrder, contigs: s.map!.contigs });
+  };
+
+  it('reapplies a whole undone batch and stops at its edge', () => {
+    setupStandardState();
+    CurationEngine.invert(0);                    // before the batch
+    const mark = state.undoMark();
+    CurationEngine.move(0, 2);
+    CurationEngine.cut(1, 10);
+    CurationEngine.invert(2);
+    state.assignBatchId(mark, 'script-1');
+    const after = view();
+
+    expect(CurationEngine.undoBatch('script-1')).toBe(3);
+    expect(state.get().undoStack.length).toBe(1);
+
+    expect(CurationEngine.redoBatch('script-1')).toBe(3);
+    expect(view()).toBe(after);
+    expect(state.get().redoStack.length).toBe(0);
+    // Still one batch, so it can be undone as one again.
+    expect(state.get().undoStack.slice(1).every((op) => op.batchId === 'script-1')).toBe(true);
+    expect(CurationEngine.undoBatch('script-1')).toBe(3);
+  });
+
+  it('does not run into a neighbouring batch or an unbatched operation', () => {
+    setupStandardState();
+    const m1 = state.undoMark();
+    CurationEngine.invert(0);
+    CurationEngine.invert(1);
+    state.assignBatchId(m1, 'first');
+    const m2 = state.undoMark();
+    CurationEngine.invert(2);
+    state.assignBatchId(m2, 'second');
+    CurationEngine.invert(0);                    // unbatched, newest
+
+    CurationEngine.undo();
+    CurationEngine.undoBatch('second');
+    CurationEngine.undoBatch('first');
+    expect(state.get().redoStack.length).toBe(4);
+
+    expect(CurationEngine.redoBatch('first')).toBe(2);
+    expect(state.get().redoStack.length).toBe(2);
+    expect(CurationEngine.redoBatch('first')).toBe(0);
+    expect(CurationEngine.redoBatch('second')).toBe(1);
+    expect(state.get().redoStack.length).toBe(1);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Reversibility across the undo-depth cap
 //
