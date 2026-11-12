@@ -68,7 +68,7 @@ import type { DetectedPattern } from '../analysis/PatternDetector';
 import { Evo2HiCClient, getStoredServerUrl as getEvoUrl, setStoredServerUrl as setEvoUrl, type EpiTrackPrediction, type HiCPredictionResult } from '../analysis/Evo2HiCClient';
 import { HiCFoundationClient, getStoredServerUrl as getHicfUrl, setStoredServerUrl as setHicfUrl } from '../analysis/HiCFoundationClient';
 import { downscaleMap, encodeContactMap, decodeContactMap, encodeFloat32Array, decodeFloat32Array, trackPredictionToConfigs } from '../analysis/Evo2HiCEnhancement';
-import { reorderContactMap } from '../renderer/ContactMapReorder';
+import { getDisplayContactMap, displayCellRemap, permuteVector } from '../core/DisplayMatrix';
 import { showBaseOverview } from './BaseOverview';
 import { computeJoinSupport, type JoinSupportResult, type JunctionSupport } from '../analysis/JoinSupport';
 import { computeContigCoverageRatios, detectHaplotigs, type HaplotigResult } from '../analysis/HaplotigDetector';
@@ -110,6 +110,10 @@ let cachedScaffoldDecay: ScaffoldDecayResult[] | null = null;
 let cachedPatterns: DetectedPattern[] | null = null;
 let cachedICE: ICEResult | null = null;
 let cachedNormalizedMap: Float32Array | null = null;
+/** Which balancing produced cachedNormalizedMap. */
+let normalizationKind: 'ice' | 'kr' | null = null;
+/** A balancing to redo because the layout it was computed for has changed. */
+let staleNormalization: 'ice' | 'kr' | null = null;
 let cachedDI: DIResult | null = null;
 let cachedQuality: HiCQualityResult | null = null;
 let cachedSaddle: SaddleResult | null = null;
@@ -244,6 +248,20 @@ export function updateFastaHint(ctx: AppContext): void {
   }
 }
 
+/**
+ * The overview in the curated order. Every analysis in this panel lays contigs
+ * out in display order (see buildContigRanges), so this, not the file-order
+ * `map.contactMap`, is the matrix they read.
+ */
+function displayMatrix(): Float32Array | null {
+  return getDisplayContactMap()?.data ?? null;
+}
+
+/** The balanced matrix when ICE or SK has been run for this layout, else the raw one. */
+function analysisMatrix(): Float32Array | null {
+  return cachedNormalizedMap ?? displayMatrix();
+}
+
 export function getOverviewSize(): number {
   const s = state.get();
   if (!s.map?.contactMap) return 0;
@@ -355,7 +373,7 @@ async function runInsulation(ctx: AppContext): Promise<void> {
 
   const overviewSize = getOverviewSize();
   const result = await getClient().computeInsulation(
-    s.map.contactMap,
+    displayMatrix()!,
     overviewSize,
     { windowSize: insulationWindowSize },
     buildContigRanges(),
@@ -382,7 +400,7 @@ async function runDecay(ctx: AppContext): Promise<void> {
 
   const overviewSize = getOverviewSize();
   const ranges = buildContigRanges();
-  const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+  const contactMap = analysisMatrix()!;
   cachedDecay = await getClient().computeContactDecay(
     contactMap,
     overviewSize,
@@ -419,7 +437,7 @@ export function recomputeScaffoldDecay(ctx: AppContext): void {
   const overviewSize = getOverviewSize();
   const ranges = buildContigRanges();
   const scaffoldGroups = buildScaffoldGroups(ctx);
-  const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+  const contactMap = analysisMatrix()!;
 
   if (scaffoldGroups.length >= 2) {
     cachedScaffoldDecay = computeDecayByScaffold(
@@ -438,7 +456,7 @@ async function runCompartments(ctx: AppContext): Promise<void> {
 
   const overviewSize = getOverviewSize();
   const result = await getClient().computeCompartments(
-    s.map.contactMap,
+    displayMatrix()!,
     overviewSize,
   );
   cachedCompartments = result;
@@ -448,7 +466,11 @@ async function runCompartments(ctx: AppContext): Promise<void> {
   // the sign stays arbitrary and A/B is reported as unoriented.
   compartmentsOriented = false;
   if (ctx.referenceSequences && ctx.referenceSequences.size > 0) {
-    const gc = computeBinGC(s.map, ctx.referenceSequences, overviewSize);
+    // GC is binned along the file; the eigenvector is in display order.
+    const gcFile = computeBinGC(s.map, ctx.referenceSequences, overviewSize);
+    const gc = permuteVector(
+      gcFile, displayCellRemap(s.map.contigs, s.contigOrder, s.map.textureSize, overviewSize),
+    );
     compartmentsOriented = orientEigenvectorByGC(result.eigenvector, gc);
   }
 
@@ -470,9 +492,10 @@ async function runICENormalization(ctx: AppContext): Promise<void> {
   if (!s.map?.contactMap) return;
 
   const overviewSize = getOverviewSize();
-  const result = await getClient().normalizeICE(s.map.contactMap, overviewSize);
+  const result = await getClient().normalizeICE(displayMatrix()!, overviewSize);
   cachedICE = result;
   cachedNormalizedMap = result.normalizedMatrix;
+  normalizationKind = 'ice';
 
   const track = iceToTrack(result, overviewSize, s.map.textureSize);
   ctx.trackRenderer.addTrack(track);
@@ -503,9 +526,10 @@ async function runKRNormalization(ctx: AppContext): Promise<void> {
   if (!s.map?.contactMap) return;
 
   const overviewSize = getOverviewSize();
-  const result = await getClient().normalizeKR(s.map.contactMap, overviewSize);
+  const result = await getClient().normalizeKR(displayMatrix()!, overviewSize);
   cachedKR = result;
   cachedNormalizedMap = result.normalizedMatrix;
+  normalizationKind = 'kr';
 
   const track = krToTrack(result, overviewSize, s.map.textureSize);
   ctx.trackRenderer.addTrack(track);
@@ -536,7 +560,7 @@ function runSaddlePlot(ctx: AppContext): void {
   if (!s.map?.contactMap || !cachedCompartments) return;
 
   const overviewSize = getOverviewSize();
-  const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+  const contactMap = analysisMatrix()!;
   cachedSaddle = computeSaddlePlot(contactMap, overviewSize, cachedCompartments.eigenvector);
   ctx.showToast(
     cachedSaddle.underpopulated
@@ -566,7 +590,7 @@ async function runQualityMetrics(ctx: AppContext): Promise<void> {
   }
 
   cachedQuality = computeHiCQuality(
-    s.map.contactMap, overviewSize, ranges, scaffoldIds, scaffoldNames,
+    displayMatrix()!, overviewSize, ranges, scaffoldIds, scaffoldNames,
   );
 
   // Add per-contig cis ratio track
@@ -611,7 +635,7 @@ async function runDirectionality(ctx: AppContext): Promise<void> {
 
   const overviewSize = getOverviewSize();
   const result = await getClient().computeDirectionality(
-    s.map.contactMap,
+    displayMatrix()!,
     overviewSize,
     { windowSize: insulationWindowSize },
     buildContigRanges(),
@@ -667,7 +691,7 @@ export function runJoinSupport(ctx: AppContext): void {
     return;
   }
 
-  const matrix = reorderContactMap(original, s.map!.contigs, s.contigOrder, overviewSize);
+  const matrix = displayMatrix()!;
   // Scaffold membership in display order: junctions between different assigned
   // scaffolds are intentional chromosome boundaries and are not scored.
   const scaffoldIds = s.contigOrder.map((id) => s.map!.contigs[id].scaffoldId);
@@ -761,7 +785,7 @@ export function runHaplotigDetection(ctx: AppContext): void {
     return;
   }
 
-  const matrix = reorderContactMap(original, s.map!.contigs, s.contigOrder, overviewSize);
+  const matrix = displayMatrix()!;
 
   // Coverage is in file order; align it to display order (contigOrder maps
   // display index -> original index), the documented originalIndex/order footgun.
@@ -1647,7 +1671,7 @@ function updateResultsDisplay(ctx: AppContext): void {
     if (!workerClient) return;
     const s = state.get();
     if (!s.map?.contactMap) return;
-    const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+    const contactMap = analysisMatrix()!;
     const overviewSize = Math.round(Math.sqrt(contactMap.length));
 
     // Build per-chromosome pixel ranges from scaffold assignments.
@@ -1745,7 +1769,7 @@ export function triggerVirtual4C(ctx: AppContext, viewpointBin: number): void {
     ctx.trackRenderer.removeTrack(`Virtual 4C (bin ${cachedV4C.viewpoint})`);
   }
 
-  const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+  const contactMap = analysisMatrix()!;
   cachedV4C = computeVirtual4C(contactMap, overviewSize, {
     viewpoint: viewpointBin,
     normalize: true,
@@ -1904,7 +1928,7 @@ async function runPatternDetection(ctx: AppContext): Promise<void> {
   const ranges = buildContigRanges();
 
   cachedPatterns = await getClient().detectPatterns(
-    s.map.contactMap,
+    displayMatrix()!,
     overviewSize,
     ranges,
   );
@@ -2264,7 +2288,7 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
   // Restore ICE normalization (re-derive normalized matrix from bias vector)
   if (data.ice && s.map.contactMap) {
     const biasVector = Float32Array.from(data.ice.biasVector);
-    const normalizedMatrix = Float32Array.from(s.map.contactMap);
+    const normalizedMatrix = Float32Array.from(displayMatrix()!);
     const iceSize = biasVector.length;
     for (let i = 0; i < iceSize; i++) {
       for (let j = 0; j < iceSize; j++) {
@@ -2285,6 +2309,7 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
       maxDeviation: data.ice.maxDeviation,
     };
     cachedNormalizedMap = normalizedMatrix;
+    normalizationKind = 'ice';
     const iceTrack = iceToTrack(cachedICE, overviewSize, s.map.textureSize);
     ctx.trackRenderer.addTrack(iceTrack);
   }
@@ -2292,7 +2317,7 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
   // Restore KR normalization (re-derive normalized matrix from bias vector)
   if (data.kr && s.map.contactMap) {
     const biasVector = Float32Array.from(data.kr.biasVector);
-    const normalizedMatrix = Float32Array.from(s.map.contactMap);
+    const normalizedMatrix = Float32Array.from(displayMatrix()!);
     const krSize = biasVector.length;
     for (let i = 0; i < krSize; i++) {
       for (let j = 0; j < krSize; j++) {
@@ -2313,6 +2338,7 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
       maxDeviation: data.kr.maxDeviation,
     };
     cachedNormalizedMap = normalizedMatrix;
+    normalizationKind = 'kr';
     const krTrack = krToTrack(cachedKR, overviewSize, s.map.textureSize);
     ctx.trackRenderer.addTrack(krTrack);
   }
@@ -2727,7 +2753,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
 
     try {
       const overviewSz = getOverviewSize();
-      const contactMap = cachedNormalizedMap ?? s2.map.contactMap;
+      const contactMap = analysisMatrix()!;
       const contigNames = s2.contigOrder.map(id => s2.map!.contigs[id].name);
       const backend = makeBackend(activeBackend(), url);
       const result = await backend.enhance(contactMap, overviewSz, ctx.referenceSequences ?? undefined, contigNames);
@@ -2783,7 +2809,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       const overviewSz = getOverviewSize();
       const contactMap = enhancedMapActive && cachedEnhancedOverview
         ? cachedEnhancedOverview
-        : (cachedNormalizedMap ?? s2.map.contactMap);
+        : (analysisMatrix()!);
       const backend = makeBackend(activeBackend(), url);
       const result = await backend.predictTracks(contactMap, overviewSz, ctx.referenceSequences ?? undefined);
 
@@ -2890,7 +2916,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
   document.getElementById('btn-detect-centromeres')?.addEventListener('click', () => {
     const s = state.get();
     if (!s.map?.contactMap) return;
-    const contactMap = cachedNormalizedMap ?? s.map.contactMap;
+    const contactMap = analysisMatrix()!;
     const overviewSize = Math.round(Math.sqrt(contactMap.length));
     const ranges = buildContigRanges();
     if (ranges.length < 2) {
@@ -2956,6 +2982,8 @@ export function clearAnalysisTracks(ctx: AppContext): void {
   cachedICE = null;
   cachedKR = null;
   cachedNormalizedMap = null;
+  normalizationKind = null;
+  staleNormalization = null;
   cachedDI = null;
   cachedQuality = null;
   cachedSaddle = null;
@@ -3011,16 +3039,53 @@ function showRecomputingIndicator(visible: boolean): void {
  * Only triggers if at least one analysis has been previously computed.
  */
 export function scheduleAnalysisRecompute(ctx: AppContext): void {
-  if (!cachedInsulation && !cachedDecay && !cachedDI) return;
+  invalidateForNewLayout(ctx);
+  if (!hasLayoutResults()) return;
 
   if (autoRecomputeTimer !== null) {
     clearTimeout(autoRecomputeTimer);
   }
+  // Results on screen are for the previous layout until the recompute lands.
+  showRecomputingIndicator(true);
 
   autoRecomputeTimer = setTimeout(() => {
     autoRecomputeTimer = null;
     triggerAutoRecompute(ctx);
   }, AUTO_RECOMPUTE_DELAY_MS);
+}
+
+/** Whether anything is cached that triggerAutoRecompute would redo. */
+function hasLayoutResults(): boolean {
+  return !!(
+    cachedInsulation || cachedDecay || cachedDI || cachedCompartments || cachedQuality ||
+    cachedPatterns || cachedJoinSupport || cachedHaplotigs || cachedTelomere || staleNormalization
+  );
+}
+
+/**
+ * The layout changed. Every result here was computed on the previous display
+ * order and is positioned in its coordinates.
+ *
+ * Results that are recomputed (see triggerAutoRecompute) stay up, behind the
+ * recomputing indicator, until their replacements arrive. The rest are
+ * dropped now, so nothing computed for another layout is used or left on
+ * screen as though it were current:
+ * - the balanced matrix, which would otherwise feed the recompute itself;
+ * - results asked for at one spot or once (Virtual 4C, checkerboard,
+ *   centromeres, cut suggestions), which are cheap to ask for again.
+ */
+function invalidateForNewLayout(ctx: AppContext): void {
+  if (cachedNormalizedMap) {
+    staleNormalization = normalizationKind;
+    cachedNormalizedMap = null;
+  }
+  if (cachedV4C) {
+    ctx.trackRenderer.removeTrack(`Virtual 4C (bin ${cachedV4C.viewpoint})`);
+    cachedV4C = null;
+  }
+  cachedCheckerboard = null;
+  cachedCentromeres = null;
+  cachedSuggestions = null;
 }
 
 function drainPendingRecompute(ctx: AppContext): void {
@@ -3041,22 +3106,44 @@ async function triggerAutoRecompute(ctx: AppContext): Promise<void> {
   setButtonsDisabled(true);
   showRecomputingIndicator(true);
 
-  const hadInsulation = cachedInsulation !== null;
-  // Misassembly detection combines insulation + the compartment eigenvector.
-  // Auto-recompute normally skips compartments (expensive), but if misassembly
-  // flags are in use we must refresh compartments too — otherwise detection runs
-  // on a stale (pre-reorder) eigenvector and produces wrong flags.
-  const misassemblyActive = misassemblyFlags.getFlaggedCount() > 0;
-  const tasks: Promise<void>[] = [];
-  if (cachedInsulation) tasks.push(runInsulation(ctx));
-  if (cachedDecay) tasks.push(runDecay(ctx));
-  if (cachedDI) tasks.push(runDirectionality(ctx));
-  if (misassemblyActive && cachedCompartments) tasks.push(runCompartments(ctx));
+  // Each runner announces its result with a toast. After an edit that would
+  // be a burst of them for work nobody asked for, so they are muted here; the
+  // recomputing indicator and the refreshed panel carry the news.
+  const quiet = new Proxy(ctx, {
+    get: (target, key, receiver) =>
+      key === 'showToast' ? () => {} : Reflect.get(target, key, receiver),
+  });
 
-  await Promise.all(tasks).finally(() => {
-    if (hadInsulation && cachedInsulation && cachedCompartments && misassemblyActive) {
-      runMisassemblyDetection(ctx);
+  const hadInsulation = cachedInsulation !== null;
+  const hadCompartments = cachedCompartments !== null;
+  const hadSaddle = cachedSaddle !== null;
+  const misassemblyActive = misassemblyFlags.getFlaggedCount() > 0;
+
+  const recompute = async (): Promise<void> => {
+    // Balancing first: the other analyses read its matrix. It also redoes
+    // compartments and P(s) itself when they are cached.
+    const redoNormalization = staleNormalization;
+    staleNormalization = null;
+    if (redoNormalization === 'ice') await runICENormalization(quiet);
+    else if (redoNormalization === 'kr') await runKRNormalization(quiet);
+
+    const tasks: Promise<void>[] = [];
+    if (cachedInsulation) tasks.push(runInsulation(quiet));
+    if (cachedDI) tasks.push(runDirectionality(quiet));
+    if (cachedDecay && !redoNormalization) tasks.push(runDecay(quiet));
+    if (cachedCompartments && !redoNormalization) tasks.push(runCompartments(quiet));
+    if (cachedQuality) tasks.push(runQualityMetrics(quiet));
+    if (cachedPatterns) tasks.push(runPatternDetection(quiet));
+    await Promise.all(tasks);
+
+    if (hadSaddle && cachedCompartments) runSaddlePlot(quiet);
+    if (hadInsulation && hadCompartments && cachedInsulation && cachedCompartments && misassemblyActive) {
+      runMisassemblyDetection(quiet);
     }
+    if (cachedTelomere) runTelomereDetection(quiet);
+  };
+
+  await recompute().finally(() => {
     if (cachedJoinSupport) runJoinSupport(ctx);
     if (cachedHaplotigs) runHaplotigDetection(ctx);
     updateResultsDisplay(ctx);

@@ -324,14 +324,25 @@ describe('scheduleAnalysisRecompute', () => {
     expect(mockComputeInsulation).toHaveBeenCalledTimes(1);
   });
 
-  it('does not recompute compartments during auto-recompute', async () => {
+  it('recomputes compartments too, since they were computed for the previous layout', async () => {
     await runAllAnalyses(ctx);
     mockComputeCompartments.mockClear();
 
     scheduleAnalysisRecompute(ctx);
     await vi.advanceTimersByTimeAsync(1100);
 
-    expect(mockComputeCompartments).not.toHaveBeenCalled();
+    expect(mockComputeCompartments).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not announce each recomputed analysis with a toast', async () => {
+    await runAllAnalyses(ctx);
+    (ctx.showToast as ReturnType<typeof vi.fn>).mockClear();
+
+    scheduleAnalysisRecompute(ctx);
+    await vi.advanceTimersByTimeAsync(1100);
+
+    expect(mockComputeInsulation).toHaveBeenCalled();
+    expect(ctx.showToast).not.toHaveBeenCalled();
   });
 
   it('clearAnalysisTracks cancels pending recompute', async () => {

@@ -172,6 +172,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **Analyses, auto-cut, auto-sort and scaffold detection read the map as
+  curated.** The stored overview matrix stays in file order, and these tools
+  lay contigs out in display order, so after any move or inversion they were
+  reading one contig's contacts under another's coordinates. They now read a
+  display-order matrix built from the same mapping the renderer uses.
+  Scaffold-aware auto-sort gives each scaffold a matrix of its own contigs.
+  Compartment orientation by GC reorders the GC profile the same way.
+- **Results are recomputed for the new layout after an edit.** Insulation,
+  P(s), directionality, compartments, ICE or Sinkhorn-Knopp balancing, library
+  quality, pattern detection, the saddle plot and telomere positions are redone
+  about a second after the last edit. Before, only three of these were, and the
+  balanced matrix from the old layout was fed back into them. Virtual 4C,
+  checkerboard, centromere and cut-suggestion results are cleared, since they
+  were asked for at a position that has moved.
+- **No toast per analysis after each edit.** The automatic recompute is shown
+  by the recomputing indicator only.
 - **Loading a second assembly starts clean.** The undo history, scaffolds,
   selection, waypoints, tracks, reference FASTA and analysis results of the
   previous assembly are all dropped when a new file loads. Before, Undo after a

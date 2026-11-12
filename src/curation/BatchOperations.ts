@@ -12,6 +12,7 @@
 
 import { CurationEngine } from './CurationEngine';
 import { state } from '../core/State';
+import { buildDisplayMatrix } from '../core/DisplayMatrix';
 import type { ContigInfo } from '../core/State';
 import { autoCut, type AutoCutParams } from './AutoCut';
 import { autoSort, autoSortCore, type AutoSortParams } from './AutoSort';
@@ -288,8 +289,10 @@ export function autoCutContigs(params?: Partial<AutoCutParams>): BatchResult {
   const resolvedParams = { ...{ cutThreshold: 0.20, windowSize: 8, minFragmentSize: 16 }, ...params };
   state.setBatchContext(batchId, { algorithm: 'autocut', algorithmParams: resolvedParams });
   try {
+    // autoCut lays contigs out in display order, so it reads the overview in
+    // that order (the stored matrix stays in file order).
     const result = autoCut(
-      map.contactMap,
+      buildDisplayMatrix(map, s.contigOrder)!,
       map.contactMap.length === map.textureSize * map.textureSize ? map.textureSize : Math.round(Math.sqrt(map.contactMap.length)),
       map.contigs,
       s.contigOrder,
@@ -373,7 +376,7 @@ export function autoSortContigs(params?: Partial<AutoSortParams>): BatchResult {
   state.setBatchContext(batchId, { algorithm: 'autosort', algorithmParams: resolvedParams });
   try {
     const result = autoSort(
-      map.contactMap,
+      buildDisplayMatrix(map, s.contigOrder)!,
       map.contactMap.length === map.textureSize * map.textureSize ? map.textureSize : Math.round(Math.sqrt(map.contactMap.length)),
       map.contigs,
       s.contigOrder,
@@ -506,8 +509,10 @@ export function scaffoldAwareAutoSort(
       const subOrder = orderIndices.map(idx => s.contigOrder[idx]);
 
       // Run core sort on this subset
+      // The core lays `subOrder` out from cell 0, so give it a matrix holding
+      // just these contigs, packed the same way.
       const result = autoSortCore(
-        map.contactMap, overviewSize, map.contigs, subOrder, map.textureSize, params,
+        buildDisplayMatrix(map, subOrder)!, overviewSize, map.contigs, subOrder, map.textureSize, params,
       );
 
       // Flatten chains → proposed sub-order

@@ -4,6 +4,7 @@
 
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
+import { getDisplayContactMap } from '../core/DisplayMatrix';
 import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
@@ -189,9 +190,10 @@ export function autoAssignScaffolds(ctx: AppContext): void {
   const s = state.get();
   if (!s.map?.contactMap) return;
 
-  const overviewSize = Math.round(Math.sqrt(s.map.contactMap.length));
+  // Blocks are found along the display order, so read the overview in it.
+  const { data: displayMatrix, size: overviewSize } = getDisplayContactMap()!;
   const result = detectChromosomeBlocks(
-    s.map.contactMap, overviewSize,
+    displayMatrix, overviewSize,
     s.map.contigs, s.contigOrder, s.map.textureSize,
   );
 

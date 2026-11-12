@@ -140,14 +140,14 @@ export interface MapData {
    */
   fileContigCount?: number;
   /**
-   * Assembled full-resolution contact map as Float32Array (textureSize x textureSize).
-   * This is reconstructed from the per-tile decoded data.
+   * The file's coarse overview matrix (row-major, symmetric, side
+   * `sqrt(length)`), in FILE order. It is never reordered. Code that analyses
+   * the assembly as curated reads it through core/DisplayMatrix instead.
    */
   contactMap: Float32Array | null;
   /**
-   * Original (file-order) contact map, preserved across curation operations.
-   * contactMap may be reordered to match display order; this always holds
-   * the original pixel layout for re-permutation after undo/redo.
+   * A second copy of the file-order overview, from when `contactMap` used to
+   * be permuted in place. Both now hold the same values.
    */
   originalContactMap?: Float32Array | null;
   /** Raw decompressed BC4 tile data for on-demand detail decoding. */
