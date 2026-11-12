@@ -20,8 +20,30 @@ import type { ScaffoldManager, Scaffold } from '../curation/ScaffoldManager';
 // Session data types
 // ---------------------------------------------------------------------------
 
-/** Current session format version. Increment on breaking changes. */
-export const SESSION_VERSION = 1;
+/**
+ * Current session format version.
+ *
+ * 1: contig order plus per-contig orientation and scaffold. Enough only while
+ *    no contig has been cut or joined, because the pieces those make exist
+ *    nowhere but in memory.
+ * 2: adds `contigs` (the whole contig table, including the pieces made by cut
+ *    and join) and `assembly` (what the session was saved against). Version 1
+ *    files are still read.
+ */
+export const SESSION_VERSION = 2;
+
+/** Versions `importSession` accepts. */
+export const READABLE_SESSION_VERSIONS: readonly number[] = [1, 2];
+
+/**
+ * What a session was saved against: enough to refuse it on another assembly.
+ */
+export interface SessionAssembly {
+  /** Texels along one axis of the full map. */
+  textureSize: number;
+  /** Number of contigs the file itself defines; they are `contigs[0..n)`. */
+  fileContigCount: number;
+}
 
 /**
  * A waypoint bookmark in the contact map.
@@ -228,6 +250,10 @@ export interface SessionData {
   timestamp: number;
   contigOrder: number[];
   contigStates: { [contigId: number]: ContigStateOverride };
+  /** Version 2: every contig, indexed as `contigOrder` refers to them. */
+  contigs?: ContigInfo[];
+  /** Version 2: the assembly the session belongs to. */
+  assembly?: SessionAssembly;
   scaffolds: SessionScaffold[];
   waypoints: SessionWaypoint[];
   camera: SessionCamera;
@@ -277,6 +303,40 @@ function isFiniteNumberArray(v: unknown): v is number[] {
   if (!Array.isArray(v)) return false;
   for (const item of v) {
     if (!isFiniteNumber(item)) return false;
+  }
+  return true;
+}
+
+function isNonNegativeInteger(v: unknown): v is number {
+  return Number.isInteger(v) && (v as number) >= 0;
+}
+
+/** Shape check for one saved contig. Whether it fits the loaded file is
+ *  decided later, by planSessionRestore. */
+function isSessionContig(v: unknown): boolean {
+  if (!isObject(v)) return false;
+  if (typeof v.name !== 'string') return false;
+  if (!isNonNegativeInteger(v.originalIndex)) return false;
+  if (!isFiniteNumber(v.length) || v.length < 0) return false;
+  if (!isNonNegativeInteger(v.pixelStart) || !isNonNegativeInteger(v.pixelEnd)) return false;
+  if (typeof v.inverted !== 'boolean') return false;
+  if (v.scaffoldId !== null && !Number.isInteger(v.scaffoldId)) return false;
+  if (v.pixelSegments !== undefined) {
+    if (!Array.isArray(v.pixelSegments)) return false;
+    for (const p of v.pixelSegments) {
+      if (!isObject(p)) return false;
+      if (!isNonNegativeInteger(p.start) || !isNonNegativeInteger(p.end)) return false;
+      if (typeof p.reversed !== 'boolean') return false;
+    }
+  }
+  if (v.sequenceSegments !== undefined) {
+    if (!Array.isArray(v.sequenceSegments)) return false;
+    for (const q of v.sequenceSegments) {
+      if (!isObject(q)) return false;
+      if (typeof q.sourceName !== 'string') return false;
+      if (!isNonNegativeInteger(q.start) || !isNonNegativeInteger(q.end)) return false;
+      if (typeof q.revComp !== 'boolean') return false;
+    }
   }
   return true;
 }
@@ -496,6 +556,11 @@ export function exportSession(
     timestamp: Date.now(),
     contigOrder: [...appState.contigOrder],
     contigStates,
+    contigs: contigs.map(serializeContig),
+    assembly: {
+      textureSize: appState.map?.textureSize ?? 0,
+      fileContigCount: appState.map?.fileContigCount ?? contigs.length,
+    },
     scaffolds,
     waypoints,
     camera: { ...appState.camera },
@@ -509,6 +574,22 @@ export function exportSession(
     },
     operationLog,
   };
+}
+
+/** A contig as written to a session: plain data, optional fields only when set. */
+function serializeContig(c: ContigInfo): ContigInfo {
+  const out: ContigInfo = {
+    name: c.name,
+    originalIndex: c.originalIndex,
+    length: c.length,
+    pixelStart: c.pixelStart,
+    pixelEnd: c.pixelEnd,
+    inverted: c.inverted,
+    scaffoldId: c.scaffoldId,
+  };
+  if (c.pixelSegments) out.pixelSegments = c.pixelSegments.map((p) => ({ ...p }));
+  if (c.sequenceSegments) out.sequenceSegments = c.sequenceSegments.map((q) => ({ ...q }));
+  return out;
 }
 
 /**
@@ -569,7 +650,7 @@ export function validateSession(data: unknown): data is SessionData {
   if (!isObject(data)) return false;
 
   // -- version --
-  if (data.version !== SESSION_VERSION) return false;
+  if (!READABLE_SESSION_VERSIONS.includes(data.version as number)) return false;
 
   // -- filename --
   if (typeof data.filename !== 'string') return false;
@@ -594,6 +675,15 @@ export function validateSession(data: unknown): data is SessionData {
     if (value.scaffoldId !== null && !Number.isInteger(value.scaffoldId)) {
       return false;
     }
+  }
+
+  // -- contigs and assembly (version 2) --
+  if (data.version === 2) {
+    if (!Array.isArray(data.contigs)) return false;
+    for (const c of data.contigs) if (!isSessionContig(c)) return false;
+    if (!isObject(data.assembly)) return false;
+    if (!isNonNegativeInteger(data.assembly.textureSize)) return false;
+    if (!isNonNegativeInteger(data.assembly.fileContigCount)) return false;
   }
 
   // -- scaffolds --

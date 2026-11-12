@@ -1,0 +1,232 @@
+/**
+ * Assembly lifecycle: what must hold when one assembly replaces another, when
+ * a session is saved and restored, and when a batch is undone and redone.
+ *
+ * Uses the synthetic .pretext writer, so every expectation is about a file
+ * whose contents are known.
+ */
+
+import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { buildSyntheticPretext, patternTexel } from '../helpers/pretextWriter';
+import { buildDisplayRuns } from '../../src/core/DisplayMapping';
+import type { ContigInfo } from '../../src/core/State';
+
+function makeFile(widths: number[], prefix: string): Buffer {
+  return Buffer.from(buildSyntheticPretext({
+    textureResLog2: 8,
+    tilesLog2: 2,
+    mipMapLevels: 2,
+    contigs: widths.map((texels, i) => ({ name: `${prefix}${i + 1}`, texels })),
+    texel: patternTexel,
+  }));
+}
+
+// Two 1024-texel maps with different contig counts and names.
+const FILE_A = makeFile([200, 300, 124, 250, 150], 'a');
+const FILE_B = makeFile([400, 324, 300], 'b');
+
+async function loadPretext(page: Page, bytes: Buffer, name: string, contigs: number): Promise<void> {
+  await page.locator('#file-input').setInputFiles({ name, mimeType: 'application/octet-stream', buffer: bytes });
+  await expect(page.locator('#welcome')).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator('#status-file')).toHaveText(name);
+  await expect(page.locator('#status-contigs')).toHaveText(`${contigs} contigs`);
+  await page.waitForTimeout(500);
+}
+
+interface Assembly {
+  contigs: ContigInfo[];
+  order: number[];
+  undo: number;
+  redo: number;
+  scaffolds: Array<{ id: number; name: string; color: string }>;
+}
+
+async function assembly(page: Page): Promise<Assembly> {
+  return page.evaluate(() => {
+    const { ctx, state } = (window as any).__openpretext;
+    const s = state.get();
+    return {
+      contigs: s.map.contigs,
+      order: s.contigOrder,
+      undo: s.undoStack.length,
+      redo: s.redoStack.length,
+      scaffolds: ctx.scaffoldManager.getAllScaffolds(),
+    };
+  });
+}
+
+/** What the curator sees: names, widths and file texels, left to right. */
+function shown(a: Assembly) {
+  return {
+    names: a.order.map((id) => a.contigs[id].name),
+    lengths: a.order.map((id) => a.contigs[id].length),
+    scaffoldOf: a.order.map((id) => a.contigs[id].scaffoldId),
+    runs: buildDisplayRuns(a.contigs, a.order),
+    sequence: a.order.map((id) => a.contigs[id].sequenceSegments ?? null),
+  };
+}
+
+function watchErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  return errors;
+}
+
+test.use({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+
+test('loading a second assembly leaves nothing of the first', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto('/');
+  await loadPretext(page, FILE_A, 'first.pretext', 5);
+
+  // Leave every kind of per-assembly state behind.
+  await page.evaluate(() => {
+    const { ctx, state, CurationEngine } = (window as any).__openpretext;
+    CurationEngine.cut(1, 100);
+    CurationEngine.move(0, 3);
+    CurationEngine.invert(2);
+    const sc = ctx.scaffoldManager.createScaffold('chrA');
+    ctx.scaffoldManager.paintContigs([0, 1], sc);
+    CurationEngine.undo();
+    state.update({ selectedContigs: new Set([1, 2]) });
+    ctx.waypointManager.addWaypoint(0.3, 0.3, 'here');
+    ctx.referenceSequences = new Map([['a1', 'ACGT']]);
+  });
+  const before = await assembly(page);
+  expect(before.undo).toBeGreaterThan(0);
+  expect(before.redo).toBeGreaterThan(0);
+
+  await loadPretext(page, FILE_B, 'second.pretext', 3);
+
+  const after = await assembly(page);
+  expect(after.undo, 'undo history belongs to the first assembly').toBe(0);
+  expect(after.redo).toBe(0);
+  expect(after.scaffolds).toEqual([]);
+  expect(after.contigs.map((c) => c.name)).toEqual(['b1', 'b2', 'b3']);
+  expect(after.order).toEqual([0, 1, 2]);
+  const leftovers = await page.evaluate(() => {
+    const { ctx, state } = (window as any).__openpretext;
+    return {
+      selected: state.get().selectedContigs.size,
+      waypoints: ctx.waypointManager.getAllWaypoints().length,
+      hasFasta: ctx.referenceSequences !== null,
+      undoDropped: state.undoDroppedCount(),
+    };
+  });
+  expect(leftovers).toEqual({ selected: 0, waypoints: 0, hasFasta: false, undoDropped: 0 });
+
+  // Undo and redo have nothing to act on, and must not throw.
+  await page.locator('#btn-undo').click();
+  await page.locator('#btn-redo').click();
+  await page.waitForTimeout(200);
+  expect((await assembly(page)).order).toEqual([0, 1, 2]);
+
+  // A new scaffold starts numbering afresh.
+  const firstId = await page.evaluate(() =>
+    (window as any).__openpretext.ctx.scaffoldManager.createScaffold(undefined, { record: false }));
+  expect(firstId).toBe(1);
+
+  expect(errors).toEqual([]);
+});
+
+test('a session saved after cuts and joins restores the same assembly', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto('/');
+  await loadPretext(page, FILE_A, 'first.pretext', 5);
+
+  await page.evaluate(() => {
+    const { ctx, CurationEngine } = (window as any).__openpretext;
+    CurationEngine.cut(1, 120);     // a2 -> a2_L, a2_R
+    CurationEngine.invert(2);       // a2_R reversed
+    CurationEngine.move(4, 0);      // a4 to the front
+    CurationEngine.join(0);         // a4 + a1: not neighbours in the file
+    CurationEngine.cut(0, 300);     // cut through the joined contig
+    const x = ctx.scaffoldManager.createScaffold('chrX');
+    const y = ctx.scaffoldManager.createScaffold('chrY');
+    ctx.scaffoldManager.deleteScaffold(x);  // leaves ids non-contiguous
+    ctx.scaffoldManager.paintContigs([0, 2], y);
+  });
+  const saved = await assembly(page);
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.evaluate(() => (document.getElementById('btn-save-session') as HTMLButtonElement).click()),
+  ]);
+  const sessionJson = readFileSync(await download.path(), 'utf8');
+
+  // A fresh page, the same file, then the session.
+  await page.goto('/');
+  await loadPretext(page, FILE_A, 'first.pretext', 5);
+  await page.locator('#session-file-input').setInputFiles({
+    name: 'session.json', mimeType: 'application/json', buffer: Buffer.from(sessionJson),
+  });
+  await expect(page.locator('#status-contigs')).toHaveText(`${saved.order.length} contigs`, { timeout: 10_000 });
+  await page.waitForTimeout(500);
+
+  const restored = await assembly(page);
+  expect(shown(restored)).toEqual(shown(saved));
+  expect(restored.scaffolds).toEqual(saved.scaffolds);
+  expect(restored.undo, 'restored history must not point at another state').toBe(0);
+
+  // The restored assembly is editable and reversible.
+  await page.evaluate(() => {
+    const { CurationEngine } = (window as any).__openpretext;
+    CurationEngine.cut(0, 50);
+    CurationEngine.undo();
+  });
+  expect(shown(await assembly(page))).toEqual(shown(saved));
+
+  // A session for a different assembly is refused and changes nothing.
+  await page.goto('/');
+  await loadPretext(page, FILE_B, 'second.pretext', 3);
+  await page.locator('#session-file-input').setInputFiles({
+    name: 'session.json', mimeType: 'application/json', buffer: Buffer.from(sessionJson),
+  });
+  await expect(page.locator('.toast').filter({ hasText: /cannot be restored: it was saved for a different assembly/ }))
+    .toBeVisible({ timeout: 5_000 });
+  const other = await assembly(page);
+  expect(other.contigs.map((c) => c.name)).toEqual(['b1', 'b2', 'b3']);
+  expect(other.order).toEqual([0, 1, 2]);
+
+  expect(errors).toEqual([]);
+});
+
+test('redo reapplies a whole batch, as undo removes it', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto('/');
+  await loadPretext(page, FILE_A, 'first.pretext', 5);
+
+  await page.evaluate(() => {
+    const { state, CurationEngine } = (window as any).__openpretext;
+    CurationEngine.invert(0);                 // a single edit before the batch
+    state.setBatchContext('batch-1');
+    CurationEngine.move(0, 4);
+    CurationEngine.cut(1, 60);
+    CurationEngine.invert(3);
+    state.clearBatchContext();
+  });
+  const done = await assembly(page);
+  expect(done.undo).toBe(4);
+
+  await page.locator('#btn-undo').click();
+  await page.waitForTimeout(200);
+  const undone = await assembly(page);
+  expect(undone.undo).toBe(1);
+  expect(undone.redo).toBe(3);
+
+  await page.locator('#btn-redo').click();
+  await page.waitForTimeout(200);
+  const redone = await assembly(page);
+  expect(redone.undo, 'one Redo brings the whole batch back').toBe(4);
+  expect(redone.redo).toBe(0);
+  expect(shown(redone)).toEqual(shown(done));
+
+  // And it is still one batch: a single Undo removes it again.
+  await page.locator('#btn-undo').click();
+  await page.waitForTimeout(200);
+  expect((await assembly(page)).undo).toBe(1);
+
+  expect(errors).toEqual([]);
+});

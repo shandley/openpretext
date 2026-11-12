@@ -108,6 +108,12 @@ function makeValidSessionData(overrides: Partial<SessionData> = {}): SessionData
       1: { inverted: true, scaffoldId: 1 },
       2: { inverted: false, scaffoldId: null },
     },
+    contigs: [
+      { name: 'c1', originalIndex: 0, length: 1000, pixelStart: 0, pixelEnd: 10, inverted: false, scaffoldId: 1 },
+      { name: 'c2', originalIndex: 1, length: 2000, pixelStart: 10, pixelEnd: 30, inverted: true, scaffoldId: 1 },
+      { name: 'c3', originalIndex: 2, length: 1000, pixelStart: 30, pixelEnd: 40, inverted: false, scaffoldId: null },
+    ],
+    assembly: { textureSize: 40, fileContigCount: 3 },
     scaffolds: [{ id: 1, name: 'Scaffold 1', color: '#e6194B' }],
     waypoints: [],
     camera: { x: 100, y: 200, zoom: 2.5 },
@@ -412,7 +418,7 @@ describe('validateSession', () => {
   });
 
   it('should reject wrong version number', () => {
-    const data = makeValidSessionData({ version: 2 });
+    const data = makeValidSessionData({ version: 3 });
     expect(validateSession(data)).toBe(false);
   });
 

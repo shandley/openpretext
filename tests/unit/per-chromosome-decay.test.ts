@@ -50,6 +50,11 @@ function makeMinimalSession(analysis?: Record<string, unknown>) {
       0: { inverted: false, scaffoldId: null },
       1: { inverted: false, scaffoldId: null },
     },
+    contigs: [
+      { name: 'c1', originalIndex: 0, length: 1000, pixelStart: 0, pixelEnd: 10, inverted: false, scaffoldId: null },
+      { name: 'c2', originalIndex: 1, length: 1000, pixelStart: 10, pixelEnd: 20, inverted: false, scaffoldId: null },
+    ],
+    assembly: { textureSize: 20, fileContigCount: 2 },
     scaffolds: [],
     waypoints: [],
     camera: { x: 0.5, y: 0.5, zoom: 1 },

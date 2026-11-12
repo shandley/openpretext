@@ -12,6 +12,7 @@ vi.mock('../../src/core/State', () => ({
     })),
     update: vi.fn(),
     updateContigs: vi.fn(),
+    clearHistory: vi.fn(),
   },
 }));
 
@@ -100,7 +101,6 @@ import { parseFASTA, parseFASTAStream } from '../../src/formats/FASTAParser';
 import { showLoading, updateLoading, hideLoading } from '../../src/ui/LoadingOverlay';
 import { parseBedGraph, bedGraphToTrack } from '../../src/formats/BedGraphParser';
 import { syncColormapDropdown, syncGammaSlider } from '../../src/ui/ColorMapControls';
-import { rebuildContigBoundaries } from '../../src/ui/EventWiring';
 import type { AppContext } from '../../src/ui/AppContext';
 
 // ---------------------------------------------------------------------------
@@ -141,6 +141,7 @@ function createMockCtx(overrides: Partial<AppContext> = {}): AppContext {
     scaffoldManager: {
       getScaffold: vi.fn(() => null),
       createScaffold: vi.fn(),
+      restoreScaffolds: vi.fn(),
       getAllScaffolds: vi.fn(() => []),
     } as any,
     waypointManager: {
@@ -349,90 +350,87 @@ describe('ExportSession', () => {
       expect(ctx.showToast).toHaveBeenCalledWith('Load a .pretext file first, then restore the session');
     });
 
-    it('should show warning toast when filename does not match', async () => {
-      const session = makeSessionData({ filename: 'other.pretext' });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: {
-          filename: 'current.pretext',
-          contigs: [
-            { inverted: false, scaffoldId: null },
-            { inverted: false, scaffoldId: null },
-          ],
-        },
-        contigOrder: [0, 1],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
+    /** A loaded two-contig map the default session fits. */
+    const loadedState = (filename = 'test.pretext') => ({
+      map: {
+        filename,
+        textureSize: 20,
+        fileContigCount: 2,
+        contigs: [
+          { name: 'c1', originalIndex: 0, length: 1000, pixelStart: 0, pixelEnd: 8, inverted: false, scaffoldId: null },
+          { name: 'c2', originalIndex: 1, length: 1500, pixelStart: 8, pixelEnd: 20, inverted: false, scaffoldId: null },
+        ],
+      },
+      contigOrder: [0, 1],
+    });
 
-      await loadSession(ctx, file);
+    async function restore(overrides: Record<string, unknown> = {}, filename = 'test.pretext') {
+      const session = makeSessionData(overrides);
+      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue(loadedState(filename));
+      const ctx = createMockCtx();
+      await loadSession(ctx, fakeFile('session.json', JSON.stringify(session)));
+      return ctx;
+    }
+
+    it('notes a filename mismatch without refusing the session', async () => {
+      const ctx = await restore({ filename: 'other.pretext' }, 'current.pretext');
 
       expect(ctx.showToast).toHaveBeenCalledWith(
-        'Warning: session was for "other.pretext", current file is "current.pretext"'
+        'Note: session was saved from "other.pretext", current file is "current.pretext"'
       );
+      expect(state.clearHistory).toHaveBeenCalled();
     });
 
-    it('should skip filename warning when session filename is "demo"', async () => {
-      const session = makeSessionData({ filename: 'demo' });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: {
-          filename: 'current.pretext',
-          contigs: [
-            { inverted: false, scaffoldId: null },
-            { inverted: false, scaffoldId: null },
-          ],
-        },
-        contigOrder: [0, 1],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
+    it('should skip the filename note when session filename is "demo"', async () => {
+      const ctx = await restore({ filename: 'demo' }, 'current.pretext');
 
-      await loadSession(ctx, file);
-
-      // Should NOT have the filename warning toast
-      const toastCalls = (ctx.showToast as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => c[0]);
-      expect(toastCalls).not.toContain(expect.stringContaining('Warning: session was for'));
+      const toasts = (ctx.showToast as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => String(c[0]));
+      expect(toasts.some((t) => t.startsWith('Note: session was saved from'))).toBe(false);
     });
 
-    it('should apply contig order from session', async () => {
-      const session = makeSessionData({ contigOrder: [1, 0] });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: {
-          filename: 'test.pretext',
-          contigs: [
-            { inverted: false, scaffoldId: null },
-            { inverted: false, scaffoldId: null },
-          ],
-        },
-        contigOrder: [0, 1],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
+    it('installs the session order, orientation and scaffold assignment in one update', async () => {
+      await restore();
 
-      await loadSession(ctx, file);
+      const call = (state.update as ReturnType<typeof vi.fn>).mock.calls
+        .map((c: unknown[]) => c[0] as Record<string, any>)
+        .find((u) => u.contigOrder !== undefined)!;
+      expect(call.contigOrder).toEqual([1, 0]);
+      expect(call.map.contigs.map((c: any) => [c.name, c.inverted, c.scaffoldId])).toEqual([
+        ['c1', true, null],
+        ['c2', false, 1],
+      ]);
+      expect(state.updateContigs).not.toHaveBeenCalled();
+    });
 
-      expect(state.update).toHaveBeenCalledWith({ contigOrder: [1, 0] });
+    it('drops history and restores scaffolds with their saved ids', async () => {
+      const scaffolds = [
+        { id: 1, name: 'scaffold_1', color: '#ff0000' },
+        { id: 4, name: 'scaffold_4', color: '#00ff00' },
+      ];
+      const ctx = await restore({ scaffolds });
+
+      expect(state.clearHistory).toHaveBeenCalled();
+      expect(ctx.scaffoldManager.restoreScaffolds).toHaveBeenCalledWith(scaffolds);
+      expect(ctx.scaffoldManager.createScaffold).not.toHaveBeenCalled();
+    });
+
+    it('refuses a session that does not fit the loaded assembly and changes nothing', async () => {
+      const ctx = await restore({ contigOrder: [0, 1, 5] });
+
+      expect(ctx.showToast).toHaveBeenCalledWith(
+        expect.stringContaining('This session cannot be restored'), 8000,
+      );
+      expect(state.update).not.toHaveBeenCalled();
+      expect(state.clearHistory).not.toHaveBeenCalled();
+      expect(ctx.scaffoldManager.restoreScaffolds).not.toHaveBeenCalled();
+      expect(ctx.waypointManager.clearAll).not.toHaveBeenCalled();
+      expect(ctx.camera.animateTo).not.toHaveBeenCalled();
+      expect(hideLoading).toHaveBeenCalled();
     });
 
     it('shows, updates, and hides the loading overlay during restore', async () => {
-      const session = makeSessionData();
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: {
-          filename: 'test.pretext',
-          contigs: [
-            { inverted: false, scaffoldId: null },
-            { inverted: false, scaffoldId: null },
-          ],
-        },
-        contigOrder: [0, 1],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
-
-      await loadSession(ctx, file);
+      await restore();
 
       expect(showLoading).toHaveBeenCalled();
       expect(updateLoading).toHaveBeenCalled();
@@ -452,155 +450,16 @@ describe('ExportSession', () => {
       expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Load failed'));
     });
 
-    it('should not update contig order when session has empty contigOrder', async () => {
-      const session = makeSessionData({ contigOrder: [] });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: {
-          filename: 'test.pretext',
-          contigs: [],
-        },
-        contigOrder: [],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
-
-      await loadSession(ctx, file);
-
-      // state.update for contigOrder should NOT have been called
-      const updateCalls = (state.update as ReturnType<typeof vi.fn>).mock.calls;
-      const contigOrderUpdates = updateCalls.filter(
-        (c: unknown[]) => (c[0] as Record<string, unknown>).contigOrder !== undefined
-      );
-      expect(contigOrderUpdates).toHaveLength(0);
-    });
-
-    it('should apply contig states (inversions, scaffolds)', async () => {
-      const session = makeSessionData({
-        contigStates: {
-          '0': { inverted: true, scaffoldId: 2 },
-          '1': { inverted: false, scaffoldId: null },
-        },
-      });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      const contigs = [
-        { inverted: false, scaffoldId: null },
-        { inverted: false, scaffoldId: null },
-      ];
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: { filename: 'test.pretext', contigs },
-        contigOrder: [0, 1],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
-
-      await loadSession(ctx, file);
-
-      // Verify updateContigs was called with correct changes
-      expect(state.updateContigs).toHaveBeenCalledWith([
-        { id: 0, changes: { inverted: true, scaffoldId: 2 } },
-        { id: 1, changes: { inverted: false, scaffoldId: null } },
-      ]);
-    });
-
-    it('should skip contig state overrides for out-of-range indices', async () => {
-      const session = makeSessionData({
-        contigStates: {
-          '99': { inverted: true, scaffoldId: 1 },
-        },
-      });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      const contigs = [{ inverted: false, scaffoldId: null }];
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: { filename: 'test.pretext', contigs },
-        contigOrder: [0],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
-
-      await loadSession(ctx, file);
-
-      // updateContigs should not have been called since index 99 is out of range
-      expect(state.updateContigs).not.toHaveBeenCalled();
-    });
-
-    it('should restore scaffolds by calling createScaffold for new ones', async () => {
-      const session = makeSessionData({
-        scaffolds: [
-          { id: 1, name: 'scaffold_1', color: '#ff0000' },
-          { id: 2, name: 'scaffold_2', color: '#00ff00' },
-        ],
-      });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: { filename: 'test.pretext', contigs: [] },
-        contigOrder: [],
-      });
-      const ctx = createMockCtx();
-      // getScaffold returns null meaning scaffold doesn't exist yet
-      (ctx.scaffoldManager.getScaffold as ReturnType<typeof vi.fn>).mockReturnValue(null);
-      const file = fakeFile('session.json', JSON.stringify(session));
-
-      await loadSession(ctx, file);
-
-      // Session restore must not record undo entries for the scaffolds it recreates.
-      expect(ctx.scaffoldManager.createScaffold).toHaveBeenCalledWith('scaffold_1', { record: false });
-      expect(ctx.scaffoldManager.createScaffold).toHaveBeenCalledWith('scaffold_2', { record: false });
-    });
-
-    it('should not create scaffold if it already exists', async () => {
-      const session = makeSessionData({
-        scaffolds: [{ id: 1, name: 'scaffold_1', color: '#ff0000' }],
-      });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: { filename: 'test.pretext', contigs: [] },
-        contigOrder: [],
-      });
-      const ctx = createMockCtx();
-      // getScaffold returns an existing scaffold
-      (ctx.scaffoldManager.getScaffold as ReturnType<typeof vi.fn>).mockReturnValue({
-        id: 1,
-        name: 'scaffold_1',
-        color: '#ff0000',
-      });
-      const file = fakeFile('session.json', JSON.stringify(session));
-
-      await loadSession(ctx, file);
-
-      expect(ctx.scaffoldManager.createScaffold).not.toHaveBeenCalled();
-    });
-
     it('should animate camera to session camera position', async () => {
-      const session = makeSessionData({
-        camera: { x: 100, y: 200, zoom: 3 },
-      });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: { filename: 'test.pretext', contigs: [] },
-        contigOrder: [],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
-
-      await loadSession(ctx, file);
+      const ctx = await restore({ camera: { x: 100, y: 200, zoom: 3 } });
 
       expect(ctx.camera.animateTo).toHaveBeenCalledWith({ x: 100, y: 200, zoom: 3 }, 300);
     });
 
     it('should restore settings via state.update and renderer', async () => {
-      const session = makeSessionData({
+      const ctx = await restore({
         settings: { colorMapName: 'viridis', gamma: 2.0, showGrid: false },
       });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: { filename: 'test.pretext', contigs: [] },
-        contigOrder: [],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
-
-      await loadSession(ctx, file);
 
       expect(state.update).toHaveBeenCalledWith({
         gamma: 2.0,
@@ -621,57 +480,24 @@ describe('ExportSession', () => {
         { id: 1, mapX: 10, mapY: 20, label: 'W1', color: '#fff' },
         { id: 2, mapX: 30, mapY: 40, label: 'W2', color: '#000' },
       ];
-      const session = makeSessionData({ waypoints });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: { filename: 'test.pretext', contigs: [] },
-        contigOrder: [],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
-
-      await loadSession(ctx, file);
+      const ctx = await restore({ waypoints });
 
       expect(ctx.waypointManager.clearAll).toHaveBeenCalled();
       expect(ctx.waypointManager.addWaypoint).toHaveBeenCalledWith(10, 20, 'W1');
       expect(ctx.waypointManager.addWaypoint).toHaveBeenCalledWith(30, 40, 'W2');
     });
 
-    it('should call rebuildContigBoundaries and update sidebars', async () => {
-      const session = makeSessionData();
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: { filename: 'test.pretext', contigs: [] },
-        contigOrder: [],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
+    it('refreshes everything that follows the layout', async () => {
+      const ctx = await restore();
 
-      await loadSession(ctx, file);
-
-      expect(rebuildContigBoundaries).toHaveBeenCalledWith(ctx);
-      expect(ctx.updateSidebarContigList).toHaveBeenCalled();
+      expect(ctx.refreshAfterCuration).toHaveBeenCalled();
       expect(ctx.updateSidebarScaffoldList).toHaveBeenCalled();
     });
 
-    it('should show success toast with operation count', async () => {
-      const session = makeSessionData({
-        operationLog: [
-          { type: 'invert', timestamp: 100, description: 'op1' },
-          { type: 'cut', timestamp: 200, description: 'op2' },
-        ],
-      });
-      (importSession as ReturnType<typeof vi.fn>).mockReturnValue(session);
-      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
-        map: { filename: 'test.pretext', contigs: [] },
-        contigOrder: [],
-      });
-      const ctx = createMockCtx();
-      const file = fakeFile('session.json', JSON.stringify(session));
+    it('should show a success toast with what was restored', async () => {
+      const ctx = await restore();
 
-      await loadSession(ctx, file);
-
-      expect(ctx.showToast).toHaveBeenCalledWith('Session restored (2 operations)');
+      expect(ctx.showToast).toHaveBeenCalledWith('Session restored (2 contigs, 1 scaffolds)');
     });
 
     it('should catch errors and show failure toast with error message', async () => {

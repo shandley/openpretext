@@ -99,7 +99,7 @@ Automatic flagging of potential chimeric contigs from TAD-boundary and compartme
 
 ### Export and import
 
-AGP 2.1, BED6, and FASTA (with reverse complement for inverted contigs), PNG screenshots, BedGraph and TSV for every analysis track, session save and load (JSON with the full undo stack and analysis data), curation-log export, and AI-strategy JSON. Load a reference FASTA for curated sequence export, or a BedGraph file for a custom track. AGP import reads a prior curation and applies its contig order, orientation, and scaffold grouping back onto the loaded assembly, matching contigs by name and leaving any not named in the file at the tail.
+AGP 2.1, BED6, and FASTA (with reverse complement for inverted contigs), PNG screenshots, BedGraph and TSV for every analysis track, session save and load (JSON with the curated contig table, scaffolds, view settings and analysis data; the undo history is not saved), curation-log export, and AI-strategy JSON. Load a reference FASTA for curated sequence export, or a BedGraph file for a custom track. AGP import reads a prior curation and applies its contig order, orientation, and scaffold grouping back onto the loaded assembly, matching contigs by name and leaving any not named in the file at the tail.
 
 ### Scripting
 

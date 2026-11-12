@@ -18,7 +18,11 @@ import { exportSession, importSession, downloadSession } from '../io/SessionMana
 import type { SessionData } from '../io/SessionManager';
 import type { ColorMapName } from '../renderer/ColorMaps';
 import { syncColormapDropdown, syncGammaSlider, syncFloorSlider, syncCeilSlider, syncOverviewModeSelect } from './ColorMapControls';
-import { rebuildContigBoundaries, applyOverviewMode } from './EventWiring';
+import { applyOverviewMode } from './EventWiring';
+import { planSessionRestore } from '../io/SessionRestore';
+import { contigExclusion } from '../curation/ContigExclusion';
+import { metaTags } from '../curation/MetaTagManager';
+import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { exportAnalysisState, restoreAnalysisState, updateFastaHint } from './AnalysisPanel';
 import { inflate } from 'pako';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
@@ -85,39 +89,38 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
       return;
     }
 
-    // Verify filename match
+    // Decide what the session means for this file before touching anything,
+    // so a session that does not fit leaves the assembly as it was.
+    let plan;
+    try {
+      plan = planSessionRestore(session, s.map);
+    } catch (err) {
+      const why = err instanceof Error ? err.message : 'it could not be read';
+      console.warn('Session refused:', why);
+      ctx.showToast(`This session cannot be restored: ${why}.`, 8000);
+      return;
+    }
+
     if (session.filename !== s.map.filename && session.filename !== 'demo') {
-      ctx.showToast(`Warning: session was for "${session.filename}", current file is "${s.map.filename}"`);
+      ctx.showToast(`Note: session was saved from "${session.filename}", current file is "${s.map.filename}"`);
     }
 
     updateLoading('Applying assembly state...', 40);
 
-    // Apply contig order
-    if (session.contigOrder.length > 0) {
-      state.update({ contigOrder: session.contigOrder });
-    }
-
-    // Apply contig states (inversions, scaffolds)
-    const contigUpdates: Array<{ id: number; changes: Partial<import('../core/State').ContigInfo> }> = [];
-    for (const [contigIdStr, override] of Object.entries(session.contigStates)) {
-      const contigId = Number(contigIdStr);
-      if (contigId >= 0 && contigId < s.map.contigs.length) {
-        contigUpdates.push({
-          id: contigId,
-          changes: { inverted: override.inverted, scaffoldId: override.scaffoldId },
-        });
-      }
-    }
-    if (contigUpdates.length > 0) {
-      state.updateContigs(contigUpdates);
-    }
-
-    // Restore scaffolds
-    for (const sc of session.scaffolds) {
-      if (!ctx.scaffoldManager.getScaffold(sc.id)) {
-        ctx.scaffoldManager.createScaffold(sc.name, { record: false });
-      }
-    }
+    // The history, tags, exclusions and flags in memory describe the assembly
+    // being replaced; none of them holds for the restored one.
+    state.clearHistory();
+    contigExclusion.clearAll();
+    metaTags.clearAll();
+    misassemblyFlags.clearAll();
+    ctx.scaffoldManager.restoreScaffolds(session.scaffolds);
+    state.update({
+      map: { ...s.map, contigs: plan.contigs },
+      contigOrder: plan.contigOrder,
+    });
+    // Redraw everything that follows the layout (grid, tiles, tracks, lists,
+    // counts, metrics) before anything below yields to a frame.
+    ctx.refreshAfterCuration();
 
     updateLoading('Restoring view and settings...', 65);
 
@@ -149,8 +152,6 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
       ctx.waypointManager.addWaypoint(wp.mapX, wp.mapY, wp.label);
     }
 
-    rebuildContigBoundaries(ctx);
-    ctx.updateSidebarContigList();
     ctx.updateSidebarScaffoldList();
 
     // Restore persisted analysis results if present
@@ -160,7 +161,7 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
     }
 
     updateLoading('Finalizing...', 98);
-    ctx.showToast(`Session restored (${session.operationLog.length} operations)`);
+    ctx.showToast(`Session restored (${plan.contigOrder.length} contigs, ${session.scaffolds.length} scaffolds)`);
   } catch (err) {
     console.error('Session load error:', err);
     ctx.showToast(`Load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);

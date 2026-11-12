@@ -172,6 +172,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **Loading a second assembly starts clean.** The undo history, scaffolds,
+  selection, waypoints, tracks, reference FASTA and analysis results of the
+  previous assembly are all dropped when a new file loads. Before, Undo after a
+  second load threw an error or applied the first file's edits to the second,
+  and a FASTA export could take sequences from the wrong assembly when contig
+  names matched. A FASTA loaded before any map is still kept for that map.
+- **A session saved after a cut or join restores.** Sessions now record the
+  whole contig table, so the pieces made by cutting and joining come back with
+  their map position and sequence coordinates. A session is checked against the
+  loaded file first and refused, changing nothing, if it belongs to another
+  assembly or does not show every part of the map exactly once. Sessions from
+  earlier versions still load when nothing in them was cut or joined; one that
+  was is refused with the reason, because it never recorded the pieces.
+- **Restoring a session clears the undo history** instead of leaving operations
+  that referred to the assembly it replaced. Scaffolds come back with their
+  saved ids and colours.
+- **Redo reapplies a whole script, auto-sort or auto-cut** in one step, as Undo
+  removes it. Redo used to bring back one operation of the batch at a time.
+- **The demo assembly is the same on every load**, and its last contig no
+  longer runs two pixels past the edge of the map.
 - **Cut on an inverted contig no longer rearranges the map.** The two pieces
   were given each other's texels, so the display changed on the cut and each
   piece exported the other end's sequence coordinates.
