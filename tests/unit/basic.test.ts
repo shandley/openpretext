@@ -36,6 +36,23 @@ describe('ColorMaps', () => {
 });
 
 describe('SyntheticData', () => {
+  it('is the same every time for the same arguments, and differs by seed', () => {
+    const a = generateSyntheticMap(256, 5);
+    const b = generateSyntheticMap(256, 5);
+    expect(b.contigs).toEqual(a.contigs);
+    expect(Array.from(b.data.subarray(0, 4096))).toEqual(Array.from(a.data.subarray(0, 4096)));
+    // Contigs tile the texture exactly: no gap, no overlap, nothing past the edge.
+    for (const [size, n] of [[256, 5], [1024, 12], [512, 7]] as const) {
+      const { contigs } = generateSyntheticMap(size, n);
+      expect(contigs[0].start).toBe(0);
+      expect(contigs[n - 1].end).toBe(size);
+      for (let i = 1; i < n; i++) expect(contigs[i].start).toBe(contigs[i - 1].end);
+      for (const k of contigs) expect(k.end).toBeGreaterThan(k.start);
+    }
+    const c = generateSyntheticMap(256, 5, 2);
+    expect(Array.from(c.data.subarray(0, 4096))).not.toEqual(Array.from(a.data.subarray(0, 4096)));
+  });
+
   it('should generate a square matrix of the correct size', () => {
     const result = generateSyntheticMap(512, 6);
     expect(result.data.length).toBe(512 * 512);

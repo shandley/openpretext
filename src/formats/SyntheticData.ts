@@ -8,6 +8,18 @@
  * - Noise
  */
 
+/** Small seeded generator (mulberry32), so the demo does not depend on Math.random. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export interface SyntheticMapResult {
   data: Float32Array;
   size: number;
@@ -16,17 +28,24 @@ export interface SyntheticMapResult {
 
 /**
  * Generate a synthetic Hi-C contact map.
+ *
+ * The result is a pure function of its arguments. The demo assembly is the
+ * same every time it is loaded, so a session saved from it restores onto it,
+ * and screenshots and lessons that use it can be reproduced.
+ *
  * @param size - Texture size (power of 2, e.g., 512, 1024, 2048)
  * @param numChromosomes - Number of chromosomes to simulate
+ * @param seed - Seed for the layout and noise
  */
-export function generateSyntheticMap(size: number = 1024, numChromosomes: number = 12): SyntheticMapResult {
+export function generateSyntheticMap(size: number = 1024, numChromosomes: number = 12, seed: number = 1): SyntheticMapResult {
   const data = new Float32Array(size * size);
+  const random = mulberry32(seed);
   
   // Generate chromosome sizes (roughly decreasing)
   const chromSizes: number[] = [];
   let totalSize = 0;
   for (let i = 0; i < numChromosomes; i++) {
-    const s = Math.max(20, Math.floor(size / numChromosomes * (1.5 - i / numChromosomes) + (Math.random() - 0.5) * 30));
+    const s = Math.max(20, Math.floor(size / numChromosomes * (1.5 - i / numChromosomes) + (random() - 0.5) * 30));
     chromSizes.push(s);
     totalSize += s;
   }
@@ -34,15 +53,20 @@ export function generateSyntheticMap(size: number = 1024, numChromosomes: number
   // Normalize to fill the texture
   const scale = size / totalSize;
   const contigs: { name: string; start: number; end: number }[] = [];
+  // Round the running boundary, not each width, so the contigs tile the
+  // texture exactly. (Rounding widths one by one let the last contig run past
+  // the edge of the map.)
   let offset = 0;
+  let cumulative = 0;
   for (let i = 0; i < numChromosomes; i++) {
-    const pixelSize = Math.round(chromSizes[i] * scale);
+    cumulative += chromSizes[i];
+    const end = i === numChromosomes - 1 ? size : Math.round(cumulative * scale);
     contigs.push({
       name: `chr${i + 1}`,
       start: offset,
-      end: offset + pixelSize,
+      end,
     });
-    offset += pixelSize;
+    offset = end;
   }
   
   // Fill the contact matrix
@@ -94,12 +118,12 @@ export function generateSyntheticMap(size: number = 1024, numChromosomes: number
           }
         } else if (inX || inY) {
           // Inter-chromosomal: very weak signal
-          value += 0.01 * Math.random();
+          value += 0.01 * random();
         }
       }
 
       // Add some noise
-      value += Math.random() * 0.02;
+      value += random() * 0.02;
       
       // Symmetry (Hi-C matrices are symmetric)
       const idx1 = y * size + x;
