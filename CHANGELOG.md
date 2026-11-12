@@ -172,6 +172,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **Browser shortcuts no longer edit the assembly.** In Edit mode, Cmd/Ctrl+C
+  (copy) cut the contig under the pointer, Cmd/Ctrl+F (find) inverted the
+  selection, and Cmd/Ctrl+J and +H joined and excluded. Single-key shortcuts
+  now act only when pressed without Cmd, Ctrl or Alt, and not while a dropdown
+  or editable field has focus.
 - **Analyses, auto-cut, auto-sort and scaffold detection read the map as
   curated.** The stored overview matrix stays in file order, and these tools
   lay contigs out in display order, so after any move or inversion they were

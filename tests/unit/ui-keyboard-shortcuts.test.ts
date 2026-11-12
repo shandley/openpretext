@@ -258,6 +258,75 @@ describe('KeyboardShortcuts', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Browser and system shortcuts are not bare key presses
+  // -------------------------------------------------------------------------
+  describe('keys held with Cmd/Ctrl that are not app shortcuts', () => {
+    it('Cmd+C (copy) does not cut in edit mode', () => {
+      ctx.currentMode = 'edit';
+      const ev = dispatchKey('c', { metaKey: true });
+      expect(cutAtCursorPosition).not.toHaveBeenCalled();
+      expect(ev.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('Ctrl+F / Cmd+F (find) does not invert in edit mode', () => {
+      ctx.currentMode = 'edit';
+      dispatchKey('f', { ctrlKey: true });
+      dispatchKey('f', { metaKey: true });
+      expect(invertSelectedContigs).not.toHaveBeenCalled();
+    });
+
+    it('Cmd+J and Cmd+H do not join or exclude in edit mode', () => {
+      ctx.currentMode = 'edit';
+      dispatchKey('j', { metaKey: true });
+      dispatchKey('h', { metaKey: true });
+      expect(joinSelectedContigs).not.toHaveBeenCalled();
+      expect(toggleContigExclusion).not.toHaveBeenCalled();
+    });
+
+    it('Cmd+R, Cmd+L, Cmd+W, Cmd+E leave mode, grid and view alone', () => {
+      for (const key of ['r', 'l', 'w', 'e', 'x', 'p', 'm', 'i', 'u', '0']) dispatchKey(key, { metaKey: true });
+      expect(ctx.setMode).not.toHaveBeenCalled();
+      expect(state.update).not.toHaveBeenCalled();
+      expect(ctx.camera.resetView).not.toHaveBeenCalled();
+      expect(ctx.minimap.toggle).not.toHaveBeenCalled();
+    });
+
+    it('Cmd+N does not create a scaffold and Cmd+Backspace does not clear waypoints', () => {
+      ctx.currentMode = 'scaffold';
+      dispatchKey('n', { metaKey: true });
+      expect(ctx.scaffoldManager.createScaffold).not.toHaveBeenCalled();
+      ctx.currentMode = 'waypoint';
+      dispatchKey('Backspace', { metaKey: true });
+      expect(ctx.waypointManager.clearAll).not.toHaveBeenCalled();
+    });
+
+    it('Alt held with a bare-key shortcut does nothing outside the Alt shortcuts', () => {
+      dispatchKey('e', { altKey: true });
+      dispatchKey('l', { altKey: true });
+      expect(ctx.setMode).not.toHaveBeenCalled();
+      expect(state.update).not.toHaveBeenCalled();
+    });
+
+    it('AltGr-typed characters still work (it reports Ctrl+Alt on some layouts)', () => {
+      const event = {
+        key: '?', code: 'Minus', metaKey: false, ctrlKey: true, altKey: true, shiftKey: false,
+        target: {}, preventDefault: vi.fn(),
+        getModifierState: (k: string) => k === 'AltGraph',
+      };
+      capturedKeydownHandler!(event);
+      expect(toggleShortcutsModal).toHaveBeenCalled();
+    });
+
+    it('the bare keys still work', () => {
+      ctx.currentMode = 'edit';
+      dispatchKey('c');
+      dispatchKey('f');
+      expect(cutAtCursorPosition).toHaveBeenCalledTimes(1);
+      expect(invertSelectedContigs).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Mode switching keys
   // -------------------------------------------------------------------------
   describe('mode switching', () => {

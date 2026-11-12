@@ -15,21 +15,44 @@ import { isCommandPaletteVisible, toggleCommandPalette } from './CommandPalette'
 import { runAutoSort, runAutoCut } from './BatchActions';
 import { nextWeakJoin, prevWeakJoin } from './AnalysisPanel';
 
+/** Keys the app binds together with Cmd/Ctrl. Every other binding is a bare key. */
+const CMD_SHORTCUT_KEYS = new Set(['s', 'k', 'z', 'o', 'a', 'g']);
+
+/** True when the key press is going into a form control or editable text. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
+  if (typeof HTMLSelectElement !== 'undefined' && target instanceof HTMLSelectElement) return true;
+  return (target as HTMLElement | null)?.isContentEditable === true;
+}
+
 export function setupKeyboardShortcuts(ctx: AppContext): void {
   window.addEventListener('keydown', (e) => {
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (isTypingTarget(e.target)) return;
 
-    const cmd = e.metaKey || e.ctrlKey;
+    // AltGr reports Ctrl+Alt on some layouts while typing ordinary characters
+    // such as [ ] ? `. Those are plain key presses here.
+    const altGr = e.getModifierState?.('AltGraph') ?? false;
+    const cmd = (e.metaKey || e.ctrlKey) && !altGr;
+    const alt = e.altKey && !altGr;
 
     // Alt-modified action shortcuts, matched on the physical key (e.code)
     // rather than e.key: on macOS Option+S / Option+C emit accented characters
     // (ß, ç), so e.key would never equal 's' / 'c'. Both require Edit mode.
-    if (e.altKey && !cmd && ctx.currentMode === 'edit') {
+    if (alt && !cmd && ctx.currentMode === 'edit') {
       if (e.code === 'KeyS') { e.preventDefault(); runAutoSort(ctx); return; }
       if (e.code === 'KeyC') { e.preventDefault(); runAutoCut(ctx); return; }
     }
 
-    switch (e.key.toLowerCase()) {
+    const key = e.key.toLowerCase();
+
+    // A key held with Cmd, Ctrl or Alt belongs to the browser or the system
+    // (copy, find, reload, close tab, ...) unless it is one of the app's own
+    // modified shortcuts. Without this, Cmd+C cut the contig under the pointer
+    // and Cmd+F inverted the selection.
+    if (alt) return;
+    if (cmd && !CMD_SHORTCUT_KEYS.has(key)) return;
+
+    switch (key) {
       case 'e': ctx.setMode('edit'); break;
       case 's':
         if (cmd) { e.preventDefault(); takeScreenshot(ctx); }
