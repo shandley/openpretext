@@ -73,7 +73,48 @@ No edit was made that the curator did not make. Both curations paint 48
 chromosomes, 24 per haplotype.
 
 The large decisions were found. Every miss is a piece under 0.35 Mb, which is
-9 texels or fewer on this map.
+9 texels or fewer on this map. There were few decisions of any size to find; see the
+correction below.
+
+## Correction: the score against doing nothing
+
+The first version of this report gave the chromosome counts in the next
+section without a floor to compare them with. This genome needed very little
+curation, so the floor is high. A no-edit export (every chromosome-scale
+scaffold painted as loaded, nothing cut, moved or joined; `baseline.agp`,
+made in the app the same way) was run through the same steps:
+
+| Identical chromosomes after `pretext-to-asm` | Haplotype 1 | Haplotype 2 |
+|---|---|---|
+| No edits | 20 of 24 | 23 of 24 |
+| Blind curation | 19 of 24 | 22 of 24 |
+
+By that count, doing nothing scores higher than the blind curation. The count
+rewards exact matches only: placing a loose scaffold at the end of a
+chromosome, where the curator kept it apart as unlocalised, makes that
+chromosome differ, and breaking the 60 Mb fusion 81 kb from the curator's cut
+still counts as two mismatches.
+
+`score_agp.py` scores the decisions instead, straight from the AGPs, with a
+break or join matching if it is within 3 texels:
+
+| | No edits | Blind curation |
+|---|---|---|
+| Bases in the wrong chromosome, or painted in one file and not the other | 36.0 Mb (2.71%) | 0.85 Mb (0.064%) |
+| Curator's 5 breaks matched | 0 | 1 |
+| Curator's 3 joins matched | 0 | 0 |
+
+Four of the five breaks are the two small pieces cut out of `H1.scaffold_22`
+and `H2.scaffold_23`, and two of the three joins close the gaps those cuts
+left. The blind curation's own two joins are the loose scaffolds the curator
+marked unlocalised instead.
+
+So the blind curation removed 98% of the misassigned bases, almost all of it
+by one decision, and matched one of eight breaks and joins. This genome cannot
+show whether a curator can find a new answer in OpenPretext: the curator made
+five breaks and three joins in 1.3 Gb. A test of that needs a map where the
+no-edit score is poor, scored with `score_agp.py` and its no-edit floor, both
+fixed before the answer is opened.
 
 ## Result after Sanger's `pretext-to-asm`
 
@@ -149,5 +190,6 @@ Got in the way:
 `drive.ts` drives the app (cached `tsx`, a preview server on port 4173).
 `final.actions` is the full list of steps, `curation.script` the console part,
 `blind.agp` the export, `FROZEN.txt` the hashes taken before the answer was
-opened, `score.py` the sequence comparison. The downloads and outputs are in
+opened, `score.py` the sequence comparison, `score_agp.py` the decision score,
+`baseline.*` the no-edit export. The downloads and outputs are in
 the git-ignored `test-data/blind/`.
