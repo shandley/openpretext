@@ -1,36 +1,32 @@
 /**
  * BED (Browser Extensible Data) file writer.
  *
- * Exports the current assembly state as a BED6 file showing contig
- * coordinates in the curated assembly. Each contig is represented as
- * an interval within its assigned scaffold, with strand reflecting
- * inversion state.
+ * Writes where each piece of the input assembly sits in the curated one, as
+ * BED6. It is the same layout as the standard AGP export (same objects, same
+ * coordinates, same gaps, excluded contigs left out), in a form genome
+ * browsers and interval tools read. No curation pipeline consumes it; the AGP
+ * is the file to hand on.
  *
- * Format (BED6 tab-separated):
- *   1. chrom      - scaffold name
- *   2. chromStart - 0-based start position in the scaffold
- *   3. chromEnd   - end position in the scaffold
- *   4. name       - contig name
+ * Format (BED6, tab-separated):
+ *   1. chrom      - object name, as in the AGP (`Scaffold_<n>`)
+ *   2. chromStart - 0-based start in the object
+ *   3. chromEnd   - end in the object (exclusive)
+ *   4. name       - original sequence and the interval of it placed here,
+ *                   `name:beg-end` (1-based, inclusive, as in the AGP)
  *   5. score      - 0
- *   6. strand     - '+' or '-' based on inversion
+ *   6. strand     - '+' or '-'
  */
 
-import type { AppState, ContigInfo } from '../core/State';
-import { groupContigsByScaffold } from './AGPWriter';
+import type { AppState } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
+import { buildAGPObjects } from './AGPModel';
+import { buildAGPRows } from './AGPWriter';
 
 /** Configuration for BED export. */
 export interface BEDExportOptions {
-  /** Default gap size between contigs within a scaffold (bp). Defaults to 200. */
-  gapSize?: number;
   /** Whether to include the header line. Defaults to true. */
   includeHeader?: boolean;
 }
-
-const DEFAULT_OPTIONS: Required<BEDExportOptions> = {
-  gapSize: 200,
-  includeHeader: true,
-};
 
 /**
  * Represents a single BED6 line.
@@ -42,43 +38,6 @@ export interface BEDLine {
   name: string;
   score: number;
   strand: '+' | '-';
-}
-
-/**
- * Builds BED lines for a single scaffold (a group of contigs).
- */
-export function buildScaffoldBEDLines(
-  scaffoldName: string,
-  contigs: ContigInfo[],
-  gapSize: number
-): BEDLine[] {
-  const lines: BEDLine[] = [];
-  let position = 0; // 0-based coordinate within the scaffold
-
-  for (let i = 0; i < contigs.length; i++) {
-    const contig = contigs[i];
-
-    // Insert gap before this contig (except before the first one)
-    if (i > 0 && gapSize > 0) {
-      position += gapSize;
-    }
-
-    const chromStart = position;
-    const chromEnd = position + contig.length;
-
-    lines.push({
-      chrom: scaffoldName,
-      chromStart,
-      chromEnd,
-      name: contig.name,
-      score: 0,
-      strand: contig.inverted ? '-' : '+',
-    });
-
-    position = chromEnd;
-  }
-
-  return lines;
 }
 
 /**
@@ -95,6 +54,26 @@ export function formatBEDLine(line: BEDLine): string {
   ].join('\t');
 }
 
+/** The BED lines for the current curation: one per sequence row of the standard AGP. */
+export function buildBEDLines(appState: AppState): BEDLine[] {
+  const map = appState.map!;
+  const order = contigExclusion.getIncludedOrder(appState.contigOrder);
+  const rows = buildAGPRows(buildAGPObjects(map, order), { tagsOf: () => [] }, 'standard');
+  const lines: BEDLine[] = [];
+  for (const row of rows) {
+    if (row.type !== 'W') continue;
+    lines.push({
+      chrom: row.object,
+      chromStart: row.objectBeg - 1,
+      chromEnd: row.objectEnd,
+      name: `${row.component}:${row.componentBeg}-${row.componentEnd}`,
+      score: 0,
+      strand: row.orientation!,
+    });
+  }
+  return lines;
+}
+
 /**
  * Export the current assembly state as a BED format string.
  *
@@ -106,40 +85,22 @@ export function exportBED(
   appState: AppState,
   options: BEDExportOptions = {}
 ): string {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const includeHeader = options.includeHeader ?? true;
 
   if (!appState.map || appState.map.contigs.length === 0) {
     throw new Error('Cannot export BED: no map data loaded');
   }
-
-  const contigs = appState.map.contigs;
-  const contigOrder = contigExclusion.getIncludedOrder(appState.contigOrder);
-
-  if (contigOrder.length === 0) {
+  if (contigExclusion.getIncludedOrder(appState.contigOrder).length === 0) {
     throw new Error('Cannot export BED: contig order is empty');
   }
 
-  // Group contigs into scaffolds (reuse AGPWriter logic)
-  const scaffolds = groupContigsByScaffold(contigs, contigOrder);
-
-  // Build all BED lines
-  const allLines: BEDLine[] = [];
-  for (const [scaffoldName, scaffoldContigs] of scaffolds) {
-    const lines = buildScaffoldBEDLines(scaffoldName, scaffoldContigs, opts.gapSize);
-    allLines.push(...lines);
-  }
-
-  // Assemble the output
   const parts: string[] = [];
-
-  if (opts.includeHeader) {
+  if (includeHeader) {
     parts.push('#chrom\tchromStart\tchromEnd\tname\tscore\tstrand');
   }
-
-  for (const line of allLines) {
+  for (const line of buildBEDLines(appState)) {
     parts.push(formatBEDLine(line));
   }
-
   return parts.join('\n') + '\n';
 }
 

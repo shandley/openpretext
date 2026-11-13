@@ -1,306 +1,269 @@
 /**
  * AGP (A Golden Path) file writer.
  *
- * Exports the current assembly state as an AGP 2.1 file.
- * The AGP format is a tab-separated specification defined by NCBI:
- *   https://www.ncbi.nlm.nih.gov/assembly/agp/AGP_Specification/
+ * Writes the curation in the form PretextView writes it, because that is what
+ * the tools after the map viewer read: Sanger's `pretext-to-asm` and the VGP
+ * `vgl-curation` scripts both take PretextView's AGP together with the FASTA
+ * the map was built from. `docs/AGP_EXPORT.md` describes the file for people
+ * who use it; `research/export-compat-2026-11/` holds the sources this follows.
  *
- * Columns:
- *   1. object          - scaffold/chromosome name
- *   2. object_beg      - start position in the object (1-based)
- *   3. object_end      - end position in the object (1-based, inclusive)
- *   4. part_number     - sequential part number within the object
- *   5. component_type  - 'W' for WGS contig, 'N' for gap
- *   6. component_id (contigs) / gap_length (gaps)
- *   7. component_beg (contigs) / gap_type (gaps)
- *   8. component_end (contigs) / linkage (gaps)
- *   9. orientation (contigs) / linkage_evidence (gaps)
+ * Two flavours come from one model (AGPModel.ts):
  *
- * Several columns carry defaults rather than measurements, object names are
- * positional, and the orientation column cannot be applied to cut/join-derived
- * components. `docs/AGP_EXPORT.md` states all of this for downstream users;
- * keep it in step with any change here.
+ * - `pretextview`: PretextView's layout. Every row names an original sequence
+ *   and an interval of it at texel resolution; the header gives the resolution;
+ *   painted rows carry `Painted` in column 10 and tags follow, one per column.
+ *   Excluded contigs are written, tagged with the reason, because the
+ *   downstream tool removes sequence by tag and adds back anything the file
+ *   does not mention.
+ * - `standard`: the same rows in nine columns for validators and archives
+ *   (NCBI's validator rejects a tenth column). Excluded contigs are left out.
+ *
+ * Coordinates in both are accurate to one map texel, as PretextView's are.
  */
 
-import type { AppState, ContigInfo } from '../core/State';
+import type { AppState, MapData } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
+import { metaTags, tagKind, REMOVAL_TAGS } from '../curation/MetaTagManager';
+import { APP_VERSION } from '../core/Version';
+import {
+  buildAGPObjects, checkTiling, formatResolution, genomeLengthOf, type AGPObject,
+} from './AGPModel';
+
+export type AGPFlavor = 'pretextview' | 'standard';
 
 /** Configuration for AGP export. */
 export interface AGPExportOptions {
-  /** Gap size written between contigs within a scaffold (bp). Defaults to 200.
-   *  This is a placeholder, not an estimate: a contact map carries no evidence
-   *  of the distance between two contigs. 0 suppresses gap rows entirely. */
-  gapSize?: number;
-  /** Gap type for intra-scaffold gaps. Defaults to 'scaffold' for every gap;
-   *  meta-tags such as centromere/telomere do not influence it. */
-  gapType?: string;
-  /** Linkage evidence type. Defaults to 'proximity_ligation' (Hi-C). */
-  linkageEvidence?: string;
-  /** Whether to include the AGP version comment header. Defaults to true. */
+  /** Which file to write. Defaults to `pretextview`. */
+  flavor?: AGPFlavor;
+  /** Whether to write the header lines. Defaults to true. */
   includeHeader?: boolean;
-  /** Timestamp to stamp in the header, or null to omit it. Defaults to now.
-   *  Omitting it makes the export a pure function of the curation, so the same
-   *  script run twice produces byte-identical AGP. */
-  timestamp?: string | null;
 }
 
-const DEFAULT_OPTIONS: Required<AGPExportOptions> = {
-  gapSize: 200,
-  gapType: 'scaffold',
-  linkageEvidence: 'proximity_ligation',
-  includeHeader: true,
-  timestamp: null,
-};
+/** PretextView's fixed gap row fields: an unknown gap is 100 bp in AGP 2.1. */
+export const GAP_LENGTH = 100;
 
-/**
- * Represents a single component line in the AGP file (either contig or gap).
- */
-export interface AGPLine {
+/** One line of the file. */
+export interface AGPRow {
   object: string;
   objectBeg: number;
   objectEnd: number;
   partNumber: number;
-  componentType: 'W' | 'N';
-  // For W (contig) lines
-  componentId?: string;
+  /** `W` for a sequence row, `U` for a gap of unknown size. */
+  type: 'W' | 'U';
+  // Sequence rows
+  component?: string;
   componentBeg?: number;
   componentEnd?: number;
   orientation?: '+' | '-';
-  // For N (gap) lines
-  gapLength?: number;
-  gapType?: string;
-  linkage?: 'yes' | 'no';
-  linkageEvidence?: string;
+  /** Column 10 onward: `Painted` first when painted, then the contig's tags. */
+  extra?: string[];
+}
+
+/** The curation cannot be written as it stands. `problems` are sentences for the curator. */
+export class AGPExportBlocked extends Error {
+  constructor(public readonly problems: string[]) {
+    super(problems.join(' '));
+    this.name = 'AGPExportBlocked';
+  }
+}
+
+interface Marks {
+  tagsOf: (contigId: number) => string[];
+  isExcluded: (contigId: number) => boolean;
+}
+
+const LIVE_MARKS: Marks = {
+  tagsOf: (id) => metaTags.getTags(id),
+  isExcluded: (id) => contigExclusion.isExcluded(id),
+};
+
+function listNames(names: string[]): string {
+  const shown = names.slice(0, 8).map((n) => `"${n}"`).join(', ');
+  return names.length > 8 ? `${shown} and ${names.length - 8} more` : shown;
 }
 
 /**
- * Groups contigs by scaffold ID. Contigs without a scaffoldId are each
- * placed into their own single-contig scaffold group.
+ * What stops this curation being written in the PretextView flavour, as
+ * sentences for the curator. Empty when nothing does.
  *
- * Object names are NOT the names a curator sees:
- * - A scaffolded contig's object is `scaffold_<numeric ScaffoldManager id>`.
- *   The curator-facing name ("Chr1", or anything set via renameScaffold) is not
- *   used, and ids keep climbing across resetScaffolds, so re-running
- *   auto-assign renumbers every object.
- * - An unscaffolded contig's object is `unplaced_<n>`, a counter over the
- *   included order. It is positional: reordering or excluding a contig renames
- *   the unplaced objects after it. Column 6 (the contig name) is the only
- *   stable key.
- *
- * Grouping is by id, not adjacency: contigs sharing a scaffoldId but separated
- * in the display order still form one object with continuous coordinates.
+ * Each of these would otherwise fail later and less clearly: `pretext-to-asm`
+ * raises an error on the tag combinations, and silently puts an excluded
+ * sequence back if nothing in the file says to remove it.
  */
-export function groupContigsByScaffold(
-  contigs: ContigInfo[],
-  contigOrder: number[]
-): Map<string, ContigInfo[]> {
-  const scaffolds = new Map<string, ContigInfo[]>();
-  let unscaffoldedCounter = 0;
+export function agpExportProblems(map: MapData, order: number[], marks: Marks = LIVE_MARKS): string[] {
+  const problems: string[] = [];
+  const objects = buildAGPObjects(map, order);
+  const name = (id: number) => map.contigs[id].name;
 
-  for (const idx of contigOrder) {
-    const contig = contigs[idx];
-    if (!contig) continue;
-
-    let scaffoldName: string;
-    if (contig.scaffoldId !== null && contig.scaffoldId !== undefined) {
-      scaffoldName = `scaffold_${contig.scaffoldId}`;
-    } else {
-      // Each unscaffolded contig becomes its own object
-      scaffoldName = `unplaced_${unscaffoldedCounter++}`;
+  // An excluded contig must say why it is removed.
+  const unexplained: string[] = [];
+  for (const o of objects) {
+    for (const id of o.contigIds) {
+      if (marks.isExcluded(id) && !marks.tagsOf(id).some((t) => REMOVAL_TAGS.includes(t))) unexplained.push(name(id));
     }
-
-    if (!scaffolds.has(scaffoldName)) {
-      scaffolds.set(scaffoldName, []);
-    }
-    scaffolds.get(scaffoldName)!.push(contig);
+  }
+  if (unexplained.length > 0) {
+    problems.push(
+      `${unexplained.length} excluded contig${unexplained.length === 1 ? ' has' : 's have'} no tag saying why ` +
+      `${unexplained.length === 1 ? 'it is' : 'they are'} removed: ${listNames(unexplained)}. ` +
+      'Tag each as Haplotig, Contaminant or FalseDuplicate, or include it again. ' +
+      '(The tools that read this file remove sequence by tag; an untagged sequence would be put back.)');
   }
 
-  return scaffolds;
+  for (const o of objects) {
+    const first = name(o.contigIds[0]);
+    const where = o.painted ? `the scaffold starting at "${first}"` : `"${first}"`;
+    const tags = new Set<string>();
+    for (const id of o.contigIds) for (const t of marks.tagsOf(id)) tags.add(t);
+
+    if (!o.painted) {
+      const unloc = o.contigIds.filter((id) => marks.tagsOf(id).includes('Unloc')).map(name);
+      if (unloc.length > 0) {
+        problems.push(
+          `${listNames(unloc)} ${unloc.length === 1 ? 'is' : 'are'} tagged Unloc but not assigned to a scaffold. ` +
+          'An unlocalised contig has to be painted into the chromosome it belongs to.');
+      }
+    }
+    const chromosomes = [...tags].filter((t) => tagKind(t) === 'chromosome');
+    if (chromosomes.length > 1) {
+      problems.push(`${where} carries more than one chromosome name (${chromosomes.join(', ')}). A scaffold can have one.`);
+    }
+    const haplotypes = [...tags].filter((t) => tagKind(t) === 'haplotype');
+    if (haplotypes.length > 1) {
+      problems.push(`${where} carries more than one haplotype tag (${haplotypes.join(', ')}). A scaffold can have one.`);
+    }
+  }
+
+  for (const p of checkTiling(objects)) problems.push(`Internal error, please report it: ${p}.`);
+  return problems;
 }
 
 /**
- * Builds AGP lines for a single scaffold (a group of contigs).
+ * Lay the objects out as rows.
+ *
+ * Painted objects come first, named `Scaffold_1..K` in map order, then the
+ * rest from `K+1`, as PretextView numbers them. Within an object every pair
+ * of neighbouring rows is separated by a `U 100` gap row.
+ *
+ * Orientation follows the map. In the standard flavour an object of a single
+ * row is written `+`, which is what the specification asks of a singleton.
+ *
+ * The PretextView flavour keeps `-` there, because it means something to the
+ * next tool: `pretext-to-asm` reverse-complements the scaffold, which is how a
+ * curator turns a whole chromosome round (in three of the Sanger tool's own
+ * test curations a single-scaffold chromosome is turned this way). PretextView
+ * up to 1.0.7 writes `+` there unless "Format Singletons" is ticked; its next
+ * release always follows the map, as this does.
  */
-export function buildScaffoldAGPLines(
-  scaffoldName: string,
-  contigs: ContigInfo[],
-  options: Required<AGPExportOptions>
-): AGPLine[] {
-  const lines: AGPLine[] = [];
-  let objectPos = 1; // 1-based position within the scaffold object
-  let partNumber = 1;
+export function buildAGPRows(objects: AGPObject[], marks: Pick<Marks, 'tagsOf'>, flavor: AGPFlavor): AGPRow[] {
+  const rows: AGPRow[] = [];
+  const ordered = [...objects.filter((o) => o.painted), ...objects.filter((o) => !o.painted)];
 
-  for (let i = 0; i < contigs.length; i++) {
-    const contig = contigs[i];
-
-    // Insert gap before this contig (except before the first one).
-    // The gap length, type, and linkage flag are fixed defaults asserted about
-    // the assembly, not anything derived from the contact map. Only the
-    // linkage evidence (proximity_ligation) reflects the actual data.
-    if (i > 0 && options.gapSize > 0) {
-      const gapEnd = objectPos + options.gapSize - 1;
-      lines.push({
-        object: scaffoldName,
-        objectBeg: objectPos,
-        objectEnd: gapEnd,
-        partNumber,
-        componentType: 'N',
-        gapLength: options.gapSize,
-        gapType: options.gapType,
-        linkage: 'yes',
-        linkageEvidence: options.linkageEvidence,
-      });
-      objectPos = gapEnd + 1;
-      partNumber++;
-    }
-
-    // Contig component line.
-    // componentBeg/componentEnd are always 1..length: a fragment produced by a
-    // cut is described as a whole component under a synthesized name
-    // (`<name>_L`/`<name>_R`, or `<a>+<b>` for a join), not as an interval of
-    // its parent, so the cut point is not recorded here. componentType is
-    // always 'W', which asserts the component is gap-free even when the input
-    // "contig" is really a scaffold with internal N-runs.
-    //
-    // The orientation column is relative to the INPUT contig sequence, so it
-    // must not be re-applied on top of OpenPretext's own FASTA export, which
-    // writes each record already reverse-complemented. Joins break it outright:
-    // a join of contigs with DIFFERING orientation collapses to '+' here (see
-    // CurationEngine.join), and a join of two INVERTED contigs writes '-', which
-    // would reverse the order of the two halves, while the join does not. One
-    // strand flag cannot describe a two-part component; the FASTA stays correct
-    // via sequenceSegments.
-    const contigLength = contig.length;
-    const contigEnd = objectPos + contigLength - 1;
-
-    lines.push({
-      object: scaffoldName,
-      objectBeg: objectPos,
-      objectEnd: contigEnd,
-      partNumber,
-      componentType: 'W',
-      componentId: contig.name,
-      componentBeg: 1,
-      componentEnd: contigLength,
-      orientation: contig.inverted ? '-' : '+',
+  ordered.forEach((o, i) => {
+    const object = `Scaffold_${i + 1}`;
+    let at = 1;
+    let part = 0;
+    o.fragments.forEach((f, k) => {
+      if (k > 0) {
+        rows.push({ object, objectBeg: at, objectEnd: at + GAP_LENGTH - 1, partNumber: ++part, type: 'U' });
+        at += GAP_LENGTH;
+      }
+      const size = f.end - f.beg + 1;
+      const row: AGPRow = {
+        object,
+        objectBeg: at,
+        objectEnd: at + size - 1,
+        partNumber: ++part,
+        type: 'W',
+        component: f.component,
+        componentBeg: f.beg,
+        componentEnd: f.end,
+        orientation: f.reversed && !(flavor === 'standard' && o.fragments.length === 1) ? '-' : '+',
+      };
+      if (flavor === 'pretextview') {
+        row.extra = [...(o.painted ? ['Painted'] : []), ...marks.tagsOf(f.contigId)];
+      }
+      rows.push(row);
+      at += size;
     });
+  });
+  return rows;
+}
 
-    objectPos = contigEnd + 1;
-    partNumber++;
+/** Format one row as a tab-separated line. */
+export function formatAGPRow(row: AGPRow): string {
+  const head = [row.object, row.objectBeg, row.objectEnd, row.partNumber, row.type];
+  if (row.type === 'U') {
+    return [...head, GAP_LENGTH, 'scaffold', 'yes', 'proximity_ligation'].join('\t');
   }
-
-  return lines;
+  return [...head, row.component, row.componentBeg, row.componentEnd, row.orientation, ...(row.extra ?? [])].join('\t');
 }
 
 /**
- * Formats an AGPLine into a tab-separated string.
+ * The header lines.
+ *
+ * `pretextview`: the version line with a tab, as PretextView writes it, a
+ * description, and the resolution line. `pretext-to-asm` will not run without
+ * the resolution line and reads its tolerance from it.
+ *
+ * `standard`: the version line with a space, as the specification writes it,
+ * and the same information as plain comments.
  */
-export function formatAGPLine(line: AGPLine): string {
-  if (line.componentType === 'W') {
+export function generateAGPHeader(map: MapData, flavor: AGPFlavor): string {
+  const resolution = formatResolution(map.textureSize, genomeLengthOf(map));
+  if (flavor === 'pretextview') {
     return [
-      line.object,
-      line.objectBeg,
-      line.objectEnd,
-      line.partNumber,
-      line.componentType,
-      line.componentId,
-      line.componentBeg,
-      line.componentEnd,
-      line.orientation,
-    ].join('\t');
-  } else {
-    // Gap line (N type)
-    return [
-      line.object,
-      line.objectBeg,
-      line.objectEnd,
-      line.partNumber,
-      line.componentType,
-      line.gapLength,
-      line.gapType,
-      line.linkage,
-      line.linkageEvidence,
-    ].join('\t');
+      '##agp-version\t2.1',
+      `# DESCRIPTION: Generated by OpenPretext Version ${APP_VERSION}`,
+      `# HiC MAP RESOLUTION: ${resolution} bp/texel`,
+    ].join('\n');
   }
+  return [
+    '##agp-version 2.1',
+    `# DESCRIPTION: Generated by OpenPretext Version ${APP_VERSION}`,
+    `# Coordinates are accurate to one Hi-C map texel (${resolution} bp).`,
+  ].join('\n');
 }
 
 /**
- * Generates the complete AGP header comment block.
+ * Export the current assembly state as AGP text.
  *
- * The version line separates `##agp-version` from `2.1` with a tab where NCBI's
- * specification writes a space. PretextView does the same (checked against
- * bCotChi1.combined.pretext.20240422.agp, a released Sanger curation), so this
- * matches what consumers of curation AGPs actually receive. Parsers that treat
- * `#` lines as comments are unaffected either way.
- *
- * @param timestamp - ISO string to stamp, or null to omit the line entirely.
- *   Defaults to now. Passing null makes the output a pure function of the
- *   curation, which is what lets two runs of the same script be compared
- *   byte for byte.
+ * @throws AGPExportBlocked when the PretextView flavour cannot be written as
+ *   the curation stands (see agpExportProblems).
  */
-export function generateAGPHeader(timestamp: string | null = new Date().toISOString()): string {
-  const lines = ['##agp-version\t2.1'];
-  if (timestamp !== null) {
-    lines.push(`# Generated by OpenPretext on ${timestamp}`);
-  }
-  lines.push('# Curation performed using Hi-C contact map data');
-  return lines.join('\n');
-}
+export function exportAGP(appState: AppState, options: AGPExportOptions = {}): string {
+  const flavor = options.flavor ?? 'pretextview';
+  const includeHeader = options.includeHeader ?? true;
+  const map = appState.map;
 
-/**
- * Export the current assembly state as an AGP format string.
- *
- * Order, orientation, and scaffold grouping survive a round-trip through
- * `AGPParser`; scaffold object names, cuts, joins, and exclusions do not (see
- * `docs/AGP_EXPORT.md`). Use a session file to reproduce a full curation.
- *
- * @param appState - The current application state
- * @param options  - Export configuration options
- * @returns The full AGP file content as a string
- */
-export function exportAGP(
-  appState: AppState,
-  options: AGPExportOptions = {}
-): string {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
-
-  if (!appState.map || appState.map.contigs.length === 0) {
+  if (!map || map.contigs.length === 0) {
     throw new Error('Cannot export AGP: no map data loaded');
   }
 
-  const contigs = appState.map.contigs;
-  // Excluded contigs are dropped before grouping: they produce no row, and the
-  // file carries no trace of them. Object coordinates close up around a removed
-  // member (later parts renumber and shift down, one gap row disappears), so
-  // coordinates are only comparable between exports with the same exclusion set.
-  const contigOrder = contigExclusion.getIncludedOrder(appState.contigOrder);
-
-  if (contigOrder.length === 0) {
+  let order = appState.contigOrder;
+  if (flavor === 'pretextview') {
+    const problems = agpExportProblems(map, order);
+    if (problems.length > 0) throw new AGPExportBlocked(problems);
+  } else {
+    order = contigExclusion.getIncludedOrder(order);
+  }
+  if (order.length === 0) {
     throw new Error('Cannot export AGP: contig order is empty');
   }
 
-  // Group contigs into scaffolds
-  const scaffolds = groupContigsByScaffold(contigs, contigOrder);
-
-  // Build all AGP lines
-  const allLines: AGPLine[] = [];
-  for (const [scaffoldName, scaffoldContigs] of scaffolds) {
-    const lines = buildScaffoldAGPLines(scaffoldName, scaffoldContigs, opts);
-    allLines.push(...lines);
+  const rows = buildAGPRows(buildAGPObjects(map, order), LIVE_MARKS, flavor);
+  if (rows.length === 0) {
+    throw new Error('Cannot export AGP: no contig in the order owns any part of the map');
   }
+  const lines = rows.map(formatAGPRow);
+  if (includeHeader) lines.unshift(generateAGPHeader(map, flavor));
+  return lines.join('\n') + '\n';
+}
 
-  // Assemble the output
-  const parts: string[] = [];
-
-  if (opts.includeHeader) {
-    parts.push(generateAGPHeader(opts.timestamp));
-  }
-
-  for (const line of allLines) {
-    parts.push(formatAGPLine(line));
-  }
-
-  return parts.join('\n') + '\n';
+/** File name for a download: `<map>.agp`, or `<map>.standard.agp`. */
+export function agpFilename(mapFilename: string | undefined, flavor: AGPFlavor): string {
+  const base = mapFilename ? mapFilename.replace(/\.pretext$/i, '') : 'assembly';
+  return flavor === 'standard' ? `${base}.standard.agp` : `${base}.agp`;
 }
 
 /**
@@ -312,15 +275,11 @@ export function downloadAGP(
   options?: AGPExportOptions
 ): void {
   const content = exportAGP(appState, options);
-  const defaultFilename = appState.map?.filename
-    ? appState.map.filename.replace(/\.pretext$/i, '.agp')
-    : 'assembly.agp';
-
   const blob = new Blob([content], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename ?? defaultFilename;
+  a.download = filename ?? agpFilename(appState.map?.filename, options?.flavor ?? 'pretextview');
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

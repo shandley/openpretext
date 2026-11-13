@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **AGP export that the curation pipelines can read.** The exported AGP now
+  has PretextView's layout, which is the input to Sanger's `pretext-to-asm`
+  and the VGP post-curation scripts: the map resolution in the header, every
+  row naming an input sequence and an interval of it at texel resolution,
+  `U 100` gap rows, objects named `Scaffold_<n>`, `Painted` in column 10 and
+  tags after it. The earlier file invented names for cut and joined contigs
+  (`name_L`, `a+b`), which no downstream tool could resolve. Checked three
+  ways: importing the AGP of a released Sanger curation (king quail) and
+  exporting it again reproduces all 605 rows; for the 14 real curations in
+  `agp-tpf-utils`' test data, `pretext-to-asm` gives identical output from
+  OpenPretext's file and from PretextView's (`bench/agp-acceptance.ts`); and
+  both flavours pass a checker written from the AGP 2.1 specification over
+  random curations. A second menu entry writes the same layout in nine
+  columns for validators. Details and limits are in `docs/AGP_EXPORT.md`.
+- **AGP import reads cuts, scaffolds and tags.** Importing a PretextView (or
+  OpenPretext) AGP now applies its cuts, order, orientation, painted scaffolds
+  and tags. An AGP for a different assembly or map resolution is refused, and
+  nothing changes.
 - **File checksums.** A `.pretext` file has no checksum of its own, so damage
   that leaves every size intact cannot be found by reading it. OpenPretext now
   computes the MD5 and SHA-256 of each file it loads. Click the file name in
@@ -114,6 +132,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - CHANGELOG.md and CONTRIBUTING.md
 
 ### Changed
+- **Excluded contigs are written to the pipeline AGP, and must say why.** The
+  downstream tool removes sequence by tag and puts back anything the AGP does
+  not mention, so leaving an excluded contig out did not remove it. Each
+  excluded contig must now carry `Haplotig`, `Contaminant` or `FalseDuplicate`;
+  the export stops and names any that does not. The standard AGP, BED and
+  FASTA still leave excluded contigs out.
+- **BED export follows the standard AGP.** Same objects and coordinates, with
+  each line named `sequence:begin-end`.
 - **Contig tags use PretextView's vocabulary, and a contig can carry several.**
   The four lower-case tags (haplotig, contaminant, unlocalised, sex chromosome)
   are replaced by the tags PretextView writes and the Sanger and VGP tools
@@ -196,6 +222,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **FASTA export of a cut contig no longer drops bases.** Contig lengths in a
+  map file are rounded, and the last piece of a cut sequence ended at the
+  rounded length, losing the bases past it. Records are now cut at the AGP's
+  coordinates and the piece that reaches the end of a sequence runs to its true
+  end. A sequence too small to own a map texel is always written, whole.
+- **Sessions saved before the boundary change still open.** Contig boundaries
+  moved by one texel on some maps (see Changed). A session saved earlier holds
+  the old positions and would have been refused as belonging to a different
+  assembly. It is now adjusted on restore: every texel stays where the curator
+  put it, and the restore says how many contigs moved. Checked on four real
+  maps with cuts at every affected contig.
 - **Tags and exclusions survive a cut or join.** Cutting an excluded contig
   produced two pieces that were no longer excluded, so sequence the curator had
   removed (a contaminant, say) went back into the exported FASTA, AGP and BED.

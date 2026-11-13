@@ -99,7 +99,7 @@ Automatic flagging of potential chimeric contigs from TAD-boundary and compartme
 
 ### Export and import
 
-AGP 2.1, BED6, and FASTA (with reverse complement for inverted contigs), PNG screenshots, BedGraph and TSV for every analysis track, session save and load (JSON with the curated contig table, scaffolds, view settings and analysis data; the undo history is not saved), curation-log export, and AI-strategy JSON. Load a reference FASTA for curated sequence export, or a BedGraph file for a custom track. AGP import reads a prior curation and applies its contig order, orientation, and scaffold grouping back onto the loaded assembly, matching contigs by name and leaving any not named in the file at the tail.
+AGP in PretextView's layout, for the Sanger `pretext-to-asm` and VGP post-curation tools (original sequence names, texel-resolution intervals, `Painted` and tag columns; see [docs/AGP_EXPORT.md](docs/AGP_EXPORT.md)), a nine-column AGP 2.1 for validators, BED6, and FASTA (cut at the AGP's coordinates, reverse-complemented where inverted), PNG screenshots, BedGraph and TSV for every analysis track, session save and load (JSON with the curated contig table, scaffolds, view settings and analysis data; the undo history is not saved), curation-log export, and AI-strategy JSON. Load a reference FASTA for curated sequence export, or a BedGraph file for a custom track. AGP import reads a curation written by PretextView or OpenPretext and applies its cuts, order, orientation, scaffolds and tags to the loaded map, keeping anything the file does not place at the end.
 
 ### Scripting
 
@@ -175,7 +175,7 @@ autosort
 - **`.pretext`**: native BC4-compressed contact maps from [PretextMap](https://github.com/sanger-tol/PretextMap), including embedded graph extensions from [PretextGraph](https://github.com/sanger-tol/PretextGraph).
 - **`.bedgraph`**: annotation tracks loaded with the **Load Track** button.
 - **`.fasta`**: reference sequences loaded with **Load FASTA** for curated export.
-- **`.agp`**: a prior curation loaded with **Import AGP**, applying its order, orientation, and scaffold grouping to the current assembly.
+- **`.agp`**: a curation from PretextView or OpenPretext, loaded with **Import AGP**, applying its cuts, order, orientation, scaffolds and tags to the loaded map.
 
 A `.pretext` file that is cut short or has a damaged tile is refused with a message saying what is wrong. The format has no checksum of its own, so to confirm a file is intact byte for byte, click its name in the status bar: the dialog shows the file's MD5 and SHA-256 and compares them with a published checksum you paste in.
 

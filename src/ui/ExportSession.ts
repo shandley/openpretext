@@ -9,7 +9,8 @@ import { downloadAGP } from '../export/AGPWriter';
 import { downloadBED } from '../export/BEDWriter';
 import { downloadFASTA } from '../export/FASTAWriter';
 import { parseFASTA, parseFASTAStream } from '../formats/FASTAParser';
-import { parseAGP, deriveAGPPlan } from '../formats/AGPParser';
+import { parseAGP, planAGPImport, AGPImportError } from '../formats/AGPParser';
+import { AGPExportBlocked, type AGPFlavor } from '../export/AGPWriter';
 import { parseBedGraph, bedGraphToTrack } from '../formats/BedGraphParser';
 import { computeFastaTrackData } from '../analysis/FastaTracks';
 import { refreshCuratorTracks } from './CuratorTracks';
@@ -27,16 +28,27 @@ import { exportAnalysisState, restoreAnalysisState, updateFastaHint } from './An
 import { inflate } from 'pako';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 
-export function exportAGP(ctx: AppContext): void {
+/**
+ * Export the curation as AGP. The default is the file PretextView would
+ * write, for `pretext-to-asm` and the VGP scripts; `standard` is the same
+ * layout in nine columns for validators and archives.
+ */
+export function exportAGP(ctx: AppContext, flavor: AGPFlavor = 'pretextview'): void {
   const s = state.get();
   if (!s.map) {
     ctx.showToast('No data to export');
     return;
   }
   try {
-    downloadAGP(s);
-    ctx.showToast('AGP exported');
+    downloadAGP(s, undefined, { flavor });
+    ctx.showToast(flavor === 'standard' ? 'Standard AGP exported (9 columns, no tags)' : 'AGP exported');
   } catch (err) {
+    if (err instanceof AGPExportBlocked) {
+      // The curation has to change before this file can be written. Say what.
+      console.warn('AGP export stopped:', err.problems);
+      ctx.showToast(`AGP not exported. ${err.problems.join(' ')}`, 20_000);
+      return;
+    }
     console.error('AGP export error:', err);
     ctx.showToast('Export failed');
   }
@@ -181,13 +193,10 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
 }
 
 /**
- * Import an AGP file and apply its contig order, orientation, and scaffold
- * grouping onto the currently-loaded assembly. Treated as a LOAD (like session
- * import), not an incremental edit: it does not push undo operations.
- *
- * Contigs present in the loaded assembly but absent from the AGP are appended
- * at the tail so nothing is lost. AGP rows that do not match any loaded contig
- * are reported and skipped.
+ * Import an AGP file onto the loaded map: its cuts, order, orientation,
+ * scaffolds and tags. A load, like opening a session: it replaces the current
+ * curation and clears the undo history. The file is checked against the map
+ * first, and nothing changes if it does not fit.
  */
 export async function loadAGPFile(ctx: AppContext, file: File): Promise<void> {
   const s0 = state.get();
@@ -203,52 +212,50 @@ export async function loadAGPFile(ctx: AppContext, file: File): Promise<void> {
     updateLoading('Parsing AGP...', 45);
     const parsed = parseAGP(text);
 
-    // Resolve everything before mutating so a zero-match import is a no-op.
-    const nameToId = new Map<string, number>();
-    s0.map.contigs.forEach((c, id) => nameToId.set(c.name, id));
-    const plan = deriveAGPPlan(parsed, nameToId, s0.contigOrder);
-
-    if (plan.matchedCount === 0) {
-      ctx.showToast('No AGP contig names matched the loaded assembly');
+    let plan;
+    try {
+      plan = planAGPImport(parsed, s0.map);
+    } catch (err) {
+      if (!(err instanceof AGPImportError)) throw err;
+      console.warn('AGP refused:', err.message);
+      ctx.showToast(`This AGP cannot be applied: ${err.message}.`, 12_000);
       return;
     }
 
-    updateLoading('Applying order and orientation...', 70);
+    updateLoading('Applying the curation...', 70);
 
-    // Order must land before painting: paintContigs resolves contig ids via
-    // state.contigOrder[orderIndex].
-    state.update({ contigOrder: plan.newOrder });
-    if (plan.inversions.length > 0) {
-      state.updateContigs(
-        plan.inversions.map((inv) => ({ id: inv.id, changes: { inverted: inv.inverted } })),
-      );
-    }
+    // The history, tags, exclusions and flags in memory describe the curation
+    // being replaced.
+    state.clearHistory();
+    contigExclusion.clearAll();
+    metaTags.clearAll();
+    misassemblyFlags.clearAll();
+    ctx.scaffoldManager.clear();
+    state.update({
+      map: { ...s0.map, contigs: plan.contigs },
+      contigOrder: plan.contigOrder,
+      selectedContigs: new Set<number>(),
+    });
 
     updateLoading('Rebuilding scaffolds...', 85);
-
-    // Rebuild scaffolds from the AGP objects. resetScaffolds clears the manager
-    // and every contig assignment; then one scaffold per non-unplaced object.
-    ctx.scaffoldManager.resetScaffolds();
-    for (const group of plan.scaffoldGroups) {
-      const id = ctx.scaffoldManager.createScaffold(group.name, { record: false });
-      ctx.scaffoldManager.paintContigs(group.orderIndices, id, { record: false });
+    const position = new Map(plan.contigOrder.map((id, i) => [id, i]));
+    for (const sc of plan.scaffolds) {
+      const id = ctx.scaffoldManager.createScaffold(sc.name, { record: false });
+      ctx.scaffoldManager.paintContigs(sc.contigIds.map((c) => position.get(c)!), id, { record: false });
     }
+    for (const [id, tags] of plan.tags) metaTags.setTags(id, tags);
 
     ctx.refreshAfterCuration();
 
-    if (plan.unmatchedNames.length > 0) {
-      console.warn(
-        `AGP import: ${plan.unmatchedNames.length} contig name(s) not found in assembly:`,
-        plan.unmatchedNames,
-      );
-    }
-
-    const unmatchedNote = plan.unmatchedNames.length > 0
-      ? `, ${plan.unmatchedNames.length} unmatched`
-      : '';
+    const { rows, cuts, scaffolds, tagged } = plan.stats;
     ctx.showToast(
-      `AGP applied: ${plan.matchedCount} contig(s), ${plan.scaffoldGroups.length} scaffold(s)${unmatchedNote}`,
+      `AGP applied: ${rows} row${rows === 1 ? '' : 's'}, ${cuts} cut${cuts === 1 ? '' : 's'}, ` +
+      `${scaffolds} scaffold${scaffolds === 1 ? '' : 's'}, ${tagged} tagged contig${tagged === 1 ? '' : 's'}`,
     );
+    if (plan.warnings.length > 0) {
+      for (const w of plan.warnings) console.warn(`AGP import: ${w}`);
+      ctx.showToast(plan.warnings.join(' '), 15_000);
+    }
   } catch (err) {
     console.error('AGP import error:', err);
     ctx.showToast(`AGP import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);

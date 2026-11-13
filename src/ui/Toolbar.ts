@@ -47,6 +47,9 @@ export function setupToolbar(ctx: AppContext): void {
   document.getElementById('btn-save-agp')?.addEventListener('click', () => {
     exportAGP(ctx);
   });
+  document.getElementById('btn-save-agp-standard')?.addEventListener('click', () => {
+    exportAGP(ctx, 'standard');
+  });
   document.getElementById('btn-save-bed')?.addEventListener('click', () => {
     exportBEDFile(ctx);
   });

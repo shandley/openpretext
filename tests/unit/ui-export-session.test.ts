@@ -18,6 +18,9 @@ vi.mock('../../src/core/State', () => ({
 
 vi.mock('../../src/export/AGPWriter', () => ({
   downloadAGP: vi.fn(),
+  AGPExportBlocked: class AGPExportBlocked extends Error {
+    constructor(public readonly problems: string[]) { super(problems.join(' ')); }
+  },
 }));
 
 vi.mock('../../src/export/BEDWriter', () => ({
@@ -92,7 +95,7 @@ import {
 } from '../../src/ui/ExportSession';
 
 import { state } from '../../src/core/State';
-import { downloadAGP } from '../../src/export/AGPWriter';
+import { downloadAGP, AGPExportBlocked } from '../../src/export/AGPWriter';
 import { downloadBED } from '../../src/export/BEDWriter';
 import { downloadFASTA } from '../../src/export/FASTAWriter';
 import { downloadSnapshot } from '../../src/export/SnapshotExporter';
@@ -219,8 +222,33 @@ describe('ExportSession', () => {
 
       exportAGP(ctx);
 
-      expect(downloadAGP).toHaveBeenCalledWith(fakeState);
+      expect(downloadAGP).toHaveBeenCalledWith(fakeState, undefined, { flavor: 'pretextview' });
       expect(ctx.showToast).toHaveBeenCalledWith('AGP exported');
+    });
+
+    it('should export the nine-column file when asked for the standard flavour', () => {
+      const fakeState = { map: { filename: 'test.pretext' }, contigOrder: [0] };
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue(fakeState);
+      const ctx = createMockCtx();
+
+      exportAGP(ctx, 'standard');
+
+      expect(downloadAGP).toHaveBeenCalledWith(fakeState, undefined, { flavor: 'standard' });
+      expect(ctx.showToast).toHaveBeenCalledWith('Standard AGP exported (9 columns, no tags)');
+    });
+
+    it('should say what has to change when the curation cannot be written yet', () => {
+      const fakeState = { map: { filename: 'test.pretext' }, contigOrder: [0] };
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue(fakeState);
+      (downloadAGP as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+        throw new AGPExportBlocked(['1 excluded contig has no tag saying why it is removed: "ctg7".']);
+      });
+      const ctx = createMockCtx();
+
+      exportAGP(ctx);
+
+      expect(ctx.showToast).toHaveBeenCalledWith(
+        'AGP not exported. 1 excluded contig has no tag saying why it is removed: "ctg7".', 20_000);
     });
 
     it('should catch errors from downloadAGP and show failure toast', () => {

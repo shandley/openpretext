@@ -37,7 +37,7 @@ import {
   type ScriptResult,
 } from '../src/scripting/ScriptExecutor';
 import { exportAGP } from '../src/export/AGPWriter';
-import { exportFASTA, resolveContigSequence } from '../src/export/FASTAWriter';
+import { exportFASTA, contigsMissingSequence } from '../src/export/FASTAWriter';
 import { parseFASTAStream } from '../src/formats/FASTAParser';
 import { loadPretextFromDisk } from './loader';
 
@@ -147,11 +147,7 @@ export function applyCurationScript(
   // needs the reference sequences: a .pretext stores contact counts, not bases.
   if (sequences) {
     outcome.fasta = exportFASTA(after, sequences);
-    const order = contigExclusion.getIncludedOrder(after.contigOrder);
-    outcome.missingSequences = order
-      .map((i) => after.map!.contigs[i])
-      .filter((c) => c && resolveContigSequence(c, sequences) === undefined)
-      .map((c) => c!.name);
+    outcome.missingSequences = contigsMissingSequence(after, sequences);
   }
 
   return outcome;
@@ -167,7 +163,7 @@ export function assemblyToMapData(
   filename: string,
   contigs: ContigInfo[],
   textureSize: number,
-  header: { mipMapLevels: number; textureResolution: number; numberOfTextures1D: number },
+  header: { mipMapLevels: number; textureResolution: number; numberOfTextures1D: number; totalGenomeLength?: bigint },
 ): MapData {
   return {
     filename,
@@ -176,6 +172,9 @@ export function assemblyToMapData(
     tileResolution: header.textureResolution,
     tilesPerDimension: header.numberOfTextures1D,
     contigs,
+    // What the AGP's coordinates and resolution header are computed from.
+    fileContigCount: contigs.length,
+    ...(header.totalGenomeLength !== undefined ? { genomeLength: Number(header.totalGenomeLength) } : {}),
     contactMap: null,
     rawTiles: null,
     parsedHeader: null,

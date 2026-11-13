@@ -134,6 +134,12 @@ export interface MapData {
   tilesPerDimension: number;
   contigs: ContigInfo[];
   /**
+   * Total genome length in bp, from the file header. With `textureSize` it
+   * gives the bp per texel that every AGP coordinate is computed from. Absent
+   * on maps that did not come from a file.
+   */
+  genomeLength?: number;
+  /**
    * How many contigs the file itself defines. They are `contigs[0..n)` and
    * keep their names and texel spans for the life of the map; cut and join
    * append new entries after them. Absent only on maps built by hand in

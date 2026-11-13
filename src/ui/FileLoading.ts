@@ -76,6 +76,7 @@ async function loadPretextFromBuffer(
         inverted: false, scaffoldId: null,
       })),
       fileContigCount: parsed.contigs.length,
+      genomeLength: Number(h.totalGenomeLength),
       contactMap,
       originalContactMap: new Float32Array(contactMap),
       rawTiles: parsed.tiles,

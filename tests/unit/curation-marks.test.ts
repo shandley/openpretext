@@ -98,7 +98,7 @@ describe('cut', () => {
     contigExclusion.set(id(1), true);
     // Sequence rows (component type W) and the bases they cover.
     const exported = () => {
-      const rows = exportAGP(state.get()).split('\n')
+      const rows = exportAGP(state.get(), { flavor: 'standard' }).split('\n')
         .filter((l) => l && !l.startsWith('#')).map((l) => l.split('\t')).filter((c) => c[4] === 'W');
       return { rows: rows.length, bases: rows.reduce((n, c) => n + Number(c[7]) - Number(c[6]) + 1, 0) };
     };

@@ -36,12 +36,14 @@ function makeContig(
 function makeMapData(contigs: ContigInfo[]): MapData {
   return {
     filename: 'test_assembly.pretext',
-    textureSize: 1024,
+    // As wide as its contigs, as a real map is. (Contigs given no texels,
+    // pixelStart = pixelEnd = 0, leave the width at a nominal 1024.)
+    textureSize: Math.max(0, ...contigs.map((c) => c.pixelEnd)) || 1024,
     numMipMaps: 1,
     contigs,
     textures: [new Float32Array(0)],
     extensions: new Map(),
-  };
+  } as unknown as MapData;
 }
 
 function makeAppState(
@@ -536,13 +538,10 @@ describe('FASTAWriter', () => {
     });
   });
 
-  // KNOWN-FAILING: cut() names its children `${name}_L`/`_R` and join() names
-  // the merge `${a}+${b}`, but exportFASTA looks sequences up by contig.name.
-  // These synthesized names are never in the sequences map, so every cut or
-  // joined contig hits the `sequence_not_found` path and is emitted as a
-  // header-only warning with NO sequence — silently dropped from the FASTA.
-  // The two most common curation operations therefore break FASTA output.
-  describe('exportFASTA — cut/join products (known bug)', () => {
+  // Cut and joined contigs have names of their own (`chr1_L`, `chrA+chrB`)
+  // that are not in the input FASTA. Their sequence is built from the input
+  // sequences they are made of.
+  describe('exportFASTA — cut/join products', () => {
     beforeEach(() => {
       state.reset();
     });
@@ -725,5 +724,138 @@ describe('FASTAWriter', () => {
       globalThis.URL = originalURL;
       vi.unstubAllGlobals();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sequence written must be the sequence the AGP describes
+// ---------------------------------------------------------------------------
+
+import { exportAGP } from '../../src/export/AGPWriter';
+import { ScaffoldManager } from '../../src/curation/ScaffoldManager';
+import { contigExclusion } from '../../src/curation/ContigExclusion';
+import { metaTags } from '../../src/curation/MetaTagManager';
+
+describe('FASTA and AGP agree, and no base is lost at the end of a sequence', () => {
+  // 64 texels over a genome the map header calls 6,400 bp: 100 bp per texel.
+  // The real sequences are a little longer or shorter than their texels say,
+  // as real ones are (the map stores lengths as rounded fractions).
+  const LAYOUT: Array<[string, number, number, number]> = [
+    // name, first texel, end texel, true length in bp
+    ['s1', 0, 20, 2037],     // 37 bp longer than 20 texels
+    ['s2', 20, 21, 61],      // one texel, really 61 bp
+    ['s3', 21, 21, 12],      // owns no texel
+    ['s4', 21, 64, 4290],    // 10 bp shorter than 43 texels
+  ];
+  const BASES = 'ACGT';
+  const sequences = new Map(LAYOUT.map(([name, , , len], k) => [
+    name,
+    Array.from({ length: len }, (_, i) => BASES[(i * 7 + k * 3 + Math.floor(i / 5)) % 4]).join(''),
+  ]));
+
+  function load(): void {
+    state.reset();
+    contigExclusion.clearAll();
+    metaTags.clearAll();
+    CurationEngine.setScaffoldManager(new ScaffoldManager());
+    const contigs: ContigInfo[] = LAYOUT.map(([name, s, e], i) => ({
+      name, originalIndex: i, length: (e - s) * 100, pixelStart: s, pixelEnd: e, inverted: false, scaffoldId: null,
+    }));
+    state.update({
+      map: {
+        filename: 'm.pretext', textureSize: 64, numMipMaps: 1, tileResolution: 64, tilesPerDimension: 1,
+        contigs, fileContigCount: contigs.length, genomeLength: 6400,
+        contactMap: null, rawTiles: null, parsedHeader: null, extensions: new Map(),
+      },
+      contigOrder: [0, 1, 2, 3],
+    });
+  }
+
+  /** Build each record from the AGP rows and the input sequences, independently of FASTAWriter. */
+  function fromAGP(): string[] {
+    const s = state.get();
+    const rows = exportAGP(s).split('\n')   // the PretextView file keeps the map's orientation on every row
+      .filter((l) => l && !l.startsWith('#')).map((l) => l.split('\t')).filter((c) => c[4] === 'W');
+    // The largest end coordinate of each sequence is its last texel boundary.
+    const last = new Map<string, number>();
+    for (const c of rows) last.set(c[5], Math.max(last.get(c[5]) ?? 0, Number(c[7])));
+    return rows.map((c) => {
+      const src = sequences.get(c[5])!;
+      const end = Number(c[7]) === last.get(c[5]) ? src.length : Math.min(src.length, Number(c[7]));
+      const piece = src.substring(Number(c[6]) - 1, end);
+      return c[8] === '-' ? reverseComplement(piece) : piece;
+    });
+  }
+
+  beforeEach(load);
+
+  it('an untouched assembly exports every input sequence whole', () => {
+    const records = parseFASTA(exportFASTA(state.get(), sequences));
+    expect(records.map((r) => [r.name, r.sequence])).toEqual(LAYOUT.map(([name]) => [name, sequences.get(name)]));
+  });
+
+  it('the piece that reaches the end of a sequence carries its real last bases', () => {
+    CurationEngine.cut(0, 5);                      // s1 at texel 5: bp 500
+    const byName = new Map(parseFASTA(exportFASTA(state.get(), sequences)).map((r) => [r.name, r.sequence]));
+    expect(byName.get('s1_L')).toBe(sequences.get('s1')!.substring(0, 500));
+    expect(byName.get('s1_R')).toBe(sequences.get('s1')!.substring(500));
+    expect(byName.get('s1_R')!.length).toBe(1537);   // 1500 by the texels, plus the 37 they do not show
+    expect(byName.get('s1_L')! + byName.get('s1_R')!).toBe(sequences.get('s1'));
+  });
+
+  it('a sequence shorter than its texels say is not read past its end', () => {
+    CurationEngine.cut(3, 42);                     // s4 one texel from its end: bp 4200 of 4290
+    const byName = new Map(parseFASTA(exportFASTA(state.get(), sequences)).map((r) => [r.name, r.sequence]));
+    expect(byName.get('s4_L')!.length).toBe(4200);
+    expect(byName.get('s4_R')!.length).toBe(90);
+    expect(byName.get('s4_L')! + byName.get('s4_R')!).toBe(sequences.get('s4'));
+  });
+
+  it('every base of every input sequence is exported exactly once, whatever the edits', () => {
+    function mulberry32(seed: number): () => number {
+      let a = seed >>> 0;
+      return () => {
+        a = (a + 0x6d2b79f5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    for (let seed = 1; seed <= 60; seed++) {
+      load();
+      const rnd = mulberry32(seed);
+      for (let k = 0; k < 16; k++) {
+        const s = state.get();
+        const count = s.contigOrder.length;
+        const i = Math.floor(rnd() * count);
+        const r = rnd();
+        const c = s.map!.contigs[s.contigOrder[i]];
+        const w = c.pixelEnd - c.pixelStart;
+        if (r < 0.35) { if (w >= 2) CurationEngine.cut(i, 1 + Math.floor(rnd() * (w - 1))); }
+        else if (r < 0.5) { if (i < count - 1) CurationEngine.join(i); }
+        else if (r < 0.75) CurationEngine.invert(i);
+        else CurationEngine.move(i, Math.floor(rnd() * count));
+      }
+      const s = state.get();
+      const records = parseFASTA(exportFASTA(s, sequences));
+      expect(records.every((r) => !/sequence_not_found/.test(r.description ?? '')), `seed ${seed}`).toBe(true);
+
+      // The same bases as the AGP's rows give. A joined contig is one record
+      // and several rows, so compare the concatenation. s3 owns no texel: it
+      // has a record and no row, so it is set aside here and checked below.
+      const withTexels = records.filter((r) => r.name !== 's3');
+      expect(withTexels.map((r) => r.sequence).join(''), `seed ${seed}`).toBe(fromAGP().join(''));
+
+      // s3 is exported once, whole, even when it was joined into another
+      // contig (it has no place on the map, so it comes out on its own).
+      const s3 = records.filter((r) => r.name === 's3');
+      expect(s3, `seed ${seed}`).toHaveLength(1);
+      expect([sequences.get('s3'), reverseComplement(sequences.get('s3')!)], `seed ${seed}`).toContain(s3[0].sequence);
+
+      // Every base once.
+      const total = records.reduce((n, r) => n + r.sequence.length, 0);
+      expect(total, `seed ${seed}`).toBe(LAYOUT.reduce((n, l) => n + l[3], 0));
+    }
   });
 });
