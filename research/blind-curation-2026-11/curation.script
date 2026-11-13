@@ -1,0 +1,106 @@
+# Blind curation of fChaTrf1, made from the map alone. Runs after the mouse cut of H1.scaffold_1.
+# H2.scaffold_25 (4.7 Mb) contacts H2.scaffold_24 along its length, strongest at its end: place it there.
+move H2.scaffold_25 after H2.scaffold_24
+# H2.scaffold_26 (0.7 Mb) contacts both; same chromosome, position not clear (tagged Unloc).
+move H2.scaffold_26 after H2.scaffold_25
+# H1.scaffold_24 (2.1 Mb) already sits after H1.scaffold_23, which it contacts along its length.
+# One scaffold per chromosome.
+scaffold create h1_01
+scaffold paint H1.scaffold_1_L h1_01
+scaffold create h1_02
+scaffold paint H1.scaffold_1_R h1_02
+scaffold create h1_03
+scaffold paint H1.scaffold_3 h1_03
+scaffold create h1_04
+scaffold paint H1.scaffold_2 h1_04
+scaffold create h1_05
+scaffold paint H1.scaffold_4 h1_05
+scaffold create h1_06
+scaffold paint H1.scaffold_5 h1_06
+scaffold create h1_07
+scaffold paint H1.scaffold_6 h1_07
+scaffold create h1_08
+scaffold paint H1.scaffold_7 h1_08
+scaffold create h1_09
+scaffold paint H1.scaffold_8 h1_09
+scaffold create h1_10
+scaffold paint H1.scaffold_9 h1_10
+scaffold create h1_11
+scaffold paint H1.scaffold_10 h1_11
+scaffold create h1_12
+scaffold paint H1.scaffold_11 h1_12
+scaffold create h1_13
+scaffold paint H1.scaffold_12 h1_13
+scaffold create h1_14
+scaffold paint H1.scaffold_13 h1_14
+scaffold create h1_15
+scaffold paint H1.scaffold_14 h1_15
+scaffold create h1_16
+scaffold paint H1.scaffold_15 h1_16
+scaffold create h1_17
+scaffold paint H1.scaffold_16 h1_17
+scaffold create h1_18
+scaffold paint H1.scaffold_17 h1_18
+scaffold create h1_19
+scaffold paint H1.scaffold_18 h1_19
+scaffold create h1_20
+scaffold paint H1.scaffold_19 h1_20
+scaffold create h1_21
+scaffold paint H1.scaffold_20 h1_21
+scaffold create h1_22
+scaffold paint H1.scaffold_22 h1_22
+scaffold create h1_23
+scaffold paint H1.scaffold_23 h1_23
+scaffold paint H1.scaffold_24 h1_23
+scaffold create h1_24
+scaffold paint H1.scaffold_21 h1_24
+scaffold create h2_01
+scaffold paint H2.scaffold_1 h2_01
+scaffold create h2_02
+scaffold paint H2.scaffold_2 h2_02
+scaffold create h2_03
+scaffold paint H2.scaffold_3 h2_03
+scaffold create h2_04
+scaffold paint H2.scaffold_4 h2_04
+scaffold create h2_05
+scaffold paint H2.scaffold_5 h2_05
+scaffold create h2_06
+scaffold paint H2.scaffold_6 h2_06
+scaffold create h2_07
+scaffold paint H2.scaffold_7 h2_07
+scaffold create h2_08
+scaffold paint H2.scaffold_8 h2_08
+scaffold create h2_09
+scaffold paint H2.scaffold_9 h2_09
+scaffold create h2_10
+scaffold paint H2.scaffold_10 h2_10
+scaffold create h2_11
+scaffold paint H2.scaffold_11 h2_11
+scaffold create h2_12
+scaffold paint H2.scaffold_12 h2_12
+scaffold create h2_13
+scaffold paint H2.scaffold_13 h2_13
+scaffold create h2_14
+scaffold paint H2.scaffold_14 h2_14
+scaffold create h2_15
+scaffold paint H2.scaffold_15 h2_15
+scaffold create h2_16
+scaffold paint H2.scaffold_16 h2_16
+scaffold create h2_17
+scaffold paint H2.scaffold_17 h2_17
+scaffold create h2_18
+scaffold paint H2.scaffold_18 h2_18
+scaffold create h2_19
+scaffold paint H2.scaffold_19 h2_19
+scaffold create h2_20
+scaffold paint H2.scaffold_20 h2_20
+scaffold create h2_21
+scaffold paint H2.scaffold_21 h2_21
+scaffold create h2_22
+scaffold paint H2.scaffold_22 h2_22
+scaffold create h2_23
+scaffold paint H2.scaffold_23 h2_23
+scaffold create h2_24
+scaffold paint H2.scaffold_24 h2_24
+scaffold paint H2.scaffold_25 h2_24
+scaffold paint H2.scaffold_26 h2_24
