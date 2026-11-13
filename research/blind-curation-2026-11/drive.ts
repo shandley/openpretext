@@ -83,7 +83,7 @@ async function settle(page: Page): Promise<void> { await page.waitForTimeout(250
   const shot = async (name: string) => { await settle(page); await canvas.screenshot({ path: join(outdir, `${name}.png`) }); console.log(`shot ${name}`); };
   await page.locator('#btn-close-console').click();
   await page.keyboard.press('x');
-  await page.addStyleTag({ content: '.toast, #toast-container, #minimap-canvas, #minimap, #zoom-controls { display: none !important; }' });
+  await page.addStyleTag({ content: '.toast, #toast-container, #minimap-canvas, #minimap, #zoom-controls, #tooltip, .tooltip { display: none !important; }' });
   if (!process.argv.includes('--noshots')) await shot('full');
   for (const z of (opt('--zoom') ?? '').split(',').filter(Boolean)) {
     await page.evaluate(() => document.getElementById('btn-console')?.click());

@@ -1,0 +1,160 @@
+# Blind curation of fAplLin1, from the map alone. Runs after four mouse cuts (scaffold_1.H2, scaffold_2.H2, scaffold_1.H1, scaffold_3.H1).
+# Order: each haplotype-1 chromosome followed by its haplotype-2 partner.
+move scaffold_1.H1_1_L to 0
+move scaffold_7.H2_1 to 1
+move scaffold_1.H1_1_R to 2
+move scaffold_1.H2_1_L to 3
+move scaffold_3.H1_1_L to 4
+move scaffold_21.H2_1 to 5
+move scaffold_3.H1_1_R to 6
+move scaffold_17.H2_1 to 7
+move scaffold_4.H1_1 to 8
+move scaffold_4.H2_1 to 9
+move scaffold_5.H1_1 to 10
+move scaffold_9.H2_1 to 11
+move scaffold_6.H1_1 to 12
+move scaffold_1.H2_1_R to 13
+move scaffold_7.H1_1 to 14
+move scaffold_5.H2_1 to 15
+move scaffold_8.H1_1 to 16
+move scaffold_10.H2_1 to 17
+move scaffold_9.H1_1 to 18
+move scaffold_8.H2_1 to 19
+move scaffold_10.H1_1 to 20
+move scaffold_2.H2_1_R to 21
+move scaffold_11.H1_1 to 22
+move scaffold_13.H2_1 to 23
+move scaffold_12.H1_1 to 24
+move scaffold_6.H2_1 to 25
+move scaffold_13.H1_1 to 26
+move scaffold_11.H2_1 to 27
+move scaffold_14.H1_1 to 28
+move scaffold_15.H2_1 to 29
+move scaffold_15.H1_1 to 30
+move scaffold_14.H2_1 to 31
+move scaffold_16.H1_1 to 32
+move scaffold_18.H2_1 to 33
+move scaffold_17.H1_1 to 34
+move scaffold_12.H2_1 to 35
+move scaffold_18.H1_1 to 36
+move scaffold_16.H2_1 to 37
+move scaffold_25.H1_1 to 38
+move scaffold_19.H1_1 to 39
+move scaffold_2.H2_1_L to 40
+move scaffold_20.H1_1 to 41
+move scaffold_19.H2_1 to 42
+move scaffold_21.H1_1 to 43
+move scaffold_20.H2_1 to 44
+move scaffold_22.H1_1 to 45
+move scaffold_27.H1_1 to 46
+move scaffold_22.H2_1 to 47
+move scaffold_2.H1_1 to 48
+move scaffold_3.H2_1 to 49
+move hap_scaffold_2.H1_1_1 to 50
+# Haplotype-2 chromosomes that run opposite to their partner, turned round.
+invert scaffold_1.H2_1_L
+invert scaffold_5.H2_1
+invert scaffold_2.H2_1_R
+invert scaffold_13.H2_1
+invert scaffold_14.H2_1
+invert scaffold_12.H2_1
+# One scaffold per chromosome.
+scaffold create h1_01
+scaffold paint scaffold_1.H1_1_L h1_01
+scaffold create h2_01
+scaffold paint scaffold_7.H2_1 h2_01
+scaffold create h1_02
+scaffold paint scaffold_1.H1_1_R h1_02
+scaffold create h2_02
+scaffold paint scaffold_1.H2_1_L h2_02
+scaffold create h1_03
+scaffold paint scaffold_3.H1_1_L h1_03
+scaffold create h2_03
+scaffold paint scaffold_21.H2_1 h2_03
+scaffold create h1_04
+scaffold paint scaffold_3.H1_1_R h1_04
+scaffold create h2_04
+scaffold paint scaffold_17.H2_1 h2_04
+scaffold create h1_05
+scaffold paint scaffold_4.H1_1 h1_05
+scaffold create h2_05
+scaffold paint scaffold_4.H2_1 h2_05
+scaffold create h1_06
+scaffold paint scaffold_5.H1_1 h1_06
+scaffold create h2_06
+scaffold paint scaffold_9.H2_1 h2_06
+scaffold create h1_07
+scaffold paint scaffold_6.H1_1 h1_07
+scaffold create h2_07
+scaffold paint scaffold_1.H2_1_R h2_07
+scaffold create h1_08
+scaffold paint scaffold_7.H1_1 h1_08
+scaffold create h2_08
+scaffold paint scaffold_5.H2_1 h2_08
+scaffold create h1_09
+scaffold paint scaffold_8.H1_1 h1_09
+scaffold create h2_09
+scaffold paint scaffold_10.H2_1 h2_09
+scaffold create h1_10
+scaffold paint scaffold_9.H1_1 h1_10
+scaffold create h2_10
+scaffold paint scaffold_8.H2_1 h2_10
+scaffold create h1_11
+scaffold paint scaffold_10.H1_1 h1_11
+scaffold create h2_11
+scaffold paint scaffold_2.H2_1_R h2_11
+scaffold create h1_12
+scaffold paint scaffold_11.H1_1 h1_12
+scaffold create h2_12
+scaffold paint scaffold_13.H2_1 h2_12
+scaffold create h1_13
+scaffold paint scaffold_12.H1_1 h1_13
+scaffold create h2_13
+scaffold paint scaffold_6.H2_1 h2_13
+scaffold create h1_14
+scaffold paint scaffold_13.H1_1 h1_14
+scaffold create h2_14
+scaffold paint scaffold_11.H2_1 h2_14
+scaffold create h1_15
+scaffold paint scaffold_14.H1_1 h1_15
+scaffold create h2_15
+scaffold paint scaffold_15.H2_1 h2_15
+scaffold create h1_16
+scaffold paint scaffold_15.H1_1 h1_16
+scaffold create h2_16
+scaffold paint scaffold_14.H2_1 h2_16
+scaffold create h1_17
+scaffold paint scaffold_16.H1_1 h1_17
+scaffold create h2_17
+scaffold paint scaffold_18.H2_1 h2_17
+scaffold create h1_18
+scaffold paint scaffold_17.H1_1 h1_18
+scaffold create h2_18
+scaffold paint scaffold_12.H2_1 h2_18
+scaffold create h1_19
+scaffold paint scaffold_18.H1_1 h1_19
+scaffold create h2_19
+scaffold paint scaffold_16.H2_1 h2_19
+scaffold paint scaffold_25.H1_1 h2_19
+scaffold create h1_20
+scaffold paint scaffold_19.H1_1 h1_20
+scaffold create h2_20
+scaffold paint scaffold_2.H2_1_L h2_20
+scaffold create h1_21
+scaffold paint scaffold_20.H1_1 h1_21
+scaffold create h2_21
+scaffold paint scaffold_19.H2_1 h2_21
+scaffold create h1_22
+scaffold paint scaffold_21.H1_1 h1_22
+scaffold create h2_22
+scaffold paint scaffold_20.H2_1 h2_22
+scaffold create h1_23
+scaffold paint scaffold_22.H1_1 h1_23
+scaffold paint scaffold_27.H1_1 h1_23
+scaffold create h2_23
+scaffold paint scaffold_22.H2_1 h2_23
+scaffold create h1_24
+scaffold paint scaffold_2.H1_1 h1_24
+scaffold create h2_24
+scaffold paint scaffold_3.H2_1 h2_24
+scaffold paint hap_scaffold_2.H1_1_1 h2_24

@@ -1,0 +1,6 @@
+2026-11-13T11:41:42Z
+90cd208b0143696ceca421de40b24f04288ca43207b98c212836e4d102e2fe4c  blind.agp
+cf3b80fe3c1cb28875a03a7c2082c8f7d2f08cdbabb8dc732e963c61df91f793  baseline.agp
+cf5a12663ae3b7c974b89b131089287653a1417ec2fb11a7abad8902eeb5a2af  curation.script
+5f2098cb097c3f52aa70c596a56b3927fb30702e497ed791f45c9b1434c8a5c2  final.actions
+Frozen before the curator's AGP for fAplLin1 was read. It had been downloaded earlier and passed only through a script that printed totals (rows, painted objects, breaks, joins, unlocalised rows, megabases moved), used to choose the genome.

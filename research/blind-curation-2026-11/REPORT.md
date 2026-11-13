@@ -1,6 +1,13 @@
-# Blind curation of a butterflyfish map in OpenPretext
+# Two blind curations in OpenPretext
 
 13 November 2026
+
+Two runs. The first, a butterflyfish, turned out to need almost no curation
+and is kept here with its correction. The second, a killifish chosen because
+a no-edit export scores badly on it, is the one that tests the question. Its
+section is at the end.
+
+# Run 1: butterflyfish (`fChaTrf1`)
 
 ## What was tested
 
@@ -187,9 +194,108 @@ Got in the way:
 
 ## Files
 
-`drive.ts` drives the app (cached `tsx`, a preview server on port 4173).
-`final.actions` is the full list of steps, `curation.script` the console part,
+`drive.ts` drives the app (cached `tsx`, a preview server on port 4173). The
+files for this run are in `fChaTrf1/`: `final.actions` is the full list of steps, `curation.script` the console part,
 `blind.agp` the export, `FROZEN.txt` the hashes taken before the answer was
 opened, `score.py` the sequence comparison, `score_agp.py` the decision score,
 `baseline.*` the no-edit export. The downloads and outputs are in
 the git-ignored `test-data/blind/`.
+
+# Run 2: killifish (`fAplLin1`)
+
+## Choosing a genome where doing nothing scores badly
+
+A full listing of GenomeArk's `assembly_curated/` folders (`scan3.py`) found
+99 individuals that publish a curator's PretextView AGP. For 42 of them with
+an assembly under 1.5 GB, a script printed totals from each AGP and nothing else:
+rows, painted objects, breaks, joins, and megabases the curator moved. Those
+totals were the only thing seen of any answer before the result was frozen.
+
+*Aplocheilus lineatus* (striped panchax), `fAplLin1`, was chosen: 60 sequences,
+1.15 Gb, both haplotypes, 9 breaks and 9 joins, about 8% of bases moved. The
+score (`score_agp.py`, 3-texel tolerance) and its no-edit floor were fixed
+before the run.
+
+Knowing the totals is a leak, though a small one: it said roughly how much
+there was to find, not where.
+
+## What was done in the app
+
+- **Four cuts with the mouse**, each on a scaffold whose two halves share no
+  contacts, placed at 10 pixels per texel.
+- **51 moves, 6 inversions and 48 scaffolds painted through the script
+  console.** The moves put each haplotype-1 chromosome next to its
+  haplotype-2 partner, which run 1 showed the Sanger tool needs.
+- **48 tags through the sidebar.**
+- Three loose scaffolds were joined to chromosomes: a 10.7 Mb one, a 1.4 Mb
+  one and a 0.7 Mb one.
+
+Partners were found by measuring, on a screenshot of the whole map, how red
+each cell of the scaffold grid is (`cells.py`, `smalls.py`). That reads the
+picture the app draws, not the map file.
+
+## Result
+
+The curator's AGP names five sequences without the `hap_` prefix that the map
+and the published assembly both carry. The names were aligned before scoring;
+without that, one correct 10.7 Mb join counts as wrong.
+
+| | No edits | Blind curation |
+|---|---|---|
+| Bases in the wrong chromosome, or painted in one file and not the other | 97.1 Mb (8.43%) | 0.25 Mb (0.02%) |
+| Curator's 9 breaks matched | 0 | 4 |
+| Curator's 9 joins matched | 0 | 3 |
+| Haplotype partner pairs the same as the curator's | not paired | 24 of 24 |
+
+Every break and join the blind curation made is one the curator made. The
+four cuts are each within 2 texels of the curator's.
+
+What was found:
+
+- All four fused scaffolds, each two chromosomes joined end to end.
+- A 10.7 Mb scaffold labelled haplotype 1 that belongs on the end of a
+  haplotype-2 chromosome. Its partner on haplotype 1 is 8 Mb longer than the
+  haplotype-2 scaffold, and the partner line on the map runs straight on from
+  one into the other.
+- Two smaller scaffolds at chromosome ends, in the curator's place and
+  orientation.
+- All 24 partner pairs.
+
+What was missed, all of it inside a chromosome:
+
+- An inverted 5.9 Mb segment and a swap of two segments in `scaffold_2.H2`.
+- A three-piece rearrangement in `scaffold_5.H1`.
+- An inverted 5.4 Mb end of `scaffold_2.H1`.
+- A 0.14 Mb scaffold joined to a chromosome end.
+
+Three of the four rearrangements were noticed as oddities in the screenshots
+and judged to be a centromere or a repeat. That is the curator's error. The
+bases are in the right chromosome in every case, which is why the first row of
+the table is nearly clean while five breaks are unmatched.
+
+`pretext-to-asm` was not run on this genome.
+
+## What the two runs show together
+
+A curator working only from OpenPretext's display found which sequence belongs
+to which chromosome almost completely, on a genome where the untouched
+assembly has 97 Mb in the wrong place. The same curator found none of the
+order and orientation errors inside chromosomes. Whether that second result is
+the curator or the tool cannot be separated here; a person looking at the same
+screen may well see an inversion that was passed over in a still image.
+
+## More that got in the way
+
+1. **Tracks hidden with `X` come back** when an analysis finishes, and cover
+   the top and left of the map again.
+2. **A cut made at one window size cannot be replayed at another**, because
+   the mouse position is in window pixels. The console's `cut` takes a texel
+   offset, which nothing on screen reports.
+3. **Nothing lists a scaffold's strongest contacts.** Pairing haplotypes and
+   placing loose scaffolds meant measuring screenshots. A table of "this
+   scaffold's contacts, by chromosome and by which end" would replace that.
+4. **An inversion inside a scaffold is easy to pass over** at the zoom where a
+   whole chromosome fits the window.
+
+The files for this run are in `fAplLin1/`. `FROZEN.txt` there records the
+hashes and what had been seen of the answer.

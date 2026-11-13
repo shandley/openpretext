@@ -1,0 +1,89 @@
+# No-edit floor: the 44 large scaffolds painted as loaded.
+scaffold create s01
+scaffold paint scaffold_1.H2_1 s01
+scaffold create s02
+scaffold paint scaffold_2.H2_1 s02
+scaffold create s03
+scaffold paint scaffold_1.H1_1 s03
+scaffold create s04
+scaffold paint scaffold_3.H1_1 s04
+scaffold create s05
+scaffold paint scaffold_4.H1_1 s05
+scaffold create s06
+scaffold paint scaffold_5.H1_1 s06
+scaffold create s07
+scaffold paint scaffold_6.H1_1 s07
+scaffold create s08
+scaffold paint scaffold_4.H2_1 s08
+scaffold create s09
+scaffold paint scaffold_5.H2_1 s09
+scaffold create s10
+scaffold paint scaffold_7.H1_1 s10
+scaffold create s11
+scaffold paint scaffold_8.H1_1 s11
+scaffold create s12
+scaffold paint scaffold_9.H1_1 s12
+scaffold create s13
+scaffold paint scaffold_10.H1_1 s13
+scaffold create s14
+scaffold paint scaffold_6.H2_1 s14
+scaffold create s15
+scaffold paint scaffold_11.H1_1 s15
+scaffold create s16
+scaffold paint scaffold_7.H2_1 s16
+scaffold create s17
+scaffold paint scaffold_2.H1_1 s17
+scaffold create s18
+scaffold paint scaffold_12.H1_1 s18
+scaffold create s19
+scaffold paint scaffold_8.H2_1 s19
+scaffold create s20
+scaffold paint scaffold_9.H2_1 s20
+scaffold create s21
+scaffold paint scaffold_10.H2_1 s21
+scaffold create s22
+scaffold paint scaffold_13.H1_1 s22
+scaffold create s23
+scaffold paint scaffold_11.H2_1 s23
+scaffold create s24
+scaffold paint scaffold_12.H2_1 s24
+scaffold create s25
+scaffold paint scaffold_14.H1_1 s25
+scaffold create s26
+scaffold paint scaffold_13.H2_1 s26
+scaffold create s27
+scaffold paint scaffold_15.H1_1 s27
+scaffold create s28
+scaffold paint scaffold_14.H2_1 s28
+scaffold create s29
+scaffold paint scaffold_15.H2_1 s29
+scaffold create s30
+scaffold paint scaffold_16.H1_1 s30
+scaffold create s31
+scaffold paint scaffold_17.H1_1 s31
+scaffold create s32
+scaffold paint scaffold_18.H1_1 s32
+scaffold create s33
+scaffold paint scaffold_19.H1_1 s33
+scaffold create s34
+scaffold paint scaffold_20.H1_1 s34
+scaffold create s35
+scaffold paint scaffold_21.H1_1 s35
+scaffold create s36
+scaffold paint scaffold_16.H2_1 s36
+scaffold create s37
+scaffold paint scaffold_17.H2_1 s37
+scaffold create s38
+scaffold paint scaffold_18.H2_1 s38
+scaffold create s39
+scaffold paint scaffold_19.H2_1 s39
+scaffold create s40
+scaffold paint scaffold_3.H2_1 s40
+scaffold create s41
+scaffold paint scaffold_20.H2_1 s41
+scaffold create s42
+scaffold paint scaffold_21.H2_1 s42
+scaffold create s43
+scaffold paint scaffold_22.H1_1 s43
+scaffold create s44
+scaffold paint scaffold_22.H2_1 s44
