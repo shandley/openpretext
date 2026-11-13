@@ -185,8 +185,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   drawn blank, and a tile that failed to decompress was replaced with zeros,
   both without a word to the user. A header with impossible values could hang
   the page. The reader now checks the header, every contig length and the
-  presence and size of every map tile (each must be exactly one complete
-  compressed stream of the right length), and refuses the file with a message
+  presence and size of every map tile (each must be a complete compressed
+  stream that decompresses to the right length), and refuses the file with a message
   that says what is wrong (for example which tile the file ends in). A refused
   file changes nothing: the landing screen stays up, or the assembly already
   loaded and its edits stay as they were. If the map is whole but a track

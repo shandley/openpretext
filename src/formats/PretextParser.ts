@@ -243,17 +243,21 @@ export const MAX_OVERVIEW_SIZE = 4096;
 const INCOMPLETE_HINT = 'It is probably an unfinished download or copy.';
 
 /**
- * Inflate one raw-DEFLATE stream, or null if `data` is not exactly one: the
- * stream must be valid, must reach its end marker, and must use every byte.
- * (pako.inflateRaw alone accepts bytes left over after the end marker.)
+ * Inflate one raw-DEFLATE stream, or null if `data` does not start with a
+ * valid one that reaches its end marker.
+ *
+ * Bytes left over after the end marker are ignored. They cannot be refused
+ * consistently: the browser's DecompressionStream rejects them in some
+ * runtimes and accepts them in others (Node 22 accepts, Node 24 rejects), and
+ * it does not report how much input it used. The inflated data is complete
+ * either way, and callers check its length.
  */
 function tryInflateRaw(data: Uint8Array): Uint8Array | null {
   try {
     const inflator = new pako.Inflate({ raw: true });
     inflator.push(data, true);
     const ended = (inflator as unknown as { ended: boolean }).ended;
-    const unused = (inflator as unknown as { strm: { avail_in: number } }).strm.avail_in;
-    if (inflator.err || !ended || unused !== 0) return null;
+    if (inflator.err || !ended) return null;
     const out = inflator.result;
     return out instanceof Uint8Array ? out : null;
   } catch {

@@ -366,9 +366,9 @@ Refused, with a message naming the problem:
   outside 1 to `textureRes - 1` (the coarsest level must hold one BC4 block).
 - The file ends before or inside any texture block. A file cut short is never
   shown with the missing region blank.
-- A texture block is empty, is not exactly one complete deflate stream (it must
-  reach its end marker and use every byte of `compSize`), or decompresses to a
-  size other than `Bytes_Per_Texture`.
+- A texture block is empty, is not a complete deflate stream (it must reach
+  its end marker), or decompresses to a size other than `Bytes_Per_Texture`.
+  Spare bytes between the end marker and the end of `compSize` are ignored.
 - The coarsest level of the whole map exceeds 4096 texels per side.
 
 Loaded, with a warning shown to the user and the affected track left out:

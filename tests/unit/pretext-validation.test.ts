@@ -235,10 +235,7 @@ describe('a damaged tile', () => {
       () => withTile(9, pako.deflateRaw(new Uint8Array(bytesPerTile + 8))), /tile 10 of 10/],
     ['an empty tile',
       () => withTile(0, new Uint8Array(0)), /tile 1 of 10/],
-    // Right size once inflated, but not exactly one deflate stream.
-    ['a tile with bytes left over after its compressed data',
-      () => withTile(3, concat(GOOD.subarray(tiles[3].dataAt, tiles[3].dataAt + tiles[3].size), new Uint8Array([0x00, 0x41]))),
-      /tile 4 of 10/],
+    // Right size once inflated, but the deflate stream is not finished.
     ['a tile whose compressed data never reaches its end marker',
       () => {
         const whole = pako.inflateRaw(GOOD.subarray(tiles[7].dataAt, tiles[7].dataAt + tiles[7].size));
@@ -258,6 +255,23 @@ describe('a damaged tile', () => {
     vi.stubGlobal('DecompressionStream', undefined);
     await refused(build(), message);
   });
+
+  it.each([['with', false], ['without', true]])(
+    'reads a tile followed by spare bytes the same way %s the browser decompressor',
+    async (_label, noStream) => {
+      // The tile's data is whole; only slack follows it. Runtimes disagree on
+      // whether DecompressionStream tolerates this, so the result must not
+      // depend on which one is in use.
+      if (noStream) vi.stubGlobal('DecompressionStream', undefined);
+      const t = tiles[3];
+      const padded = withTile(3, concat(GOOD.subarray(t.dataAt, t.dataAt + t.size), new Uint8Array([0x00, 0x41])));
+      const file = await parsePretextFile(ab(padded));
+      const good = await parsePretextFile(ab(GOOD));
+      expect(file.tiles).toEqual(good.tiles);
+      expect(file.extensions.map((e) => e.name)).toEqual(['coverage', 'gaps']);
+      expect(file.warnings).toEqual([]);
+    },
+  );
 
   it('a single flipped byte in a tile is either refused or changes nothing silently', async () => {
     // Deflate has no checksum, so a flip can survive decompression. What must
