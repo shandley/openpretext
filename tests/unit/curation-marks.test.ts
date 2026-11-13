@@ -34,8 +34,8 @@ function contig(name: string, i: number): ContigInfo {
 function shown(): Array<[string, string | null, string | null, boolean]> {
   const s = state.get();
   return s.contigOrder.map((id) => {
-    const t = metaTags.getTag(id);
-    return [s.map!.contigs[id].name, t?.tag ?? null, t?.notes ?? null, contigExclusion.isExcluded(id)];
+    const t = metaTags.getInfo(id);
+    return [s.map!.contigs[id].name, t?.tags.join('+') ?? null, t?.notes ?? null, contigExclusion.isExcluded(id)];
   });
 }
 
@@ -61,26 +61,26 @@ beforeEach(() => {
 
 describe('cut', () => {
   it('gives both pieces the tag, notes and exclusion of the contig that was cut', () => {
-    metaTags.setTag(id(1), 'contaminant', 'bacterial');
+    metaTags.addTag(id(1), 'Contaminant', 'bacterial');
     contigExclusion.set(id(1), true);
     CurationEngine.cut(1, 40);
     expect(shown()).toEqual([
       ['a', null, null, false],
-      ['b_L', 'contaminant', 'bacterial', true],
-      ['b_R', 'contaminant', 'bacterial', true],
+      ['b_L', 'Contaminant', 'bacterial', true],
+      ['b_R', 'Contaminant', 'bacterial', true],
       ['c', null, null, false],
       ['d', null, null, false],
     ]);
   });
 
   it('carries a tag without an exclusion, and an exclusion without a tag', () => {
-    metaTags.setTag(id(0), 'haplotig');
+    metaTags.addTag(id(0), 'Haplotig');
     contigExclusion.set(id(2), true);
     CurationEngine.cut(2, 10);
     CurationEngine.cut(0, 10);
     expect(shown()).toEqual([
-      ['a_L', 'haplotig', null, false],
-      ['a_R', 'haplotig', null, false],
+      ['a_L', 'Haplotig', null, false],
+      ['a_R', 'Haplotig', null, false],
       ['b', null, null, false],
       ['c_L', null, null, true],
       ['c_R', null, null, true],
@@ -111,12 +111,12 @@ describe('cut', () => {
   });
 
   it('undo restores the contig with its marks; redo restores the pieces with theirs', () => {
-    metaTags.setTag(id(1), 'haplotig', 'dup of a');
+    metaTags.addTag(id(1), 'Haplotig', 'dup of a');
     contigExclusion.set(id(1), true);
     const before = shown();
     CurationEngine.cut(1, 40);
     // The curator changes one piece.
-    metaTags.setTag(id(2), 'unlocalised');
+    metaTags.addTag(id(2), 'Unloc');
     contigExclusion.set(id(2), false);
     const afterCut = shown();
 
@@ -132,11 +132,11 @@ describe('cut', () => {
     CurationEngine.cut(1, 40);
     CurationEngine.undo();
     contigExclusion.set(id(1), true);
-    metaTags.setTag(id(1), 'contaminant');
+    metaTags.addTag(id(1), 'Contaminant');
     CurationEngine.redo();
     expect(shown().slice(1, 3)).toEqual([
-      ['b_L', 'contaminant', null, true],
-      ['b_R', 'contaminant', null, true],
+      ['b_L', 'Contaminant', null, true],
+      ['b_R', 'Contaminant', null, true],
     ]);
   });
 
@@ -162,28 +162,28 @@ describe('cut', () => {
 describe('join', () => {
   it('keeps a tag and an exclusion that both parts carry', () => {
     for (const i of [1, 2]) {
-      metaTags.setTag(id(i), 'contaminant', 'bacterial');
+      metaTags.addTag(id(i), 'Contaminant', 'bacterial');
       contigExclusion.set(id(i), true);
     }
     CurationEngine.join(1);
-    expect(shown()[1]).toEqual(['b+c', 'contaminant', 'bacterial', true]);
+    expect(shown()[1]).toEqual(['b+c', 'Contaminant', 'bacterial', true]);
     expect(dropped).toEqual([[]]);
   });
 
   it('keeps both notes when the parts have the same tag with different notes', () => {
-    metaTags.setTag(id(0), 'haplotig', 'dup of d');
-    metaTags.setTag(id(1), 'haplotig', 'low coverage');
+    metaTags.addTag(id(0), 'Haplotig', 'dup of d');
+    metaTags.addTag(id(1), 'Haplotig', 'low coverage');
     CurationEngine.join(0);
-    expect(shown()[0]).toEqual(['a+b', 'haplotig', 'dup of d; low coverage', false]);
-    metaTags.setTag(id(1), 'sex_chromosome');
-    metaTags.setTag(id(2), 'sex_chromosome', 'W');
+    expect(shown()[0]).toEqual(['a+b', 'Haplotig', 'dup of d; low coverage', false]);
+    metaTags.addTag(id(1), 'W');
+    metaTags.addTag(id(2), 'W', 'ZW system');
     CurationEngine.join(1);
-    expect(shown()[1]).toEqual(['c+d', 'sex_chromosome', 'W', false]);
+    expect(shown()[1]).toEqual(['c+d', 'W', 'ZW system', false]);
   });
 
   it('refuses to join an excluded contig to one that is not, either way round, and changes nothing', () => {
     contigExclusion.set(id(1), true);
-    metaTags.setTag(id(1), 'contaminant');
+    metaTags.addTag(id(1), 'Contaminant');
     const before = { shown: shown(), contigs: state.get().map!.contigs.length };
     expect(() => CurationEngine.join(1)).toThrow(
       'Cannot join "b" and "c": "b" is excluded from export and "c" is not. Exclude both or include both first.');
@@ -198,24 +198,24 @@ describe('join', () => {
 
     // Once the curator has said which, the join goes ahead.
     contigExclusion.set(id(2), true);
-    expect(CurationEngine.join(1)).toEqual([{ kind: 'tag', contig: 'b', tag: 'contaminant' }]);
+    expect(CurationEngine.join(1)).toEqual([{ kind: 'tag', contig: 'b', tag: 'Contaminant' }]);
     expect(shown()[1]).toEqual(['b+c', null, null, true]);
   });
 
   it('drops a tag only one part carries, and tags of different kinds, and says so', () => {
-    metaTags.setTag(id(0), 'haplotig');
+    metaTags.addTag(id(0), 'Haplotig');
     CurationEngine.join(0);
     expect(shown()[0]).toEqual(['a+b', null, null, false]);
-    expect(dropped[0]).toEqual([{ kind: 'tag', contig: 'a', tag: 'haplotig' }]);
-    expect(describeDroppedTags(dropped[0] as DroppedMark[])).toBe('the haplotig tag on "a"');
+    expect(dropped[0]).toEqual([{ kind: 'tag', contig: 'a', tag: 'Haplotig' }]);
+    expect(describeDroppedTags(dropped[0] as DroppedMark[])).toBe('the Haplotig tag on "a"');
 
-    metaTags.setTag(id(1), 'contaminant');
-    metaTags.setTag(id(2), 'unlocalised');
+    metaTags.addTag(id(1), 'Contaminant');
+    metaTags.addTag(id(2), 'Unloc');
     CurationEngine.join(1);
     expect(shown()[1]).toEqual(['c+d', null, null, false]);
     expect(dropped[1]).toEqual([
-      { kind: 'tag', contig: 'c', tag: 'contaminant' },
-      { kind: 'tag', contig: 'd', tag: 'unlocalised' },
+      { kind: 'tag', contig: 'c', tag: 'Contaminant' },
+      { kind: 'tag', contig: 'd', tag: 'Unloc' },
     ]);
   });
 
@@ -226,7 +226,7 @@ describe('join', () => {
   });
 
   it('undo restores both parts with their own marks; redo restores the joined contig', () => {
-    metaTags.setTag(id(1), 'haplotig');
+    metaTags.addTag(id(1), 'Haplotig');
     contigExclusion.set(id(1), true);
     contigExclusion.set(id(2), true);
     const before = shown();
@@ -245,10 +245,10 @@ describe('join', () => {
     CurationEngine.undo();
     contigExclusion.set(id(1), true);
     contigExclusion.set(id(2), true);
-    metaTags.setTag(id(1), 'haplotig');
+    metaTags.addTag(id(1), 'Haplotig');
     expect(CurationEngine.redo()).toBe(true);
     expect(shown()[1]).toEqual(['b+c', null, null, true]);
-    expect(dropped[dropped.length - 1]).toEqual([{ kind: 'tag', contig: 'b', tag: 'haplotig' }]);
+    expect(dropped[dropped.length - 1]).toEqual([{ kind: 'tag', contig: 'b', tag: 'Haplotig' }]);
   });
 
   it('redo of a join is held back while its parts differ in exclusion', () => {
@@ -288,21 +288,52 @@ describe('join', () => {
   });
 });
 
+describe('several tags on one contig', () => {
+  it('a cut gives both pieces every tag', () => {
+    metaTags.setTags(id(1), ['Unloc', 'Z', 'Hap_2'], 'left arm');
+    CurationEngine.cut(1, 40);
+    expect(shown().slice(1, 3)).toEqual([
+      ['b_L', 'Unloc+Z+Hap_2', 'left arm', false],
+      ['b_R', 'Unloc+Z+Hap_2', 'left arm', false],
+    ]);
+  });
+
+  it('a join keeps the tags both parts carry and reports the rest, part by part', () => {
+    metaTags.setTags(id(0), ['Unloc', 'Z', 'Hap_1']);
+    metaTags.setTags(id(1), ['Z', 'Hap_2']);
+    expect(CurationEngine.join(0)).toEqual([
+      { kind: 'tag', contig: 'a', tag: 'Unloc' },
+      { kind: 'tag', contig: 'a', tag: 'Hap_1' },
+      { kind: 'tag', contig: 'b', tag: 'Hap_2' },
+    ]);
+    expect(shown()[0]).toEqual(['a+b', 'Z', null, false]);
+    CurationEngine.undo();
+    expect(shown().slice(0, 2)).toEqual([['a', 'Unloc+Z+Hap_1', null, false], ['b', 'Z+Hap_2', null, false]]);
+  });
+
+  it('a join with no tag in common keeps no notes either', () => {
+    metaTags.setTags(id(0), ['Haplotig'], 'dup');
+    metaTags.setTags(id(1), ['Unloc'], 'floating');
+    CurationEngine.join(0);
+    expect(shown()[0]).toEqual(['a+b', null, null, false]);
+  });
+});
+
 describe('cut then join', () => {
   it('a marked contig that is cut and rejoined ends with the marks it started with', () => {
-    metaTags.setTag(id(2), 'contaminant', 'phiX');
+    metaTags.addTag(id(2), 'Contaminant', 'phiX');
     contigExclusion.set(id(2), true);
     CurationEngine.cut(2, 30);
     CurationEngine.join(2);
-    expect(shown()[2]).toEqual(['c_L+c_R', 'contaminant', 'phiX', true]);
+    expect(shown()[2]).toEqual(['c_L+c_R', 'Contaminant', 'phiX', true]);
     CurationEngine.undo();
     CurationEngine.undo();
-    expect(shown()[2]).toEqual(['c', 'contaminant', 'phiX', true]);
+    expect(shown()[2]).toEqual(['c', 'Contaminant', 'phiX', true]);
   });
 
   it('undoing and redoing a batch keeps marks where they were', () => {
     contigExclusion.set(id(0), true);
-    metaTags.setTag(id(3), 'haplotig');
+    metaTags.addTag(id(3), 'Haplotig');
     state.setBatchContext('b1');
     CurationEngine.cut(0, 50);
     CurationEngine.cut(4, 50);
@@ -310,7 +341,7 @@ describe('cut then join', () => {
     state.clearBatchContext();
     const after = shown();
     CurationEngine.undoBatch('b1');
-    expect(shown()).toEqual([['a', null, null, true], ['b', null, null, false], ['c', null, null, false], ['d', 'haplotig', null, false]]);
+    expect(shown()).toEqual([['a', null, null, true], ['b', null, null, false], ['c', null, null, false], ['d', 'Haplotig', null, false]]);
     CurationEngine.redoBatch('b1');
     expect(shown()).toEqual(after);
   });
@@ -329,7 +360,7 @@ describe('batch join', () => {
 
   it('joins a run that is excluded throughout, keeps it excluded, and counts tags it did not keep', () => {
     for (const i of [1, 2, 3]) contigExclusion.set(id(i), true);
-    metaTags.setTag(id(3), 'contaminant');
+    metaTags.addTag(id(3), 'Contaminant');
     state.update({ selectedContigs: new Set([1, 2, 3]) });
     const result = batchJoinSelected();
     expect(result.operationsPerformed).toBe(2);

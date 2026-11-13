@@ -11,7 +11,7 @@
 import type { ContigInfo, MapData, PixelSegment } from '../core/State';
 import { getPixelSegments } from '../core/DisplayMapping';
 import type { SessionData } from './SessionManager';
-import type { MetaTagInfo } from '../curation/MetaTagManager';
+import { fromLegacyTag, sortTags, type MetaTagInfo } from '../curation/MetaTagManager';
 
 export interface SessionRestorePlan {
   contigs: ContigInfo[];
@@ -20,6 +20,8 @@ export interface SessionRestorePlan {
   tags: Array<[number, MetaTagInfo]>;
   /** Contig ids excluded from export. */
   excluded: number[];
+  /** Things the session held that could not be carried over, for the user. */
+  warnings: string[];
 }
 
 type SessionLayout = Pick<SessionRestorePlan, 'contigs' | 'contigOrder'>;
@@ -183,15 +185,36 @@ export function planSessionRestore(session: SessionData, map: MapData): SessionR
   // any other contig means the file is not what it claims to be.
   const placed = new Set(layout.contigOrder);
   const tags: Array<[number, MetaTagInfo]> = [];
+  const unnamed: string[] = [];
   for (const [key, info] of Object.entries(session.contigTags ?? {})) {
     const id = Number(key);
     if (!placed.has(id)) throw new Error(`it tags contig ${key}, which it does not place`);
-    tags.push([id, info.notes !== undefined ? { tag: info.tag, notes: info.notes } : { tag: info.tag }]);
+    let list: string[];
+    if ('tags' in info) {
+      list = sortTags(info.tags);
+    } else {
+      // Version 2 stored one lower-case tag. Three of the four have an exact
+      // equivalent; "sex_chromosome" never said which chromosome.
+      const mapped = fromLegacyTag(info.tag);
+      if (mapped === null) {
+        unnamed.push(layout.contigs[id]?.name ?? `#${id}`);
+        continue;
+      }
+      list = [mapped];
+    }
+    tags.push([id, info.notes !== undefined ? { tags: list, notes: info.notes } : { tags: list }]);
+  }
+  const warnings: string[] = [];
+  if (unnamed.length > 0) {
+    warnings.push(
+      `${unnamed.length} sex chromosome tag${unnamed.length === 1 ? '' : 's'} could not be restored, because the ` +
+      `session did not record which chromosome (${unnamed.slice(0, 5).join(', ')}${unnamed.length > 5 ? ', ...' : ''}). ` +
+      'Tag them again as X, Y, Z or W.');
   }
   const excluded: number[] = [];
   for (const id of session.excludedContigs ?? []) {
     if (!placed.has(id)) throw new Error(`it excludes contig ${id}, which it does not place`);
     if (!excluded.includes(id)) excluded.push(id);
   }
-  return { ...layout, tags, excluded };
+  return { ...layout, tags, excluded, warnings };
 }

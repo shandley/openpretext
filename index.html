@@ -2379,21 +2379,20 @@
       background: #e67e22;
       color: #fff;
     }
-    .contig-badge.metatag-haplotig {
-      background: #9b59b6;
+    /* Tag badges: the colour comes from the tag (set inline by Sidebar.ts). */
+    .contig-badge.metatag {
       color: #fff;
     }
-    .contig-badge.metatag-contaminant {
-      background: #e74c3c;
-      color: #fff;
-    }
-    .contig-badge.metatag-unlocalised {
-      background: #3498db;
-      color: #fff;
-    }
-    .contig-badge.metatag-sex_chromosome {
-      background: #2ecc71;
-      color: #fff;
+    #metatag-custom {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+      margin-bottom: 4px;
     }
     .contig-badge.telomere {
       background: #00e676;
@@ -3026,13 +3025,55 @@
           <div id="metatag-controls">
             <select id="metatag-select">
               <option value="">Tag selected as...</option>
-              <option value="haplotig">Haplotig</option>
-              <option value="contaminant">Contaminant</option>
-              <option value="unlocalised">Unlocalised</option>
-              <option value="sex_chromosome">Sex Chromosome</option>
+              <optgroup label="Remove from the assembly">
+                <option value="Haplotig">Haplotig</option>
+                <option value="Contaminant">Contaminant</option>
+                <option value="FalseDuplicate">FalseDuplicate</option>
+              </optgroup>
+              <optgroup label="Placement">
+                <option value="Unloc">Unloc (unlocalised)</option>
+              </optgroup>
+              <optgroup label="Sex chromosome">
+                <option value="X">X</option>
+                <option value="Y">Y</option>
+                <option value="Z">Z</option>
+                <option value="W">W</option>
+                <option value="X1">X1</option>
+                <option value="X2">X2</option>
+                <option value="Y1">Y1</option>
+                <option value="Y2">Y2</option>
+                <option value="Z1">Z1</option>
+                <option value="Z2">Z2</option>
+                <option value="W1">W1</option>
+                <option value="W2">W2</option>
+                <option value="U">U</option>
+                <option value="V">V</option>
+              </optgroup>
+              <optgroup label="B chromosome">
+                <option value="B1">B1</option>
+                <option value="B2">B2</option>
+                <option value="B3">B3</option>
+              </optgroup>
+              <optgroup label="Haplotype (Sanger)">
+                <option value="Hap1">Hap1</option>
+                <option value="Hap2">Hap2</option>
+                <option value="HAP1">HAP1</option>
+                <option value="HAP2">HAP2</option>
+              </optgroup>
+              <optgroup label="Haplotype (VGP)">
+                <option value="Hap_1">Hap_1</option>
+                <option value="Hap_2">Hap_2</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="Target">Target</option>
+                <option value="Primary">Primary</option>
+                <option value="Singleton">Singleton</option>
+              </optgroup>
             </select>
-            <button class="analysis-btn" id="btn-apply-metatag" style="width:100%;margin:2px 0;">Apply Tag</button>
-            <button class="analysis-btn" id="btn-clear-metatag" style="width:100%;margin:2px 0;">Clear Tag</button>
+            <input type="text" id="metatag-custom" placeholder="or type another tag (one word)" spellcheck="false" autocomplete="off" aria-label="Another tag">
+            <button class="analysis-btn" id="btn-apply-metatag" style="width:100%;margin:2px 0;">Add Tag</button>
+            <button class="analysis-btn" id="btn-remove-metatag" style="width:100%;margin:2px 0;">Remove This Tag</button>
+            <button class="analysis-btn" id="btn-clear-metatag" style="width:100%;margin:2px 0;">Clear All Tags</button>
           </div>
           <div id="metatag-summary"></div>
         </div>

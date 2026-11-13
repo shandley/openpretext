@@ -152,15 +152,16 @@ test('a session saved after cuts and joins restores the same assembly', async ({
   const marksSaved = await page.evaluate(() => {
     const { state, CurationEngine, metaTags, contigExclusion } = (window as any).__openpretext;
     const order = state.get().contigOrder as number[];
-    metaTags.setTag(order[1], 'haplotig');
-    metaTags.setTag(order[3], 'contaminant', 'bacterial');
+    metaTags.addTag(order[1], 'Haplotig');
+    metaTags.addTag(order[1], 'Hap_1');
+    metaTags.addTag(order[3], 'Contaminant', 'bacterial');
     contigExclusion.toggle(order[3]);
     contigExclusion.toggle(order[4]);
     CurationEngine.move(1, 4);
     const s = state.get();
     const name = (id: number) => s.map.contigs[id].name;
     return {
-      tags: [...metaTags.getAllTags()].map(([id, t]: [number, any]) => [name(id), t.tag, t.notes ?? null]).sort(),
+      tags: [...metaTags.getAllTags()].map(([id, t]: [number, any]) => [name(id), t.tags.join('+'), t.notes ?? null]).sort(),
       excluded: [...contigExclusion.getExcluded()].map(name).sort(),
     };
   });
@@ -194,15 +195,15 @@ test('a session saved after cuts and joins restores the same assembly', async ({
     const s = state.get();
     const name = (id: number) => s.map.contigs[id].name;
     return {
-      tags: [...metaTags.getAllTags()].map(([id, t]: [number, any]) => [name(id), t.tag, t.notes ?? null]).sort(),
+      tags: [...metaTags.getAllTags()].map(([id, t]: [number, any]) => [name(id), t.tags.join('+'), t.notes ?? null]).sort(),
       excluded: [...contigExclusion.getExcluded()].map(name).sort(),
     };
   });
   expect(marksRestored).toEqual(marksSaved);
   await page.keyboard.press('i');
   await expect(page.locator('#contig-list .contig-badge.excluded')).toHaveCount(2);
-  await expect(page.locator('#contig-list .contig-badge.metatag-haplotig')).toHaveCount(1);
-  await expect(page.locator('#contig-list .contig-badge.metatag-contaminant')).toHaveCount(1);
+  await expect(page.locator('#contig-list .contig-badge[data-tag="Haplotig"]')).toHaveCount(1);
+  await expect(page.locator('#contig-list .contig-badge[data-tag="Contaminant"]')).toHaveCount(1);
 
   // The restored assembly is editable and reversible.
   await page.evaluate(() => {
@@ -275,13 +276,13 @@ test('tags and exclusions follow a contig through a cut, and a join that would c
     const { state, CurationEngine, metaTags, contigExclusion } = (window as any).__openpretext;
     const a2 = state.get().contigOrder[1];
     contigExclusion.toggle(a2);
-    metaTags.setTag(a2, 'contaminant', 'bacterial');
+    metaTags.addTag(a2, 'Contaminant', 'bacterial');
     CurationEngine.cut(1, 120);
   });
   await expect(page.locator('#status-contigs')).toHaveText('6 contigs');
   await page.keyboard.press('i');
   await expect(page.locator('#contig-list .contig-badge.excluded')).toHaveCount(2);
-  await expect(page.locator('#contig-list .contig-badge.metatag-contaminant')).toHaveCount(2);
+  await expect(page.locator('#contig-list .contig-badge[data-tag="Contaminant"]')).toHaveCount(2);
 
   // Joining an excluded piece to its included neighbour is refused in the UI.
   await page.keyboard.press('e');
@@ -301,7 +302,7 @@ test('tags and exclusions follow a contig through a cut, and a join that would c
   await page.locator('#btn-undo').click();
   await expect(page.locator('#status-contigs')).toHaveText('5 contigs');
   await expect(page.locator('#contig-list .contig-badge.excluded')).toHaveCount(1);
-  await expect(page.locator('#contig-list .contig-badge.metatag-contaminant')).toHaveCount(1);
+  await expect(page.locator('#contig-list .contig-badge[data-tag="Contaminant"]')).toHaveCount(1);
 
   expect(errors).toEqual([]);
 });
@@ -315,20 +316,71 @@ test('redoing a join says so when a tag added in between is not kept', async ({ 
     const { state, CurationEngine, metaTags } = (window as any).__openpretext;
     CurationEngine.join(1);                     // a2 + a3
     CurationEngine.undo();
-    metaTags.setTag(state.get().contigOrder[1], 'haplotig');   // tag a2 while the join is undone
+    metaTags.addTag(state.get().contigOrder[1], 'Haplotig');   // tag a2 while the join is undone
   });
   await page.locator('#btn-redo').click();
   await expect(page.locator('.toast').filter({
-    hasText: 'Redo. Not kept on a joined contig, because its two parts differ: the haplotig tag on "a2".',
+    hasText: 'Redo. Not kept on a joined contig, because its two parts differ: the Haplotig tag on "a2".',
   })).toBeVisible({ timeout: 5_000 });
   await expect(page.locator('#status-contigs')).toHaveText('4 contigs');
 
   // Undo brings a2 back with its tag; an ordinary redo says only "Redo".
   await page.locator('#btn-undo').click();
   await page.keyboard.press('i');
-  await expect(page.locator('#contig-list .contig-badge.metatag-haplotig')).toHaveCount(1);
+  await expect(page.locator('#contig-list .contig-badge[data-tag="Haplotig"]')).toHaveCount(1);
   await page.locator('#btn-redo').click();
   await expect(page.locator('.toast').filter({ hasText: /^Redo$/ })).toBeVisible({ timeout: 5_000 });
+
+  expect(errors).toEqual([]);
+});
+
+test('the sidebar adds, removes and checks tags in the vocabulary the downstream tools read', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto('/');
+  await loadPretext(page, FILE_A, 'first.pretext', 5);
+  await page.keyboard.press('i');
+  await page.evaluate(() => {
+    (window as any).__openpretext.state.update({ selectedContigs: new Set([1, 2]) });
+  });
+  const tagsOf = () => page.evaluate(() => {
+    const { state, metaTags } = (window as any).__openpretext;
+    const s = state.get();
+    return s.contigOrder.map((id: number) => metaTags.getTags(id).join('+'));
+  });
+
+  // Two tags on the same contigs: a sex chromosome and a haplotype.
+  await page.locator('#metatag-select').selectOption('Z');
+  await page.locator('#btn-apply-metatag').click();
+  await page.locator('#metatag-select').selectOption('Hap_2');
+  await page.locator('#btn-apply-metatag').click();
+  expect(await tagsOf()).toEqual(['', 'Z+Hap_2', 'Z+Hap_2', '', '']);
+  await expect(page.locator('#contig-list .contig-badge[data-tag="Z"]')).toHaveCount(2);
+  await expect(page.locator('#contig-list .contig-badge[data-tag="Hap_2"]')).toHaveCount(2);
+
+  // A second sex chromosome replaces the first; the haplotype stays.
+  await page.locator('#metatag-select').selectOption('W');
+  await page.locator('#btn-apply-metatag').click();
+  expect(await tagsOf()).toEqual(['', 'W+Hap_2', 'W+Hap_2', '', '']);
+
+  // A tag the tools would misread is caught, not applied.
+  await page.locator('#metatag-custom').fill('haplotig');
+  await page.locator('#btn-apply-metatag').click();
+  await expect(page.locator('.toast').filter({ hasText: 'Did you mean "Haplotig"?' })).toBeVisible({ timeout: 5_000 });
+  await page.locator('#metatag-custom').fill('two words');
+  await page.locator('#btn-apply-metatag').click();
+  await expect(page.locator('.toast').filter({ hasText: 'cannot be used as a tag' })).toBeVisible({ timeout: 5_000 });
+  expect(await tagsOf()).toEqual(['', 'W+Hap_2', 'W+Hap_2', '', '']);
+
+  // A typed tag that is fine is applied; removing one tag leaves the others.
+  await page.locator('#metatag-custom').fill('maternal');
+  await page.locator('#btn-apply-metatag').click();
+  expect(await tagsOf()).toEqual(['', 'W+maternal', 'W+maternal', '', '']);
+  await page.locator('#metatag-custom').fill('W');
+  await page.locator('#btn-remove-metatag').click();
+  expect(await tagsOf()).toEqual(['', 'maternal', 'maternal', '', '']);
+  await page.locator('#btn-clear-metatag').click();
+  expect(await tagsOf()).toEqual(['', '', '', '', '']);
+  await expect(page.locator('#contig-list .contig-badge.metatag')).toHaveCount(0);
 
   expect(errors).toEqual([]);
 });

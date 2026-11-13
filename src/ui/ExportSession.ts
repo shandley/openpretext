@@ -121,7 +121,7 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
       map: { ...s.map, contigs: plan.contigs },
       contigOrder: plan.contigOrder,
     });
-    for (const [id, info] of plan.tags) metaTags.setTag(id, info.tag, info.notes);
+    for (const [id, info] of plan.tags) metaTags.setTags(id, info.tags, info.notes);
     contigExclusion.excludeMany(plan.excluded);
     // Redraw everything that follows the layout (grid, tiles, tracks, lists,
     // counts, metrics) before anything below yields to a frame.
@@ -171,6 +171,7 @@ export async function loadSession(ctx: AppContext, file: File): Promise<void> {
       plan.excluded.length > 0 ? `, ${plan.excluded.length} excluded` : '',
     ].join('');
     ctx.showToast(`Session restored (${plan.contigOrder.length} contigs, ${session.scaffolds.length} scaffolds${marks})`);
+    if (plan.warnings.length > 0) ctx.showToast(plan.warnings.join(' '), 15_000);
   } catch (err) {
     console.error('Session load error:', err);
     ctx.showToast(`Load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);

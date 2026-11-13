@@ -834,7 +834,7 @@ export function tagHaplotigCandidates(ctx: AppContext, confirmedOnly: boolean): 
     return;
   }
   // MetaTagManager is keyed by original contig index (see Sidebar tagging).
-  metaTags.setMany(picked.map((c) => c.originalIndex), 'haplotig');
+  metaTags.addMany(picked.map((c) => c.originalIndex), 'Haplotig');
   ctx.updateSidebarContigList();
   updateResultsDisplay(ctx);
   ctx.showToast(`Tagged ${picked.length} contig${picked.length === 1 ? '' : 's'} as haplotig`);

@@ -15,7 +15,7 @@
 
 import type { AppState, ContigInfo, CurationOperation } from '../core/State';
 import type { ScaffoldManager, Scaffold } from '../curation/ScaffoldManager';
-import { META_TAG_TYPES, type MetaTagInfo } from '../curation/MetaTagManager';
+import { isValidTag, type MetaTagInfo } from '../curation/MetaTagManager';
 
 // ---------------------------------------------------------------------------
 // Session data types
@@ -31,10 +31,10 @@ import { META_TAG_TYPES, type MetaTagInfo } from '../curation/MetaTagManager';
  *    and join) and `assembly` (what the session was saved against). Version 1
  *    files are still read.
  */
-export const SESSION_VERSION = 2;
+export const SESSION_VERSION = 3;
 
 /** Versions `importSession` accepts. */
-export const READABLE_SESSION_VERSIONS: readonly number[] = [1, 2];
+export const READABLE_SESSION_VERSIONS: readonly number[] = [1, 2, 3];
 
 /**
  * What a session was saved against: enough to refuse it on another assembly.
@@ -256,10 +256,11 @@ export interface SessionData {
   /** Version 2: the assembly the session belongs to. */
   assembly?: SessionAssembly;
   /**
-   * Classification tags (haplotig, contaminant, ...) by contig id. Optional:
-   * absent in version 1 and in early version 2 files.
+   * Tags by contig id. Optional: absent in version 1 and early version 2
+   * files. Version 3 stores `{ tags: [...] }` in the PretextView vocabulary;
+   * version 2 stored one lower-case `{ tag }` (see SessionRestore).
    */
-  contigTags?: { [contigId: number]: MetaTagInfo };
+  contigTags?: { [contigId: number]: MetaTagInfo | LegacySessionTag };
   /** Ids of contigs excluded from export. Optional, as above. */
   excludedContigs?: number[];
   scaffolds: SessionScaffold[];
@@ -269,6 +270,15 @@ export interface SessionData {
   operationLog: SessionOperationLogEntry[];
   /** Optional persisted analysis results (added post-v1, backward compatible). */
   analysis?: SessionAnalysisData;
+}
+
+/** The four tags version 2 sessions could hold. */
+const LEGACY_SESSION_TAGS: readonly string[] = ['haplotig', 'contaminant', 'unlocalised', 'sex_chromosome'];
+
+/** A tag as version 2 sessions stored it. */
+export interface LegacySessionTag {
+  tag: string;
+  notes?: string;
 }
 
 /**
@@ -575,7 +585,7 @@ export function exportSession(
   const excludedContigs: number[] = [];
   if (marks) {
     for (const [id, info] of marks.tags) {
-      if (placed.has(id)) contigTags[id] = info.notes !== undefined ? { tag: info.tag, notes: info.notes } : { tag: info.tag };
+      if (placed.has(id)) contigTags[id] = info.notes !== undefined ? { tags: [...info.tags], notes: info.notes } : { tags: [...info.tags] };
     }
     for (const id of marks.excluded) if (placed.has(id)) excludedContigs.push(id);
     excludedContigs.sort((a, b) => a - b);
@@ -725,7 +735,12 @@ export function validateSession(data: unknown): data is SessionData {
     for (const [key, value] of Object.entries(data.contigTags)) {
       if (!isNonNegativeInteger(Number(key))) return false;
       if (!isObject(value)) return false;
-      if (!(META_TAG_TYPES as readonly unknown[]).includes(value.tag)) return false;
+      if (Array.isArray(value.tags)) {
+        if (value.tags.length === 0) return false;
+        for (const t of value.tags) if (typeof t !== 'string' || !isValidTag(t)) return false;
+      } else if (!LEGACY_SESSION_TAGS.includes(value.tag as string)) {
+        return false;
+      }
       if (value.notes !== undefined && typeof value.notes !== 'string') return false;
     }
   }

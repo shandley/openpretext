@@ -130,7 +130,7 @@ const REFUSAL_TOAST_MS = 12_000;
 
 /** "the haplotig tag on "a"", for each tag a join did not keep. */
 export function describeDroppedTags(dropped: DroppedMark[]): string {
-  return dropped.map((d) => `the ${d.tag.replace('_', ' ')} tag on "${d.contig}"`).join(' and ');
+  return dropped.map((d) => `the ${d.tag} tag on "${d.contig}"`).join(' and ');
 }
 
 function joinAt(ctx: AppContext, orderIndex: number): void {

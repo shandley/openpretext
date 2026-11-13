@@ -295,7 +295,7 @@ describe('ExportSession', () => {
       const { contigExclusion } = await import('../../src/curation/ContigExclusion');
       metaTags.clearAll();
       contigExclusion.clearAll();
-      metaTags.setTag(0, 'haplotig');
+      metaTags.addTag(0, 'Haplotig');
       contigExclusion.toggle(0);
       const fakeState = { map: { filename: 'test.pretext' }, contigOrder: [0] };
       (state.get as ReturnType<typeof vi.fn>).mockReturnValue(fakeState);
@@ -308,7 +308,7 @@ describe('ExportSession', () => {
       contigExclusion.clearAll();
 
       expect(exportSession).toHaveBeenCalledWith(fakeState, ctx.scaffoldManager, ctx.waypointManager, {
-        tags: new Map([[0, { tag: 'haplotig' }]]),
+        tags: new Map([[0, { tags: ['Haplotig'] }]]),
         excluded: new Set([0]),
       });
       expect(downloadSession).toHaveBeenCalledWith(sessionData);
@@ -510,15 +510,15 @@ describe('ExportSession', () => {
       const { contigExclusion } = await import('../../src/curation/ContigExclusion');
       metaTags.clearAll();
       contigExclusion.clearAll();
-      metaTags.setTag(1, 'unlocalised');   // from before the restore
+      metaTags.addTag(1, 'Unloc');   // from before the restore
       contigExclusion.toggle(1);
 
       const ctx = await restore({
-        contigTags: { '0': { tag: 'haplotig', notes: 'dup of c2' } },
+        contigTags: { '0': { tags: ['Haplotig', 'Hap_1'], notes: 'dup of c2' } },
         excludedContigs: [0],
       });
 
-      expect([...metaTags.getAllTags()]).toEqual([[0, { tag: 'haplotig', notes: 'dup of c2' }]]);
+      expect([...metaTags.getAllTags()]).toEqual([[0, { tags: ['Haplotig', 'Hap_1'], notes: 'dup of c2' }]]);
       expect([...contigExclusion.getExcluded()]).toEqual([0]);
       expect(ctx.showToast).toHaveBeenCalledWith('Session restored (2 contigs, 1 scaffolds, 1 tagged, 1 excluded)');
       metaTags.clearAll();

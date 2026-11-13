@@ -114,6 +114,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - CHANGELOG.md and CONTRIBUTING.md
 
 ### Changed
+- **Contig tags use PretextView's vocabulary, and a contig can carry several.**
+  The four lower-case tags (haplotig, contaminant, unlocalised, sex chromosome)
+  are replaced by the tags PretextView writes and the Sanger and VGP tools
+  read: `Haplotig`, `Contaminant`, `FalseDuplicate`, `Unloc`, named sex and B
+  chromosomes (`X`, `Y`, `Z`, `W`, `X1`, `B1`, ...), haplotypes (`Hap1`,
+  `HAP1`, `Hap_1`, ...), `Target`, `Primary` and `Singleton`. A contig holds
+  at most one chromosome name, one haplotype and one reason for removal. The
+  sidebar refuses a tag that is not one word and catches near misses such as
+  `haplotig`, because the downstream tools match tags exactly and read an
+  unknown word as a haplotype name. Sessions are now version 3; version 2
+  sessions still load, with their tags converted, except that an old "sex
+  chromosome" tag cannot be converted (it never recorded which chromosome)
+  and is reported.
+- **Contig boundaries match PretextView's.** The texels a contig owns are now
+  derived exactly as PretextView derives them, which moves some boundaries by
+  one texel on real maps and decides the coordinates in an exported AGP.
 - **Each screen pixel shows one stored value when zoomed in.** Magnified views
   read the nearest texel instead of blending neighbours, so bins appear as
   crisp squares and a contig's edge is never mixed with whatever sits next to

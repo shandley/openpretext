@@ -96,7 +96,7 @@ describe('resetForNewAssembly', () => {
     state.update({ selectedContigs: new Set([1, 2]) });
     state.setBatchContext('left-open');
     contigExclusion.toggle(2);
-    metaTags.setTag(1, 'haplotig');
+    metaTags.addTag(1, 'Haplotig');
     ctx.waypointManager.addWaypoint(0.2, 0.2, 'w');
   }
 

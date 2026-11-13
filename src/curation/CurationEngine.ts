@@ -15,7 +15,7 @@ import {
 } from '../core/DisplayMapping';
 import type { PixelSegment } from '../core/State';
 import type { ScaffoldManager } from './ScaffoldManager';
-import { metaTags, type MetaTagInfo, type MetaTagType } from './MetaTagManager';
+import { metaTags, sortTags } from './MetaTagManager';
 import { contigExclusion } from './ContigExclusion';
 
 /**
@@ -272,9 +272,9 @@ export function undoCut(op: CurationOperation): void {
 //     so: the joined contig would put the excluded sequence back, or take the
 //     other part out with it. The join is refused (as is a redo of one) until
 //     both parts are excluded or neither is.
-//   - A joined contig keeps a tag only if both parts carry the same one. Tags
-//     are annotations and do not affect exports; one that is not kept is
-//     returned by join() and reported on the 'curation:join' event.
+//   - A joined contig keeps the tags both parts carry. A tag only one part
+//     carries is not kept: it is returned by join() and reported on the
+//     'curation:join' event.
 //
 // The contigs an operation replaced keep their ids and their marks, so undo
 // brings them back as they were. Redo brings the new contigs back with the
@@ -283,7 +283,9 @@ export function undoCut(op: CurationOperation): void {
 
 /** The tag and exclusion on one contig. */
 interface ContigMarks {
-  tag: MetaTagInfo | null;
+  /** In written order; empty when the contig has none. */
+  tags: string[];
+  notes?: string;
   excluded: boolean;
 }
 
@@ -292,7 +294,7 @@ export interface DroppedMark {
   kind: 'tag';
   /** Name of the part that carried the tag. */
   contig: string;
-  tag: MetaTagType;
+  tag: string;
 }
 
 /** Why contigs `firstId` and `secondId` must not be joined, or null if they may be. */
@@ -329,19 +331,18 @@ export function redoBlockedReason(): string | null {
 }
 
 function marksOf(contigId: number): ContigMarks {
-  const tag = metaTags.getTag(contigId);
-  return { tag: tag ? { ...tag } : null, excluded: contigExclusion.isExcluded(contigId) };
+  const info = metaTags.getInfo(contigId);
+  return { tags: info?.tags ?? [], notes: info?.notes, excluded: contigExclusion.isExcluded(contigId) };
 }
 
 function sameMarks(a: ContigMarks, b: ContigMarks): boolean {
   return a.excluded === b.excluded &&
-    (a.tag?.tag ?? null) === (b.tag?.tag ?? null) &&
-    (a.tag?.notes ?? null) === (b.tag?.notes ?? null);
+    a.tags.join('\t') === b.tags.join('\t') &&
+    (a.notes ?? null) === (b.notes ?? null);
 }
 
 function setMarks(contigId: number, marks: ContigMarks): void {
-  if (marks.tag) metaTags.setTag(contigId, marks.tag.tag, marks.tag.notes);
-  else if (metaTags.hasTag(contigId)) metaTags.removeTag(contigId);
+  if (marks.tags.length > 0 || metaTags.hasTag(contigId)) metaTags.setTags(contigId, marks.tags, marks.notes);
   contigExclusion.set(contigId, marks.excluded);
 }
 
@@ -350,16 +351,14 @@ function joinMarks(
   first: ContigMarks, firstName: string, second: ContigMarks, secondName: string,
 ): { marks: ContigMarks; dropped: DroppedMark[] } {
   const dropped: DroppedMark[] = [];
-  let tag: MetaTagInfo | null = null;
-  if (first.tag && second.tag && first.tag.tag === second.tag.tag) {
-    const notes = [...new Set([first.tag.notes, second.tag.notes].filter((n): n is string => !!n))];
-    tag = notes.length > 0 ? { tag: first.tag.tag, notes: notes.join('; ') } : { tag: first.tag.tag };
-  } else {
-    if (first.tag) dropped.push({ kind: 'tag', contig: firstName, tag: first.tag.tag });
-    if (second.tag) dropped.push({ kind: 'tag', contig: secondName, tag: second.tag.tag });
-  }
+  const tags = sortTags(first.tags.filter((t) => second.tags.includes(t)));
+  for (const t of first.tags) if (!tags.includes(t)) dropped.push({ kind: 'tag', contig: firstName, tag: t });
+  for (const t of second.tags) if (!tags.includes(t)) dropped.push({ kind: 'tag', contig: secondName, tag: t });
+  // Notes go with tags: they are kept, both parts' together, when a tag is.
+  const noteParts = [...new Set([first.notes, second.notes].filter((n): n is string => !!n))];
+  const notes = tags.length > 0 && noteParts.length > 0 ? noteParts.join('; ') : undefined;
   // The two agree on exclusion: a join of parts that differ is refused.
-  return { marks: { tag, excluded: first.excluded && second.excluded }, dropped };
+  return { marks: { tags, notes, excluded: first.excluded && second.excluded }, dropped };
 }
 
 // ---------------------------------------------------------------------------
@@ -430,7 +429,7 @@ export function join(contigOrderIndex: number): DroppedMark[] {
   const mergedId = map.contigs.length;
   state.appendContigs(merged);
 
-  // The joined contig keeps a tag only if both parts carry the same one.
+  // The joined contig keeps the tags both parts carry.
   const firstMarks = marksOf(firstId);
   const secondMarks = marksOf(secondId);
   const { marks: mergedMarks, dropped } = joinMarks(firstMarks, first.name, secondMarks, second.name);

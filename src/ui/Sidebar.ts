@@ -9,16 +9,29 @@ import { getDisplayContactMap } from '../core/DisplayMatrix';
 import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
-import { metaTags, type MetaTagType } from '../curation/MetaTagManager';
+import { metaTags, isValidTag, tagKind, type TagKind } from '../curation/MetaTagManager';
 import { move } from '../curation/CurationEngine';
 import { detectChromosomeBlocks } from '../analysis/ScaffoldDetection';
 import { recomputeScaffoldDecay } from './AnalysisPanel';
 
-const META_TAG_COLORS: Record<MetaTagType, string> = {
-  haplotig: '#9b59b6',
-  contaminant: '#e74c3c',
-  unlocalised: '#3498db',
-  sex_chromosome: '#2ecc71',
+/** Stripe and label colour for a tag: by what it does, with the removals told apart. */
+const TAG_KIND_COLORS: Record<TagKind, string> = {
+  removal: '#e74c3c',
+  unloc: '#3498db',
+  chromosome: '#2ecc71',
+  haplotype: '#16a085',
+  flag: '#95a5a6',
+};
+const TAG_COLORS: Record<string, string> = { Haplotig: '#9b59b6', FalseDuplicate: '#e67e22' };
+
+export function tagColor(tag: string): string {
+  return TAG_COLORS[tag] ?? TAG_KIND_COLORS[tagKind(tag)];
+}
+
+/** Short badge text for the long tag names; the rest are short already. */
+const TAG_BADGE_TEXT: Record<string, string> = {
+  Haplotig: 'HTIG', Contaminant: 'CONT', FalseDuplicate: 'FDUP', Unloc: 'UNLOC',
+  Singleton: 'SNGL', Primary: 'PRIM', Target: 'TARG',
 };
 
 /** Current contig color metric for sidebar stripe. */
@@ -85,9 +98,9 @@ export function updateSidebarContigList(ctx: AppContext): void {
   } else if (contigColorMetric === 'metatag') {
     metricColors = new Map();
     for (let i = 0; i < s.contigOrder.length; i++) {
-      const info = metaTags.getTag(s.contigOrder[i]);
-      if (info) {
-        metricColors.set(i, META_TAG_COLORS[info.tag]);
+      const tags = metaTags.getTags(s.contigOrder[i]);
+      if (tags.length > 0) {
+        metricColors.set(i, tagColor(tags[0]));
       }
     }
   }
@@ -101,10 +114,12 @@ export function updateSidebarContigList(ctx: AppContext): void {
     const invertedBadge = contig.inverted ? '<span class="contig-badge inverted">INV</span>' : '';
     const excludedBadge = contigExclusion.isExcluded(contigId) ? '<span class="contig-badge excluded">EXC</span>' : '';
     const misassemblyBadge = misassemblyFlags.isFlagged(orderIdx) ? '<span class="contig-badge misassembly">MIS</span>' : '';
-    const tagInfo = metaTags.getTag(contigId);
-    const metatagBadge = tagInfo
-      ? `<span class="contig-badge metatag-${tagInfo.tag}">${tagInfo.tag === 'sex_chromosome' ? 'SEX' : tagInfo.tag.substring(0, 3).toUpperCase()}</span>`
-      : '';
+    // One badge per tag. The full tag is in `data-tag` and the tooltip.
+    const metatagBadge = metaTags.getTags(contigId).map((tag) => {
+      const t = escapeHtml(tag);
+      return `<span class="contig-badge metatag metatag-${tagKind(tag)}" data-tag="${t}" title="Tag: ${t}" ` +
+        `style="background:${tagColor(tag)}">${escapeHtml(TAG_BADGE_TEXT[tag] ?? tag)}</span>`;
+    }).join('');
     const scaffoldBadge = contig.scaffoldId !== null
       ? `<span class="contig-badge scaffold">S${contig.scaffoldId}</span>`
       : '';
@@ -365,16 +380,28 @@ export function setupContigSearch(ctx: AppContext): void {
   // Wire meta tag controls
   document.getElementById('btn-apply-metatag')?.addEventListener('click', () => {
     const s = state.get();
-    const sel = document.getElementById('metatag-select') as HTMLSelectElement | null;
-    if (!sel) return;
-    const tag = sel.value as MetaTagType;
+    const tag = chosenTag(ctx);
+    if (tag === null) return;
     if (s.selectedContigs.size === 0) {
       ctx.showToast('Select contigs first');
       return;
     }
     // Meta tags are keyed by contig identity; map selected order positions to IDs.
-    metaTags.setMany([...s.selectedContigs].map((oi) => s.contigOrder[oi]), tag);
+    metaTags.addMany([...s.selectedContigs].map((oi) => s.contigOrder[oi]), tag);
     ctx.showToast(`Tagged ${s.selectedContigs.size} contig(s) as ${tag}`);
+    updateMetaTagSummary();
+  });
+
+  document.getElementById('btn-remove-metatag')?.addEventListener('click', () => {
+    const s = state.get();
+    const tag = chosenTag(ctx);
+    if (tag === null) return;
+    if (s.selectedContigs.size === 0) {
+      ctx.showToast('Select contigs first');
+      return;
+    }
+    metaTags.removeMany([...s.selectedContigs].map((oi) => s.contigOrder[oi]), tag);
+    ctx.showToast(`Removed the ${tag} tag from ${s.selectedContigs.size} contig(s)`);
     updateMetaTagSummary();
   });
 
@@ -390,6 +417,40 @@ export function setupContigSearch(ctx: AppContext): void {
   });
 }
 
+/**
+ * The tag named in the sidebar controls: the typed one if there is one, else
+ * the one picked from the list. Null, with a message, if neither is usable.
+ */
+function chosenTag(ctx: AppContext): string | null {
+  const typed = (document.getElementById('metatag-custom') as HTMLInputElement | null)?.value.trim() ?? '';
+  const picked = (document.getElementById('metatag-select') as HTMLSelectElement | null)?.value ?? '';
+  const tag = typed || picked;
+  if (tag === '') {
+    ctx.showToast('Choose a tag first');
+    return null;
+  }
+  if (!isValidTag(tag)) {
+    ctx.showToast(`"${tag}" cannot be used as a tag. A tag is one word of letters, digits and underscores.`, 8000);
+    return null;
+  }
+  // The tools that read the AGP match tags exactly, with case, and read a word
+  // they do not know as a haplotype name. Catch the near misses.
+  const near = NEAR_MISSES[tag.toLowerCase()];
+  if (near && near !== tag) {
+    ctx.showToast(`Did you mean "${near}"? Tags are case-sensitive, and "${tag}" would be read downstream as a haplotype name.`, 10_000);
+    return null;
+  }
+  return tag;
+}
+
+/** Lower-cased spellings people reach for, and the tag the tools know. */
+const NEAR_MISSES: Record<string, string> = {
+  haplotig: 'Haplotig', haplotigs: 'Haplotig', contaminant: 'Contaminant', contamination: 'Contaminant',
+  unloc: 'Unloc', unlocalised: 'Unloc', unlocalized: 'Unloc', falseduplicate: 'FalseDuplicate',
+  false_duplicate: 'FalseDuplicate', duplicate: 'FalseDuplicate', target: 'Target', primary: 'Primary',
+  singleton: 'Singleton', painted: 'Painted', x: 'X', y: 'Y', z: 'Z', w: 'W',
+};
+
 export function updateMetaTagSummary(): void {
   const el = document.getElementById('metatag-summary');
   if (!el) return;
@@ -400,16 +461,8 @@ export function updateMetaTagSummary(): void {
     return;
   }
   let html = '';
-  const labels: Record<MetaTagType, string> = {
-    haplotig: 'Haplotigs',
-    contaminant: 'Contaminants',
-    unlocalised: 'Unlocalised',
-    sex_chromosome: 'Sex chr.',
-  };
-  for (const [tag, count] of Object.entries(counts)) {
-    if (count > 0) {
-      html += `<div class="metatag-count-row"><span style="color:${META_TAG_COLORS[tag as MetaTagType]}">${labels[tag as MetaTagType]}</span><span>${count}</span></div>`;
-    }
+  for (const [tag, count] of counts) {
+    html += `<div class="metatag-count-row"><span style="color:${tagColor(tag)}">${escapeHtml(tag)}</span><span>${count}</span></div>`;
   }
   el.innerHTML = html;
 }

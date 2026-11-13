@@ -279,19 +279,19 @@ describe('tags and exclusions', () => {
   it('come back on the contigs they were put on, wherever those now sit', () => {
     const order = state.get().contigOrder;
     const session = save(marks(
-      [[6, { tag: 'haplotig' }], [order[0], { tag: 'contaminant', notes: 'bacterial, see blast' }]],
+      [[6, { tags: ['Haplotig', 'Hap_1'] }], [order[0], { tags: ['Contaminant'], notes: 'bacterial, see blast' }]],
       [7, 3],
     ));
     expect(session.contigTags).toEqual({
-      6: { tag: 'haplotig' },
-      [order[0]]: { tag: 'contaminant', notes: 'bacterial, see blast' },
+      6: { tags: ['Haplotig', 'Hap_1'] },
+      [order[0]]: { tags: ['Contaminant'], notes: 'bacterial, see blast' },
     });
     expect(session.excludedContigs).toEqual([3, 7]);
 
     const plan = planSessionRestore(session, freshMap(WIDTHS));
     expect(new Map(plan.tags)).toEqual(new Map<number, MetaTagInfo>([
-      [6, { tag: 'haplotig' }],
-      [order[0], { tag: 'contaminant', notes: 'bacterial, see blast' }],
+      [6, { tags: ['Haplotig', 'Hap_1'] }],
+      [order[0], { tags: ['Contaminant'], notes: 'bacterial, see blast' }],
     ]));
     expect(plan.excluded.sort()).toEqual([3, 7]);
     // The tagged ids are the same contigs after restore.
@@ -300,8 +300,8 @@ describe('tags and exclusions', () => {
 
   it('does not save a mark left on a contig that a cut has replaced', () => {
     // Contig 1 was cut and is no longer placed.
-    const session = save(marks([[1, { tag: 'haplotig' }], [2, { tag: 'unlocalised' }]], [1, 2]));
-    expect(session.contigTags).toEqual({ 2: { tag: 'unlocalised' } });
+    const session = save(marks([[1, { tags: ['Haplotig'] }], [2, { tags: ['Unloc'] }]], [1, 2]));
+    expect(session.contigTags).toEqual({ 2: { tags: ['Unloc'] } });
     expect(session.excludedContigs).toEqual([2]);
   });
 
@@ -324,18 +324,53 @@ describe('tags and exclusions', () => {
 
   it('refuses a tag or exclusion on a contig the session does not place', () => {
     const session = save(marks([], []));
-    expect(() => planSessionRestore({ ...session, contigTags: { 1: { tag: 'haplotig' } } }, freshMap(WIDTHS)))
+    expect(() => planSessionRestore({ ...session, contigTags: { 1: { tags: ['Haplotig'] } } }, freshMap(WIDTHS)))
       .toThrow(/tags contig 1, which it does not place/);
     expect(() => planSessionRestore({ ...session, excludedContigs: [99] }, freshMap(WIDTHS)))
       .toThrow(/excludes contig 99/);
   });
 
+  it('reads the single lower-case tags of a version 2 session, and says which it could not carry over', () => {
+    const order = state.get().contigOrder;
+    const session = save(marks([], []));
+    const v2 = {
+      ...session,
+      version: 2,
+      contigTags: {
+        [order[0]]: { tag: 'haplotig', notes: 'dup' },
+        [order[1]]: { tag: 'contaminant' },
+        [order[2]]: { tag: 'unlocalised' },
+        [order[3]]: { tag: 'sex_chromosome' },
+      },
+    };
+    expect(validateSession(v2)).toBe(true);
+    const plan = planSessionRestore(v2 as never, freshMap(WIDTHS));
+    expect(plan.tags).toEqual([
+      [order[0], { tags: ['Haplotig'], notes: 'dup' }],
+      [order[1], { tags: ['Contaminant'] }],
+      [order[2], { tags: ['Unloc'] }],
+    ].sort((a, b) => (a[0] as number) - (b[0] as number)));
+    expect(plan.warnings).toHaveLength(1);
+    expect(plan.warnings[0]).toMatch(/1 sex chromosome tag could not be restored/);
+    expect(plan.warnings[0]).toContain(plan.contigs[order[3]].name);
+  });
+
+  it('has nothing to warn about for a current session', () => {
+    const session = save(marks([[6, { tags: ['Z', 'Hap_2'] }]], []));
+    expect(session.version).toBe(3);
+    expect(planSessionRestore(session, freshMap(WIDTHS)).warnings).toEqual([]);
+  });
+
   it('rejects malformed marks at import', () => {
-    const session = save(marks([[6, { tag: 'haplotig' }]], [7]));
+    const session = save(marks([[6, { tags: ['Haplotig'] }]], [7]));
     const bad = (patch: object) => validateSession({ ...session, ...patch });
     expect(bad({ contigTags: { 6: { tag: 'virus' } } })).toBe(false);
-    expect(bad({ contigTags: { 6: { tag: 'haplotig', notes: 5 } } })).toBe(false);
-    expect(bad({ contigTags: { x: { tag: 'haplotig' } } })).toBe(false);
+    expect(bad({ contigTags: { 6: { tags: [] } } })).toBe(false);
+    expect(bad({ contigTags: { 6: { tags: ['two words'] } } })).toBe(false);
+    expect(bad({ contigTags: { 6: { tags: ['Painted'] } } })).toBe(false);
+    expect(bad({ contigTags: { 6: { tags: 'Haplotig' } } })).toBe(false);
+    expect(bad({ contigTags: { 6: { tags: ['Haplotig'], notes: 5 } } })).toBe(false);
+    expect(bad({ contigTags: { x: { tags: ['Haplotig'] } } })).toBe(false);
     expect(bad({ contigTags: [] })).toBe(false);
     expect(bad({ excludedContigs: [1.5] })).toBe(false);
     expect(bad({ excludedContigs: 'all' })).toBe(false);

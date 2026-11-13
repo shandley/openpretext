@@ -418,7 +418,7 @@ describe('validateSession', () => {
   });
 
   it('should reject wrong version number', () => {
-    const data = makeValidSessionData({ version: 3 });
+    const data = makeValidSessionData({ version: 4 });
     expect(validateSession(data)).toBe(false);
   });
 

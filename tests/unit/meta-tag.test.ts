@@ -1,513 +1,211 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+/**
+ * Contig tags: the PretextView vocabulary, several per contig.
+ *
+ * The downstream tools compare tags exactly and read an unknown word as a
+ * haplotype name, so spelling, kind and written order are all pinned here.
+ */
 
-vi.mock('../../src/core/EventBus', () => ({
-  events: {
-    on: vi.fn(),
-    emit: vi.fn(),
-    off: vi.fn(),
-  },
-}));
-
-import { metaTags } from '../../src/curation/MetaTagManager';
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  metaTags, isValidTag, tagKind, sortTags, fromLegacyTag,
+  PRETEXTVIEW_TAGS, REMOVAL_TAGS,
+} from '../../src/curation/MetaTagManager';
 import { events } from '../../src/core/EventBus';
 
-// ---------------------------------------------------------------------------
-// MetaTagManager tests
-// ---------------------------------------------------------------------------
+describe('tag vocabulary', () => {
+  it('lists PretextView\'s default tags in PretextView\'s order, without its paint tags', () => {
+    expect(PRETEXTVIEW_TAGS.slice(0, 11)).toEqual([
+      'Haplotig', 'Unloc', 'X', 'Y', 'Z', 'W', 'HAP1', 'HAP2', 'Target', 'Contaminant', 'Singleton',
+    ]);
+    expect(PRETEXTVIEW_TAGS).toContain('FalseDuplicate');
+    expect(PRETEXTVIEW_TAGS).toContain('Primary');
+    expect(PRETEXTVIEW_TAGS).toHaveLength(30);
+    for (const paint of ['vertPaint', 'horzPaint', 'crossPaint']) expect(PRETEXTVIEW_TAGS).not.toContain(paint);
+    expect(new Set(PRETEXTVIEW_TAGS).size).toBe(PRETEXTVIEW_TAGS.length);
+  });
+
+  it('classifies tags as pretext-to-asm does', () => {
+    for (const t of ['Haplotig', 'Contaminant', 'FalseDuplicate']) expect(tagKind(t)).toBe('removal');
+    expect([...REMOVAL_TAGS].sort()).toEqual(['Contaminant', 'FalseDuplicate', 'Haplotig']);
+    expect(tagKind('Unloc')).toBe('unloc');
+    for (const t of ['Target', 'Primary', 'Singleton', 'Cut']) expect(tagKind(t)).toBe('flag');
+    // Its pattern: [A-Z]\d*[A-Z]? | [IVX_]+ | \d+[A-Z]+
+    for (const t of ['X', 'Y', 'Z', 'W', 'U', 'V', 'X1', 'W2', 'B1', 'B3', 'I', 'II', 'IV', 'I_II', '2RL']) {
+      expect(tagKind(t), t).toBe('chromosome');
+    }
+    for (const t of ['Hap1', 'Hap2', 'HAP1', 'HAP2', 'Hap_1', 'Hap_2', 'maternal']) {
+      expect(tagKind(t), t).toBe('haplotype');
+    }
+  });
+
+  it('reads a misspelled tag as a haplotype, which is why spelling is checked on entry', () => {
+    for (const t of ['haplotig', 'contaminant', 'unloc', 'Unlocalised', 'sex_chromosome']) {
+      expect(tagKind(t), t).toBe('haplotype');
+    }
+  });
+
+  it('accepts one word of letters, digits and underscores, and never Painted', () => {
+    for (const t of ['Haplotig', 'X1', 'Hap_1', 'I_II', '2RL']) expect(isValidTag(t)).toBe(true);
+    for (const t of ['', 'two words', 'tab\there', 'semi;colon', 'new\nline', 'dash-ed', 'Painted', '<b>']) {
+      expect(isValidTag(t), JSON.stringify(t)).toBe(false);
+    }
+  });
+
+  it('writes tags in PretextView\'s order, then the rest by name', () => {
+    expect(sortTags(['Hap_2', 'Z', 'Unloc'])).toEqual(['Unloc', 'Z', 'Hap_2']);
+    expect(sortTags(['Hap_1', 'Contaminant', 'Haplotig', 'Hap1'])).toEqual(['Haplotig', 'Contaminant', 'Hap1', 'Hap_1']);
+    expect(sortTags(['X', 'X', 'Unloc'])).toEqual(['Unloc', 'X']);
+  });
+
+  it('maps the old lower-case tags, except the one that never named its chromosome', () => {
+    expect(fromLegacyTag('haplotig')).toBe('Haplotig');
+    expect(fromLegacyTag('contaminant')).toBe('Contaminant');
+    expect(fromLegacyTag('unlocalised')).toBe('Unloc');
+    expect(fromLegacyTag('sex_chromosome')).toBeNull();
+    expect(fromLegacyTag('Haplotig')).toBeNull();
+  });
+});
 
 describe('MetaTagManager', () => {
+  let updates: number[] = [];
+  const onUpdate = (d: { count: number }) => { updates.push(d.count); };
+
   beforeEach(() => {
     metaTags.clearAll();
-    vi.clearAllMocks();
+    events.off('metatag:updated', onUpdate);
+    events.on('metatag:updated', onUpdate);
+    updates = [];
   });
 
-  // -----------------------------------------------------------------------
-  // setTag
-  // -----------------------------------------------------------------------
-  describe('setTag', () => {
-    it('should set a tag on a contig', () => {
-      metaTags.setTag(0, 'haplotig');
-      expect(metaTags.getTag(0)).toEqual({ tag: 'haplotig' });
-    });
-
-    it('should set a tag with notes', () => {
-      metaTags.setTag(1, 'contaminant', 'bacterial contamination');
-      expect(metaTags.getTag(1)).toEqual({
-        tag: 'contaminant',
-        notes: 'bacterial contamination',
-      });
-    });
-
-    it('should not include notes key when notes is undefined', () => {
-      metaTags.setTag(0, 'haplotig');
-      const info = metaTags.getTag(0);
-      expect(info).toEqual({ tag: 'haplotig' });
-      expect(info).not.toHaveProperty('notes');
-    });
-
-    it('should replace an existing tag on the same contig', () => {
-      metaTags.setTag(0, 'haplotig', 'first');
-      metaTags.setTag(0, 'contaminant', 'replaced');
-      expect(metaTags.getTag(0)).toEqual({ tag: 'contaminant', notes: 'replaced' });
-      expect(metaTags.getTagCount()).toBe(1);
-    });
-
-    it('should replace an existing tag and remove notes when none given', () => {
-      metaTags.setTag(0, 'haplotig', 'has notes');
-      metaTags.setTag(0, 'unlocalised');
-      const info = metaTags.getTag(0);
-      expect(info).toEqual({ tag: 'unlocalised' });
-      expect(info).not.toHaveProperty('notes');
-    });
-
-    it('should emit metatag:updated with correct count', () => {
-      metaTags.setTag(0, 'haplotig');
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 1 });
-    });
-
-    it('should emit metatag:updated with correct count for multiple tags', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'contaminant');
-      expect(events.emit).toHaveBeenLastCalledWith('metatag:updated', { count: 2 });
-    });
-
-    it('should support all four tag types', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'contaminant');
-      metaTags.setTag(2, 'unlocalised');
-      metaTags.setTag(3, 'sex_chromosome');
-      expect(metaTags.getTag(0)!.tag).toBe('haplotig');
-      expect(metaTags.getTag(1)!.tag).toBe('contaminant');
-      expect(metaTags.getTag(2)!.tag).toBe('unlocalised');
-      expect(metaTags.getTag(3)!.tag).toBe('sex_chromosome');
-    });
+  it('holds several tags on one contig, in written order', () => {
+    metaTags.addTag(7, 'Hap_2');
+    metaTags.addTag(7, 'Z');
+    metaTags.addTag(7, 'Unloc');
+    expect(metaTags.getTags(7)).toEqual(['Unloc', 'Z', 'Hap_2']);
+    expect(metaTags.hasTag(7)).toBe(true);
+    expect(metaTags.hasTag(7, 'Z')).toBe(true);
+    expect(metaTags.hasTag(7, 'W')).toBe(false);
+    expect(metaTags.hasTag(8)).toBe(false);
+    expect(metaTags.getTags(8)).toEqual([]);
+    expect(metaTags.getInfo(8)).toBeNull();
+    expect(metaTags.getTagCount()).toBe(1);
   });
 
-  // -----------------------------------------------------------------------
-  // removeTag
-  // -----------------------------------------------------------------------
-  describe('removeTag', () => {
-    it('should remove an existing tag', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.removeTag(0);
-      expect(metaTags.getTag(0)).toBeNull();
-      expect(metaTags.getTagCount()).toBe(0);
-    });
+  it('keeps one chromosome name, one haplotype and one reason for removal per contig', () => {
+    metaTags.addTag(1, 'X');
+    metaTags.addTag(1, 'Y');
+    expect(metaTags.getTags(1)).toEqual(['Y']);
 
-    it('should be safe to remove a non-existent tag', () => {
-      metaTags.removeTag(99);
-      expect(metaTags.getTagCount()).toBe(0);
-    });
+    metaTags.addTag(1, 'Hap1');
+    metaTags.addTag(1, 'Hap2');
+    expect(metaTags.getTags(1)).toEqual(['Y', 'Hap2']);
 
-    it('should only remove the specified contig', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'contaminant');
-      metaTags.removeTag(0);
-      expect(metaTags.hasTag(0)).toBe(false);
-      expect(metaTags.hasTag(1)).toBe(true);
-    });
+    metaTags.addTag(2, 'Haplotig');
+    metaTags.addTag(2, 'Contaminant');
+    expect(metaTags.getTags(2)).toEqual(['Contaminant']);
 
-    it('should emit metatag:updated with correct count', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'contaminant');
-      vi.clearAllMocks();
-      metaTags.removeTag(0);
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 1 });
-    });
-
-    it('should emit metatag:updated even when removing non-existent tag', () => {
-      metaTags.removeTag(99);
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 0 });
-    });
+    // Kinds that do not exclude one another accumulate.
+    metaTags.addTag(2, 'Unloc');
+    metaTags.addTag(2, 'Target');
+    expect(metaTags.getTags(2)).toEqual(['Unloc', 'Target', 'Contaminant']);
   });
 
-  // -----------------------------------------------------------------------
-  // getTag
-  // -----------------------------------------------------------------------
-  describe('getTag', () => {
-    it('should return tag info for a tagged contig', () => {
-      metaTags.setTag(5, 'sex_chromosome', 'X chromosome');
-      expect(metaTags.getTag(5)).toEqual({ tag: 'sex_chromosome', notes: 'X chromosome' });
-    });
-
-    it('should return null for an untagged contig', () => {
-      expect(metaTags.getTag(0)).toBeNull();
-    });
-
-    it('should return null after a tag is removed', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.removeTag(0);
-      expect(metaTags.getTag(0)).toBeNull();
-    });
-
-    it('should return null for an index that never existed', () => {
-      expect(metaTags.getTag(999)).toBeNull();
-    });
+  it('adding a tag twice changes nothing', () => {
+    metaTags.addTag(3, 'Unloc');
+    metaTags.addTag(3, 'Unloc');
+    expect(metaTags.getTags(3)).toEqual(['Unloc']);
   });
 
-  // -----------------------------------------------------------------------
-  // hasTag
-  // -----------------------------------------------------------------------
-  describe('hasTag', () => {
-    it('should return true for a tagged contig', () => {
-      metaTags.setTag(0, 'haplotig');
-      expect(metaTags.hasTag(0)).toBe(true);
-    });
-
-    it('should return false for an untagged contig', () => {
-      expect(metaTags.hasTag(0)).toBe(false);
-    });
-
-    it('should return false after removal', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.removeTag(0);
-      expect(metaTags.hasTag(0)).toBe(false);
-    });
-
-    it('should return false for an index that never existed', () => {
-      expect(metaTags.hasTag(999)).toBe(false);
-    });
+  it('refuses a tag that could not be written to an AGP, and leaves the contig as it was', () => {
+    metaTags.addTag(4, 'Unloc');
+    expect(() => metaTags.addTag(4, 'not a tag')).toThrow(/one word/);
+    expect(() => metaTags.addTag(4, 'Painted')).toThrow(/cannot be used as a tag/);
+    expect(() => metaTags.setTags(4, ['X', 'a\tb'])).toThrow();
+    expect(metaTags.getTags(4)).toEqual(['Unloc']);
   });
 
-  // -----------------------------------------------------------------------
-  // getByTag
-  // -----------------------------------------------------------------------
-  describe('getByTag', () => {
-    it('should return indices with the specified tag type', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(2, 'haplotig');
-      metaTags.setTag(5, 'haplotig');
-      metaTags.setTag(1, 'contaminant');
-      const haplotigs = metaTags.getByTag('haplotig');
-      expect(haplotigs).toEqual(expect.arrayContaining([0, 2, 5]));
-      expect(haplotigs).toHaveLength(3);
-    });
-
-    it('should return empty array when no contigs have the tag', () => {
-      metaTags.setTag(0, 'haplotig');
-      expect(metaTags.getByTag('contaminant')).toEqual([]);
-    });
-
-    it('should return empty array when no tags exist', () => {
-      expect(metaTags.getByTag('haplotig')).toEqual([]);
-    });
-
-    it('should not include contigs with a different tag type', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'contaminant');
-      metaTags.setTag(2, 'unlocalised');
-      metaTags.setTag(3, 'sex_chromosome');
-      expect(metaTags.getByTag('contaminant')).toEqual([1]);
-    });
-
-    it('should reflect updates after tag changes', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'haplotig');
-      metaTags.setTag(0, 'contaminant'); // change tag type
-      expect(metaTags.getByTag('haplotig')).toEqual([1]);
-      expect(metaTags.getByTag('contaminant')).toEqual([0]);
-    });
+  it('keeps notes with the tags and drops them with the last tag', () => {
+    metaTags.addTag(5, 'Contaminant', 'bacterial');
+    expect(metaTags.getInfo(5)).toEqual({ tags: ['Contaminant'], notes: 'bacterial' });
+    metaTags.addTag(5, 'Unloc');
+    expect(metaTags.getInfo(5)).toEqual({ tags: ['Unloc', 'Contaminant'], notes: 'bacterial' });
+    metaTags.removeTag(5, 'Unloc');
+    expect(metaTags.getInfo(5)).toEqual({ tags: ['Contaminant'], notes: 'bacterial' });
+    metaTags.removeTag(5, 'Contaminant');
+    expect(metaTags.getInfo(5)).toBeNull();
+    metaTags.addTag(5, 'X');
+    expect(metaTags.getInfo(5)).toEqual({ tags: ['X'] });
+    expect('notes' in metaTags.getInfo(5)!).toBe(false);
   });
 
-  // -----------------------------------------------------------------------
-  // getAllTags
-  // -----------------------------------------------------------------------
-  describe('getAllTags', () => {
-    it('should return an empty map when no tags exist', () => {
-      const all = metaTags.getAllTags();
-      expect(all.size).toBe(0);
-    });
-
-    it('should return all tags', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'contaminant', 'notes');
-      const all = metaTags.getAllTags();
-      expect(all.size).toBe(2);
-      expect(all.get(0)).toEqual({ tag: 'haplotig' });
-      expect(all.get(1)).toEqual({ tag: 'contaminant', notes: 'notes' });
-    });
-
-    it('should return a copy that does not affect internal state', () => {
-      metaTags.setTag(0, 'haplotig');
-      const all = metaTags.getAllTags();
-      all.set(99, { tag: 'contaminant' });
-      all.delete(0);
-      // Internal state should not be affected
-      expect(metaTags.hasTag(0)).toBe(true);
-      expect(metaTags.hasTag(99)).toBe(false);
-      expect(metaTags.getTagCount()).toBe(1);
-    });
+  it('setTags replaces everything, and an empty list clears the contig', () => {
+    metaTags.addTag(6, 'X');
+    metaTags.setTags(6, ['Hap_1', 'Unloc'], 'n');
+    expect(metaTags.getInfo(6)).toEqual({ tags: ['Unloc', 'Hap_1'], notes: 'n' });
+    metaTags.setTags(6, []);
+    expect(metaTags.hasTag(6)).toBe(false);
+    expect(metaTags.getTagCount()).toBe(0);
   });
 
-  // -----------------------------------------------------------------------
-  // getTagCount
-  // -----------------------------------------------------------------------
-  describe('getTagCount', () => {
-    it('should return 0 when no tags exist', () => {
-      expect(metaTags.getTagCount()).toBe(0);
-    });
-
-    it('should return the correct count', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'contaminant');
-      metaTags.setTag(2, 'unlocalised');
-      expect(metaTags.getTagCount()).toBe(3);
-    });
-
-    it('should decrease when tags are removed', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'contaminant');
-      metaTags.removeTag(0);
-      expect(metaTags.getTagCount()).toBe(1);
-    });
-
-    it('should not double-count when replacing a tag', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(0, 'contaminant');
-      expect(metaTags.getTagCount()).toBe(1);
-    });
+  it('removes one tag or all of them', () => {
+    metaTags.setTags(1, ['Unloc', 'Z']);
+    metaTags.removeTag(1, 'W');
+    expect(metaTags.getTags(1)).toEqual(['Unloc', 'Z']);
+    metaTags.removeTag(1, 'Z');
+    expect(metaTags.getTags(1)).toEqual(['Unloc']);
+    metaTags.setTags(1, ['Unloc', 'Z']);
+    metaTags.removeTag(1);
+    expect(metaTags.getTags(1)).toEqual([]);
+    metaTags.removeTag(99);
+    metaTags.removeTag(99, 'X');
   });
 
-  // -----------------------------------------------------------------------
-  // getTagCounts
-  // -----------------------------------------------------------------------
-  describe('getTagCounts', () => {
-    it('should return all zeros when no tags exist', () => {
-      expect(metaTags.getTagCounts()).toEqual({
-        haplotig: 0,
-        contaminant: 0,
-        unlocalised: 0,
-        sex_chromosome: 0,
-      });
-    });
+  it('tags and untags several contigs at once, with one event each', () => {
+    metaTags.addTag(2, 'Z');
+    updates = [];
+    metaTags.addMany([1, 2, 3], 'Haplotig');
+    expect(updates).toEqual([3]);
+    expect(metaTags.getTags(2)).toEqual(['Haplotig', 'Z']);
+    expect(metaTags.getByTag('Haplotig').sort()).toEqual([1, 2, 3]);
+    expect(metaTags.getByTag('Z')).toEqual([2]);
 
-    it('should count each tag type correctly', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'haplotig');
-      metaTags.setTag(2, 'contaminant');
-      metaTags.setTag(3, 'sex_chromosome');
-      metaTags.setTag(4, 'sex_chromosome');
-      metaTags.setTag(5, 'sex_chromosome');
-      expect(metaTags.getTagCounts()).toEqual({
-        haplotig: 2,
-        contaminant: 1,
-        unlocalised: 0,
-        sex_chromosome: 3,
-      });
-    });
-
-    it('should update after removals', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'haplotig');
-      metaTags.removeTag(0);
-      expect(metaTags.getTagCounts()).toEqual({
-        haplotig: 1,
-        contaminant: 0,
-        unlocalised: 0,
-        sex_chromosome: 0,
-      });
-    });
-
-    it('should reflect tag type changes', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(0, 'contaminant');
-      expect(metaTags.getTagCounts()).toEqual({
-        haplotig: 0,
-        contaminant: 1,
-        unlocalised: 0,
-        sex_chromosome: 0,
-      });
-    });
+    updates = [];
+    metaTags.removeMany([1, 2, 9], 'Haplotig');
+    expect(updates).toEqual([2]);
+    expect(metaTags.getTags(1)).toEqual([]);
+    expect(metaTags.getTags(2)).toEqual(['Z']);
+    metaTags.removeMany([2, 3]);
+    expect(metaTags.getTagCount()).toBe(0);
+    metaTags.addMany([], 'X');
+    metaTags.removeMany([]);
   });
 
-  // -----------------------------------------------------------------------
-  // clearAll
-  // -----------------------------------------------------------------------
-  describe('clearAll', () => {
-    it('should remove all tags', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.setTag(1, 'contaminant');
-      metaTags.setTag(2, 'unlocalised');
-      metaTags.clearAll();
-      expect(metaTags.getTagCount()).toBe(0);
-      expect(metaTags.hasTag(0)).toBe(false);
-      expect(metaTags.hasTag(1)).toBe(false);
-      expect(metaTags.hasTag(2)).toBe(false);
-    });
-
-    it('should be safe to call when no tags exist', () => {
-      metaTags.clearAll();
-      expect(metaTags.getTagCount()).toBe(0);
-    });
-
-    it('should allow new tags after clearing', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.clearAll();
-      metaTags.setTag(5, 'contaminant');
-      expect(metaTags.getTagCount()).toBe(1);
-      expect(metaTags.hasTag(5)).toBe(true);
-    });
-
-    it('should emit metatag:updated with count 0', () => {
-      metaTags.setTag(0, 'haplotig');
-      vi.clearAllMocks();
-      metaTags.clearAll();
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 0 });
-    });
+  it('counts contigs per tag, in written order', () => {
+    metaTags.setTags(1, ['Hap_1', 'Unloc']);
+    metaTags.setTags(2, ['Unloc']);
+    metaTags.setTags(3, ['Contaminant']);
+    expect([...metaTags.getTagCounts()]).toEqual([['Unloc', 2], ['Contaminant', 1], ['Hap_1', 1]]);
+    expect(metaTags.getTagCount()).toBe(3);
+    metaTags.clearAll();
+    expect([...metaTags.getTagCounts()]).toEqual([]);
   });
 
-  // -----------------------------------------------------------------------
-  // setMany
-  // -----------------------------------------------------------------------
-  describe('setMany', () => {
-    it('should tag multiple contigs at once', () => {
-      metaTags.setMany([0, 1, 2], 'haplotig');
-      expect(metaTags.hasTag(0)).toBe(true);
-      expect(metaTags.hasTag(1)).toBe(true);
-      expect(metaTags.hasTag(2)).toBe(true);
-      expect(metaTags.getTagCount()).toBe(3);
-    });
-
-    it('should tag multiple contigs with notes', () => {
-      metaTags.setMany([0, 1], 'contaminant', 'E. coli');
-      expect(metaTags.getTag(0)).toEqual({ tag: 'contaminant', notes: 'E. coli' });
-      expect(metaTags.getTag(1)).toEqual({ tag: 'contaminant', notes: 'E. coli' });
-    });
-
-    it('should not include notes key when notes is undefined', () => {
-      metaTags.setMany([0, 1], 'haplotig');
-      expect(metaTags.getTag(0)).not.toHaveProperty('notes');
-      expect(metaTags.getTag(1)).not.toHaveProperty('notes');
-    });
-
-    it('should handle empty array', () => {
-      metaTags.setMany([], 'haplotig');
-      expect(metaTags.getTagCount()).toBe(0);
-    });
-
-    it('should replace existing tags', () => {
-      metaTags.setTag(0, 'haplotig', 'old');
-      metaTags.setMany([0, 1], 'contaminant', 'new');
-      expect(metaTags.getTag(0)).toEqual({ tag: 'contaminant', notes: 'new' });
-      expect(metaTags.getTagCount()).toBe(2);
-    });
-
-    it('should not share object references between entries', () => {
-      metaTags.setMany([0, 1], 'haplotig', 'shared?');
-      const tag0 = metaTags.getTag(0)!;
-      const tag1 = metaTags.getTag(1)!;
-      expect(tag0).toEqual(tag1);
-      expect(tag0).not.toBe(tag1); // different object instances
-    });
-
-    it('should emit metatag:updated once with correct count', () => {
-      metaTags.setMany([0, 1, 2], 'haplotig');
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 3 });
-    });
-
-    it('should emit metatag:updated only once for the batch', () => {
-      metaTags.setMany([0, 1, 2], 'haplotig');
-      // Only the final emit from setMany, not per-item
-      expect(events.emit).toHaveBeenCalledTimes(1);
-    });
+  it('hands out copies, so callers cannot change what is stored', () => {
+    metaTags.setTags(1, ['Unloc', 'X'], 'n');
+    metaTags.getTags(1).push('Y');
+    metaTags.getInfo(1)!.tags.push('Y');
+    const all = metaTags.getAllTags();
+    all.get(1)!.tags.push('Y');
+    all.delete(1);
+    expect(metaTags.getInfo(1)).toEqual({ tags: ['Unloc', 'X'], notes: 'n' });
   });
 
-  // -----------------------------------------------------------------------
-  // removeMany
-  // -----------------------------------------------------------------------
-  describe('removeMany', () => {
-    it('should remove tags from multiple contigs', () => {
-      metaTags.setMany([0, 1, 2, 3], 'haplotig');
-      vi.clearAllMocks();
-      metaTags.removeMany([1, 3]);
-      expect(metaTags.hasTag(0)).toBe(true);
-      expect(metaTags.hasTag(1)).toBe(false);
-      expect(metaTags.hasTag(2)).toBe(true);
-      expect(metaTags.hasTag(3)).toBe(false);
-      expect(metaTags.getTagCount()).toBe(2);
-    });
-
-    it('should handle empty array', () => {
-      metaTags.setMany([0, 1], 'haplotig');
-      vi.clearAllMocks();
-      metaTags.removeMany([]);
-      expect(metaTags.getTagCount()).toBe(2);
-    });
-
-    it('should be safe to remove non-existent indices', () => {
-      metaTags.setTag(0, 'haplotig');
-      vi.clearAllMocks();
-      metaTags.removeMany([5, 10, 99]);
-      expect(metaTags.getTagCount()).toBe(1);
-    });
-
-    it('should emit metatag:updated with correct count', () => {
-      metaTags.setMany([0, 1, 2], 'haplotig');
-      vi.clearAllMocks();
-      metaTags.removeMany([0, 2]);
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 1 });
-    });
-
-    it('should emit metatag:updated only once for the batch', () => {
-      metaTags.setMany([0, 1, 2], 'haplotig');
-      vi.clearAllMocks();
-      metaTags.removeMany([0, 1, 2]);
-      expect(events.emit).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // Event emission
-  // -----------------------------------------------------------------------
-  describe('event emission', () => {
-    it('should emit on setTag', () => {
-      metaTags.setTag(0, 'haplotig');
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 1 });
-    });
-
-    it('should emit on removeTag', () => {
-      metaTags.setTag(0, 'haplotig');
-      vi.clearAllMocks();
-      metaTags.removeTag(0);
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 0 });
-    });
-
-    it('should emit on clearAll', () => {
-      metaTags.setTag(0, 'haplotig');
-      vi.clearAllMocks();
-      metaTags.clearAll();
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 0 });
-    });
-
-    it('should emit on setMany', () => {
-      metaTags.setMany([0, 1], 'haplotig');
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 2 });
-    });
-
-    it('should emit on removeMany', () => {
-      metaTags.setMany([0, 1, 2], 'haplotig');
-      vi.clearAllMocks();
-      metaTags.removeMany([0, 1]);
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 1 });
-    });
-
-    it('should emit correct count when replacing a tag via setTag', () => {
-      metaTags.setTag(0, 'haplotig');
-      vi.clearAllMocks();
-      metaTags.setTag(0, 'contaminant');
-      expect(events.emit).toHaveBeenCalledWith('metatag:updated', { count: 1 });
-    });
-
-    it('should always emit the event name metatag:updated', () => {
-      metaTags.setTag(0, 'haplotig');
-      metaTags.removeTag(0);
-      metaTags.setMany([1, 2], 'contaminant');
-      metaTags.removeMany([1]);
-      metaTags.clearAll();
-      const emitCalls = (events.emit as ReturnType<typeof vi.fn>).mock.calls;
-      for (const call of emitCalls) {
-        expect(call[0]).toBe('metatag:updated');
-      }
-    });
+  it('emits metatag:updated with the number of tagged contigs', () => {
+    metaTags.addTag(1, 'X');
+    metaTags.addTag(2, 'Y');
+    metaTags.removeTag(1);
+    metaTags.setTags(2, []);
+    metaTags.clearAll();
+    expect(updates).toEqual([1, 2, 1, 0, 0]);
   });
 });
