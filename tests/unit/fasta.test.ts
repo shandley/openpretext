@@ -833,7 +833,7 @@ describe('FASTA and AGP agree, and no base is lost at the end of a sequence', ()
         const c = s.map!.contigs[s.contigOrder[i]];
         const w = c.pixelEnd - c.pixelStart;
         if (r < 0.35) { if (w >= 2) CurationEngine.cut(i, 1 + Math.floor(rnd() * (w - 1))); }
-        else if (r < 0.5) { if (i < count - 1) CurationEngine.join(i); }
+        else if (r < 0.5) { if (i < count - 1 && !CurationEngine.joinBlockedReason(i)) CurationEngine.join(i); }
         else if (r < 0.75) CurationEngine.invert(i);
         else CurationEngine.move(i, Math.floor(rnd() * count));
       }

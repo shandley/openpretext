@@ -79,7 +79,7 @@ function randomEdits(rnd: () => number, n: number): void {
       const w = c.pixelEnd - c.pixelStart;
       if (w >= 2) CurationEngine.cut(i, 1 + Math.floor(rnd() * (w - 1)));
     } else if (r < 0.5) {
-      if (i < count - 1) CurationEngine.join(i);
+      if (i < count - 1 && !CurationEngine.joinBlockedReason(i)) CurationEngine.join(i);
     } else if (r < 0.75) {
       CurationEngine.invert(i);
     } else {

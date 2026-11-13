@@ -19,11 +19,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   OpenPretext's file and from PretextView's (`bench/agp-acceptance.ts`); and
   both flavours pass a checker written from the AGP 2.1 specification over
   random curations. A second menu entry writes the same layout in nine
-  columns for validators. Details and limits are in `docs/AGP_EXPORT.md`.
+  columns for validators; NCBI's `agp_validate` reports no errors in it for
+  15 real curations (`bench/ncbi-validate.ts`). The VGP `split_agp` script
+  gives the same output from OpenPretext's file as from PretextView's
+  (`bench/vgp-acceptance.ts`). Details and limits are in `docs/AGP_EXPORT.md`.
 - **AGP import reads cuts, scaffolds and tags.** Importing a PretextView (or
   OpenPretext) AGP now applies its cuts, order, orientation, painted scaffolds
   and tags. An AGP for a different assembly or map resolution is refused, and
-  nothing changes.
+  nothing changes. Import AGP is in the File menu as well as the command
+  palette.
 - **File checksums.** A `.pretext` file has no checksum of its own, so damage
   that leaves every size intact cannot be found by reading it. OpenPretext now
   computes the MD5 and SHA-256 of each file it loads. Click the file name in
@@ -239,6 +243,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   Tags were lost the same way. Now both pieces of a cut take the tag, notes
   and exclusion of the contig they came from, and undo restores the contig
   with its marks.
+- **A contig too small to appear on the map cannot be joined.** A sequence
+  shorter than about one texel is on the contig list but owns no part of the
+  map, and an AGP has no row for it, so a join that included one could not be
+  written down. Such a join is now refused with a message; the sequence is
+  exported on its own, as before.
 - **A join that would change the export is refused.** Joining an excluded
   contig to an included one has no safe automatic result: the joined contig
   either exports the excluded sequence or drops the included one. The join is

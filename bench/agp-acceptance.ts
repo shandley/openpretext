@@ -61,7 +61,7 @@ function main(): void {
     process.exit(2);
   }
   const keep = process.argv.includes('--keep');
-  const out = mkdtempSync(join(ROOT, 'bench/output/agp-acceptance-'));
+  const out = mkdtempSync(join(ROOT, 'test-data/agp-acceptance-'));
   let failed = 0;
 
   for (const dir of readdirSync(DATA).sort()) {

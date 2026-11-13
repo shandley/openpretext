@@ -192,7 +192,8 @@ describe('engine vs texel oracle', () => {
         } else if (kind === 2 && n >= 2) {
           const to = int(n);
           CurationEngine.move(idx, to);
-        } else if (kind === 3 && idx + 1 < n) {
+        } else if (kind === 3 && idx + 1 < n && !CurationEngine.joinBlockedReason(idx)) {
+          // (A contig that owns no texel cannot be joined; see curation-marks.test.ts.)
           const nextId = s.map!.contigs.length;
           const merged = [...oracle.get(id)!, ...oracle.get(order[idx + 1])!];
           CurationEngine.join(idx);

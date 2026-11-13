@@ -454,7 +454,7 @@ describe('any curation gives a file the specification and pretext-to-asm accept'
         const c = s.map!.contigs[s.contigOrder[i]];
         const w = c.pixelEnd - c.pixelStart;
         if (r < 0.3) { if (w >= 2) CurationEngine.cut(i, 1 + Math.floor(rnd() * (w - 1))); }
-        else if (r < 0.45) { if (i < count - 1) CurationEngine.join(i); }
+        else if (r < 0.45) { if (i < count - 1 && !CurationEngine.joinBlockedReason(i)) CurationEngine.join(i); }
         else if (r < 0.65) CurationEngine.invert(i);
         else if (r < 0.85) CurationEngine.move(i, Math.floor(rnd() * count));
         else {

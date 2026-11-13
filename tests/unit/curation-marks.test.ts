@@ -368,3 +368,51 @@ describe('batch join', () => {
     expect(shown()).toEqual([['a', null, null, false], ['b+c+d', null, null, true]]);
   });
 });
+
+describe('a contig that owns no map texel', () => {
+  // A sequence shorter than about one texel is on the contig list but not on
+  // the map. An AGP has no row for it, so a join that includes it could not
+  // be written down.
+  beforeEach(() => {
+    state.reset();
+    metaTags.clearAll();
+    contigExclusion.clearAll();
+    const contigs: ContigInfo[] = [
+      { name: 'a', originalIndex: 0, length: 10_000, pixelStart: 0, pixelEnd: 100, inverted: false, scaffoldId: null },
+      { name: 'speck', originalIndex: 1, length: 40, pixelStart: 100, pixelEnd: 100, inverted: false, scaffoldId: null },
+      { name: 'b', originalIndex: 2, length: 10_000, pixelStart: 100, pixelEnd: 200, inverted: false, scaffoldId: null },
+    ];
+    state.update({
+      map: {
+        filename: 't.pretext', textureSize: 200, numMipMaps: 1, tileResolution: 200, tilesPerDimension: 1,
+        contigs, fileContigCount: 3, contactMap: null, rawTiles: null, parsedHeader: null, extensions: new Map(),
+      } as unknown as MapData,
+      contigOrder: [0, 1, 2],
+    });
+  });
+
+  it('cannot be joined, on either side, and nothing changes', () => {
+    expect(() => CurationEngine.join(0)).toThrow(
+      'Cannot join "a" and "speck": "speck" is too small to appear on the map (it owns no map texel), ' +
+      'so the join could not be written to an AGP. It is exported as a sequence of its own.');
+    expect(() => CurationEngine.join(1)).toThrow(/^Cannot join "speck" and "b": "speck" is too small/);
+    expect(CurationEngine.joinBlockedReason(0)).toMatch(/too small to appear on the map/);
+    expect(state.get().contigOrder).toEqual([0, 1, 2]);
+    expect(state.get().undoStack).toHaveLength(0);
+    expect(state.get().map!.contigs).toHaveLength(3);
+  });
+
+  it('can still be moved, so its neighbours can be brought together and joined', () => {
+    CurationEngine.move(1, 2);                 // a b speck
+    expect(CurationEngine.joinBlockedReason(0)).toBeNull();
+    CurationEngine.join(0);
+    expect(state.get().contigOrder.map((id) => state.get().map!.contigs[id].name)).toEqual(['a+b', 'speck']);
+  });
+
+  it('stops a batch join that would include it', () => {
+    state.update({ selectedContigs: new Set([0, 1, 2]) });
+    const result = batchJoinSelected();
+    expect(result.operationsPerformed).toBe(0);
+    expect(result.description).toMatch(/^Nothing was joined\. Cannot join "a" and "speck"/);
+  });
+});

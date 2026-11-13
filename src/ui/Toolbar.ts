@@ -56,6 +56,9 @@ export function setupToolbar(ctx: AppContext): void {
   document.getElementById('btn-save-fasta')?.addEventListener('click', () => {
     exportFASTAFile(ctx);
   });
+  document.getElementById('btn-import-agp')?.addEventListener('click', () => {
+    document.getElementById('agp-file-input')?.click();
+  });
   document.getElementById('btn-load-fasta')?.addEventListener('click', () => {
     document.getElementById('fasta-file-input')?.click();
   });

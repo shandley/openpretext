@@ -92,7 +92,12 @@ test('a curation exports as the AGP PretextView would write, and reads back', as
 
   // Read the pipeline file back onto a freshly loaded map.
   await load(page);
-  await page.locator('#agp-file-input').setInputFiles({ name: 'm.agp', mimeType: 'text/plain', buffer: Buffer.from(agp.text) });
+  // File > Import AGP opens the file chooser.
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.evaluate(() => (document.getElementById('btn-import-agp') as HTMLButtonElement).click()),
+  ]);
+  await chooser.setFiles({ name: 'm.agp', mimeType: 'text/plain', buffer: Buffer.from(agp.text) });
   await expect(page.locator('.toast').filter({ hasText: 'AGP applied: 6 rows, 1 cut, 1 scaffold, 3 tagged contigs' }))
     .toBeVisible({ timeout: 10_000 });
   await expect(page.locator('#status-contigs')).toHaveText('6 contigs');

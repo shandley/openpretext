@@ -165,22 +165,45 @@ produces from the pipeline AGP, not this one.
   OpenPretext, writes it back, runs `pretext-to-asm` on OpenPretext's file,
   and compares every output with the result that repository expects. All 14
   give identical output.
+- **Against the VGP scripts.** `bench/vgp-acceptance.ts` runs `split_agp` from
+  `vgl-curation` on PretextView's AGP and on OpenPretext's rewrite of it and
+  compares the outputs: the whole of `split_agp` on the Galaxy tool's own test
+  data, and the haplotype split and unloc/haplotig steps on the king quail
+  curation (605 rows, 34 unlocalised rows renamed). The outputs are the same.
+- **Against NCBI's validator.** `bench/ncbi-validate.ts` runs `agp_validate`
+  2.29 on the standard file for the quail curation and the 14 Sanger
+  curations. It reports no errors in any of the 15. It does print warnings
+  (w36, w37, w49): a curation that cuts a sequence names the same component on
+  several rows, which the validator notes because a finished component
+  normally appears once. The pipeline file is not valid by this validator,
+  which rejects a tenth column.
 - **Against the specification.** `tests/helpers/agpValidate.ts` checks the
   rules a writer can break (contiguous coordinates, part numbers, span
   equality, gap rows, allowed values). Both files pass it over 80 random
   curations (`tests/unit/agp-export.test.ts`).
+- **By hand on the deployed site.** The koala example was loaded on the live
+  site and a contig tagged, cut and excluded through the interface. The
+  pipeline export was refused until the exclusion was explained or undone; the
+  exported file passed the specification check and NCBI's validator; importing
+  it and exporting again gave the same file.
 
-The first two need files that are not committed (they are large, or belong to
-another repository) and are skipped where absent; the third runs everywhere.
+Only the specification check runs in CI. The others need files that are not
+committed (large maps, other projects' repositories and tools); each script
+says how to set them up.
 
-Not checked: NCBI's `agp_validate` has not been run on the standard file, the
-VGP scripts have not been run on the pipeline file, and nothing has been
-submitted to ENA, whose validator source does not list `proximity_ligation`
-among the gap evidence it accepts.
+Not checked:
+
+- The later VGP steps (`gfastats`, `chromosome_assignment`, `sak_generation`)
+  have not been run; they need the assembly FASTA and further tools. The
+  length correction in `split_agp` was run on the small Galaxy fixture only.
+- `split_agp` fails on PretextView's own files under pandas 3 (it assigns a
+  number into a text column). It was run here with pandas 2.3.
+- Nothing has been submitted to ENA, whose validator source does not list
+  `proximity_ligation` among the gap evidence it accepts.
 
 ## Importing an AGP
 
-**Import AGP** (in the command palette, Cmd+K) applies an AGP to the loaded map: its cuts, order,
+**File > Import AGP** (also in the command palette) applies an AGP to the loaded map: its cuts, order,
 orientation, scaffolds and tags. It reads PretextView's file, OpenPretext's,
 and plain nine-column AGP. It replaces the current curation and clears the
 undo history, like opening a session. The file is checked against the map

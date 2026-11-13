@@ -267,6 +267,8 @@ export function undoCut(op: CurationOperation): void {
 // excluded contaminant that is cut would be written to the exported FASTA.
 //
 //   - Both pieces of a cut take the marks of the contig that was cut.
+//   - A contig that owns no map texel cannot be joined to anything: the AGP
+//     could not express it.
 //   - An excluded contig cannot be joined to one that is not excluded. Either
 //     result would change what is exported without the curator having said
 //     so: the joined contig would put the excluded sequence back, or take the
@@ -299,11 +301,23 @@ export interface DroppedMark {
 
 /** Why contigs `firstId` and `secondId` must not be joined, or null if they may be. */
 function exclusionConflict(firstId: number, secondId: number): string | null {
-  const firstExcluded = contigExclusion.isExcluded(firstId);
-  if (firstExcluded === contigExclusion.isExcluded(secondId)) return null;
   const contigs = state.get().map!.contigs;
   const first = contigs[firstId].name;
   const second = contigs[secondId].name;
+
+  // A sequence too small to own a texel has no place on the map, and an AGP
+  // has no row for it (PretextView leaves such sequences out, and the next
+  // tool adds them back as unplaced). A join that includes one could not be
+  // written down, so it is not made.
+  const empty = [firstId, secondId].filter((id) => contigs[id].pixelEnd <= contigs[id].pixelStart);
+  if (empty.length > 0) {
+    const name = contigs[empty[0]].name;
+    return `Cannot join "${first}" and "${second}": "${name}" is too small to appear on the map ` +
+      '(it owns no map texel), so the join could not be written to an AGP. It is exported as a sequence of its own.';
+  }
+
+  const firstExcluded = contigExclusion.isExcluded(firstId);
+  if (firstExcluded === contigExclusion.isExcluded(secondId)) return null;
   const [out, kept] = firstExcluded ? [first, second] : [second, first];
   return `Cannot join "${first}" and "${second}": "${out}" is excluded from export and "${kept}" is not. ` +
     'Exclude both or include both first.';
@@ -311,7 +325,8 @@ function exclusionConflict(firstId: number, secondId: number): string | null {
 
 /**
  * Why the contigs at `contigOrderIndex` and the one after it cannot be joined
- * because of their exclusion state, or null if that does not stand in the way.
+ * (one owns no map texel, or one is excluded and the other is not), or null
+ * if nothing stands in the way.
  */
 export function joinBlockedReason(contigOrderIndex: number): string | null {
   const s = state.get();
