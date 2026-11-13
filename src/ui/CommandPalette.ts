@@ -17,6 +17,7 @@ import { toggleComparisonMode } from './ComparisonMode';
 import { openBeforeAfterMap } from './BeforeAfterMap';
 import { toggleScriptConsole } from './ScriptConsole';
 import { toggleShortcutsModal } from './ShortcutsModal';
+import { openFileChecksums } from './FileChecksums';
 import { runBatchSelectByPattern, runBatchSelectBySize, runBatchCut, runBatchJoin, runBatchInvert, runSortByLength, runAutoSort, runAutoCut, undoLastBatch } from './BatchActions';
 import { togglePatternGallery } from './PatternGallery';
 import { exportAnalysisByKey, nextWeakJoin, prevWeakJoin } from './AnalysisPanel';
@@ -68,6 +69,7 @@ function getCommands(ctx: AppContext) {
     { name: 'Load example dataset (Koala)', shortcut: '', action: () => loadExampleDataset(ctx) },
     ...specimenCommands,
     { name: 'Load synthetic demo', shortcut: '', action: () => loadDemoData(ctx) },
+    { name: 'File checksums (verify the loaded file)', shortcut: '', keywords: 'md5 sha256 sha checksum integrity verify corrupt hash', action: () => openFileChecksums() },
     { name: 'Navigate mode', shortcut: 'Esc', action: () => ctx.setMode('navigate') },
     { name: 'Edit mode', shortcut: 'E', action: () => ctx.setMode('edit') },
     { name: 'Scaffold mode', shortcut: 'S', action: () => ctx.setMode('scaffold') },

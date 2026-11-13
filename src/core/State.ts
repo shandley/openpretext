@@ -10,6 +10,7 @@
  */
 
 import type { PretextHeader } from '../formats/PretextParser';
+import type { FileChecksums } from './Checksum';
 
 /**
  * Soft target for the number of operations retained in the undo stack.
@@ -156,6 +157,11 @@ export interface MapData {
   parsedHeader: PretextHeader | null;
   // Extension track data (graph name -> Int32Array of per-pixel values)
   extensions: Map<string, Int32Array>;
+  /**
+   * Size, MD5 and SHA-256 of the file this map was read from, for comparing
+   * with a published checksum. Absent for maps that did not come from a file.
+   */
+  checksums?: FileChecksums;
 }
 
 export type InteractionMode = 'navigate' | 'edit' | 'scaffold' | 'waypoint' | 'select_sort';

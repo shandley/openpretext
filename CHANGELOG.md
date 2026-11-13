@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **File checksums.** A `.pretext` file has no checksum of its own, so damage
+  that leaves every size intact cannot be found by reading it. OpenPretext now
+  computes the MD5 and SHA-256 of each file it loads. Click the file name in
+  the status bar (or run "File checksums" from the command palette) to see
+  them and to paste the checksum published with the file; the dialog says
+  whether it matches. It accepts a bare value or a line from `md5sum`,
+  `sha256sum` or `shasum`. Computing both adds about 0.3 s to loading a 105 MB
+  file.
 - **Curator overlay tracks from the `.pretext` file.** Coverage, gaps, telomeres,
   and repeat-density tracks embedded as graph extensions are now surfaced as map
   overlays, with fallbacks that compute gaps and telomeres from a loaded FASTA.
@@ -177,7 +185,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   drawn blank, and a tile that failed to decompress was replaced with zeros,
   both without a word to the user. A header with impossible values could hang
   the page. The reader now checks the header, every contig length and the
-  presence and size of every map tile, and refuses the file with a message
+  presence and size of every map tile (each must be exactly one complete
+  compressed stream of the right length), and refuses the file with a message
   that says what is wrong (for example which tile the file ends in). A refused
   file changes nothing: the landing screen stays up, or the assembly already
   loaded and its edits stay as they were. If the map is whole but a track

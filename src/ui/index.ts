@@ -15,6 +15,7 @@ export { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
 
 // ShortcutsModal
 export { toggleShortcutsModal, setupShortcutsModal } from './ShortcutsModal';
+export { openFileChecksums, setupFileChecksums } from './FileChecksums';
 
 // Sidebar
 export { formatBp, updateSidebarContigList, updateSidebarScaffoldList, setupContigSearch, autoAssignScaffolds, getContigColorMetric } from './Sidebar';

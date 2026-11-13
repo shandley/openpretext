@@ -81,6 +81,7 @@ async function loadPretextFromBuffer(
       rawTiles: parsed.tiles,
       parsedHeader: h,
       extensions: new Map(parsed.extensions.map(e => [e.name, e.data])),
+      checksums: parsed.checksums,
     },
     contigOrder: parsed.contigs.map((_, i) => i),
   });

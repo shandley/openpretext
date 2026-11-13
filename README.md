@@ -177,7 +177,9 @@ autosort
 - **`.fasta`**: reference sequences loaded with **Load FASTA** for curated export.
 - **`.agp`**: a prior curation loaded with **Import AGP**, applying its order, orientation, and scaffold grouping to the current assembly.
 
-For the binary format details, see [docs/PRETEXT_FORMAT.md](docs/PRETEXT_FORMAT.md).
+A `.pretext` file that is cut short or has a damaged tile is refused with a message saying what is wrong. The format has no checksum of its own, so to confirm a file is intact byte for byte, click its name in the status bar: the dialog shows the file's MD5 and SHA-256 and compares them with a published checksum you paste in.
+
+For the binary format details and the full list of checks, see [docs/PRETEXT_FORMAT.md](docs/PRETEXT_FORMAT.md).
 
 ## Development
 

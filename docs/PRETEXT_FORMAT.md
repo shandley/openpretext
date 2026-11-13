@@ -366,8 +366,9 @@ Refused, with a message naming the problem:
   outside 1 to `textureRes - 1` (the coarsest level must hold one BC4 block).
 - The file ends before or inside any texture block. A file cut short is never
   shown with the missing region blank.
-- A texture block is empty, does not decompress, or decompresses to a size
-  other than `Bytes_Per_Texture`.
+- A texture block is empty, is not exactly one complete deflate stream (it must
+  reach its end marker and use every byte of `compSize`), or decompresses to a
+  size other than `Bytes_Per_Texture`.
 - The coarsest level of the whole map exceeds 4096 texels per side.
 
 Loaded, with a warning shown to the user and the affected track left out:
@@ -379,7 +380,10 @@ Loaded, with a warning shown to the user and the affected track left out:
   bytes for a later extension; it stops reading there.
 
 A block whose bytes are altered in a way that still decompresses to the right
-size cannot be detected.
+size passes these checks; nothing in the file can reveal it. For that case
+OpenPretext computes the MD5 and SHA-256 of the file as it was read and shows
+them in the File checksums dialog (click the file name in the status bar),
+where a checksum published with the file can be pasted and compared.
 
 ---
 

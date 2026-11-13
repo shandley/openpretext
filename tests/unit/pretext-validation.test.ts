@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import pako from 'pako';
+import { createHash } from 'node:crypto';
 import { buildSyntheticPretext, patternTexel, type SyntheticPretextSpec } from '../helpers/pretextWriter';
 import {
   parsePretextFile, parseAndAssemble, PretextFormatError,
@@ -234,6 +235,19 @@ describe('a damaged tile', () => {
       () => withTile(9, pako.deflateRaw(new Uint8Array(bytesPerTile + 8))), /tile 10 of 10/],
     ['an empty tile',
       () => withTile(0, new Uint8Array(0)), /tile 1 of 10/],
+    // Right size once inflated, but not exactly one deflate stream.
+    ['a tile with bytes left over after its compressed data',
+      () => withTile(3, concat(GOOD.subarray(tiles[3].dataAt, tiles[3].dataAt + tiles[3].size), new Uint8Array([0x00, 0x41]))),
+      /tile 4 of 10/],
+    ['a tile whose compressed data never reaches its end marker',
+      () => {
+        const whole = pako.inflateRaw(GOOD.subarray(tiles[7].dataAt, tiles[7].dataAt + tiles[7].size));
+        const d = new pako.Deflate({ raw: true });
+        d.push(whole, 2 /* Z_SYNC_FLUSH: all the data, no final block */);
+        const chunks = (d as unknown as { chunks: Uint8Array[] }).chunks;
+        return withTile(7, concat(...chunks));
+      },
+      /tile 8 of 10/],
   ];
 
   it.each(cases)('refuses %s', async (_label, build, message) => {
@@ -305,6 +319,23 @@ describe('damage after the map', () => {
 });
 
 describe('parseAndAssemble', () => {
+  it('reports the size, MD5 and SHA-256 of the file it read', async () => {
+    const out = await parseAndAssemble(ab(GOOD));
+    expect(out.checksums).toEqual({
+      byteLength: GOOD.length,
+      md5: createHash('md5').update(GOOD).digest('hex'),
+      sha256: createHash('sha256').update(GOOD).digest('hex'),
+    });
+    // One changed byte in a track changes both.
+    const flipped = GOOD.slice();
+    flipped[flipped.length - 3] ^= 1;
+    const sums = (await parseAndAssemble(ab(flipped)).catch(() => null))?.checksums;
+    if (sums) {
+      expect(sums.md5).not.toBe(out.checksums.md5);
+      expect(sums.sha256).not.toBe(out.checksums.sha256);
+    }
+  });
+
   it('passes warnings through', async () => {
     const { tilesEnd } = layout(GOOD);
     const out = await parseAndAssemble(ab(concat(GOOD.subarray(0, tilesEnd), new Uint8Array(5).fill(1))));

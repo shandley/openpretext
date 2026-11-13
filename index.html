@@ -1901,6 +1901,53 @@
       justify-content: center;
     }
     #shortcuts-modal.visible { display: flex; }
+    #checksums-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+    }
+    #checksums-modal.visible { display: flex; }
+    .checksums-card { max-width: 680px; font-size: 13px; color: var(--text-primary); }
+    .checksums-note { margin: 0 0 14px; line-height: 1.5; color: var(--text-secondary); }
+    .checksums-list { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0 0 16px; }
+    .checksums-list dt { color: var(--text-secondary); }
+    .checksums-list dd { margin: 0; display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+    .checksums-list code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; user-select: all; }
+    .checksums-card button {
+      flex: none;
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .checksums-card button:disabled { opacity: 0.4; cursor: default; }
+    .checksums-card label { display: block; margin-bottom: 6px; color: var(--text-secondary); }
+    #checksums-expected {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 7px 9px;
+      background: var(--bg-primary, transparent);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+    }
+    #checksums-verdict { min-height: 2.6em; margin: 8px 0 0; line-height: 1.4; }
+    #checksums-verdict[data-tone="ok"] { color: #56B4E9; font-weight: 600; }
+    #checksums-verdict[data-tone="bad"] { color: #E69F00; font-weight: 600; }
+    .checksums-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+    .checksums-actions button { padding: 5px 16px; }
+    #status-file { cursor: pointer; }
+    #status-file:focus-visible { outline: 1px solid var(--accent, currentColor); outline-offset: 2px; }
     .shortcuts-card {
       background: var(--bg-surface);
       border: 1px solid var(--border);
@@ -3047,7 +3094,7 @@
 
     <!-- Status bar -->
     <div id="statusbar">
-      <span class="status-item" id="status-file">No file loaded</span>
+      <span class="status-item" id="status-file" role="button" tabindex="0" aria-label="Loaded file. Open its checksums.">No file loaded</span>
       <span class="status-item" id="status-position">—</span>
       <span class="status-item" id="status-zoom">100%</span>
       <span class="status-item" id="status-mode">Navigate</span>
@@ -3151,6 +3198,27 @@
         <button id="btn-ai-analyze" class="ai-analyze-btn">Analyze Map</button>
         <div id="ai-status"></div>
         <div id="ai-results"></div>
+      </div>
+    </div>
+
+    <!-- File checksums dialog -->
+    <div id="checksums-modal" role="dialog" aria-modal="true" aria-labelledby="checksums-title">
+      <div class="shortcuts-card checksums-card">
+        <h2 id="checksums-title">File checksums</h2>
+        <p id="checksums-empty" hidden></p>
+        <div id="checksums-body">
+          <p class="checksums-note">A .pretext file carries no checksum of its own. OpenPretext checks the file's structure when it loads, which catches a file that is cut short or has a damaged tile. To confirm that every byte is intact, compare one of the values below with the checksum published alongside the file.</p>
+          <dl class="checksums-list">
+            <dt>File</dt><dd id="checksums-file"></dd>
+            <dt>Size</dt><dd id="checksums-size"></dd>
+            <dt>MD5</dt><dd><code id="checksums-md5"></code><button type="button" id="checksums-copy-md5">Copy</button></dd>
+            <dt>SHA-256</dt><dd><code id="checksums-sha256"></code><button type="button" id="checksums-copy-sha256">Copy</button></dd>
+          </dl>
+          <label for="checksums-expected">Compare with a published checksum</label>
+          <input type="text" id="checksums-expected" spellcheck="false" autocomplete="off" placeholder="Paste an MD5 or SHA-256, or a line from md5sum or sha256sum">
+          <p id="checksums-verdict" role="status" aria-live="polite"></p>
+        </div>
+        <div class="checksums-actions"><button type="button" id="checksums-close">Close</button></div>
       </div>
     </div>
 

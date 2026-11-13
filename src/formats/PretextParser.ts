@@ -27,6 +27,7 @@
  */
 
 import pako from 'pako';
+import { computeFileChecksums, type FileChecksums } from '../core/Checksum';
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -241,9 +242,19 @@ export const MAX_OVERVIEW_SIZE = 4096;
 
 const INCOMPLETE_HINT = 'It is probably an unfinished download or copy.';
 
+/**
+ * Inflate one raw-DEFLATE stream, or null if `data` is not exactly one: the
+ * stream must be valid, must reach its end marker, and must use every byte.
+ * (pako.inflateRaw alone accepts bytes left over after the end marker.)
+ */
 function tryInflateRaw(data: Uint8Array): Uint8Array | null {
   try {
-    const out = pako.inflateRaw(data);
+    const inflator = new pako.Inflate({ raw: true });
+    inflator.push(data, true);
+    const ended = (inflator as unknown as { ended: boolean }).ended;
+    const unused = (inflator as unknown as { strm: { avail_in: number } }).strm.avail_in;
+    if (inflator.err || !ended || unused !== 0) return null;
+    const out = inflator.result;
     return out instanceof Uint8Array ? out : null;
   } catch {
     return null;
@@ -738,6 +749,11 @@ export interface AssembledPretext {
   mapSize: number;
   /** See PretextFile.warnings. */
   warnings: string[];
+  /**
+   * Size, MD5 and SHA-256 of the file as read. The format has no checksum of
+   * its own, so these are what the user compares with the published one.
+   */
+  checksums: FileChecksums;
 }
 
 /**
@@ -751,6 +767,8 @@ export async function parseAndAssemble(
   buffer: ArrayBuffer,
   onProgress?: (message: string, percent: number) => void,
 ): Promise<AssembledPretext> {
+  onProgress?.('Computing checksums...', 5);
+  const checksums = await computeFileChecksums(buffer);
   onProgress?.('Parsing header and metadata...', 10);
   // The overview is the coarsest stored level of every tile, held as one
   // matrix. Check that it is a size that can be held before reading any tile.
@@ -818,6 +836,7 @@ export async function parseAndAssemble(
     overviewSize,
     mapSize,
     warnings: parsed.warnings,
+    checksums,
   };
 }
 
