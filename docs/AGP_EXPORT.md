@@ -160,11 +160,26 @@ produces from the pipeline AGP, not this one.
   quail map and the AGP PretextView 0.2.5 wrote from the Sanger curation of it.
   Importing that AGP onto the map and exporting again reproduces all 605 rows
   exactly (`tests/unit/agp-quail-roundtrip.test.ts`).
+- **By curating a real map in the interface.** `bench/quail-e2e.ts` loads the
+  king quail map in the built site in a browser and makes the released
+  curation again without importing its AGP: 28 cuts, 395 moves, 34 inversions
+  and the painting of 66 scaffolds through the script console, then the
+  `Hap_1`, `Hap_2`, `Unloc` and `Z` tags through the sidebar. The AGP from the
+  Export menu has the same 605 rows as PretextView's. `pretext-to-asm`, given
+  each AGP with the assembly the map was built from (1.94 Gb, both
+  haplotypes), writes the same ten files from both, FASTA included. The edit
+  list is worked out from the released AGP by a reader inside the script that
+  shares no code with OpenPretext's AGP reader or writer. This shows that edits
+  made in the interface produce the right file. It does not test anyone's
+  judgement of the map: the edits were known in advance, and they were issued
+  as console commands, not with the mouse on the map.
 - **Against the Sanger tool.** `bench/agp-acceptance.ts` takes the 14 real
   curations in `agp-tpf-utils`' own test data, reads each PretextView AGP into
   OpenPretext, writes it back, runs `pretext-to-asm` on OpenPretext's file,
   and compares every output with the result that repository expects. All 14
-  give identical output.
+  give identical output. This checks the writer, not the interface: the maps
+  are rebuilt from the AGPs, because those curations' map files are not
+  public.
 - **Against the VGP scripts.** `bench/vgp-acceptance.ts` runs `split_agp` from
   `vgl-curation` on PretextView's AGP and on OpenPretext's rewrite of it and
   compares the outputs: the whole of `split_agp` on the Galaxy tool's own test
