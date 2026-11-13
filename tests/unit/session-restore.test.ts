@@ -16,6 +16,9 @@ import {
 } from '../../src/io/SessionManager';
 import type { MetaTagInfo } from '../../src/curation/MetaTagManager';
 import { planSessionRestore } from '../../src/io/SessionRestore';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { readPretextHeader } from '../../src/formats/PretextParser';
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -375,5 +378,188 @@ describe('tags and exclusions', () => {
     expect(bad({ excludedContigs: [1.5] })).toBe(false);
     expect(bad({ excludedContigs: 'all' })).toBe(false);
     expect(validateSession(session)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sessions saved before contig boundaries followed PretextView
+// ---------------------------------------------------------------------------
+//
+// The parser used to place some contig boundaries one texel away from where
+// it places them now (see PretextParser, step 5). A session saved then holds
+// texel positions in the old layout. It must still restore on the same map,
+// with every position moved to the new layout.
+
+describe('a session saved under the earlier contig boundaries', () => {
+  // The same six contigs under the two layouts. Boundaries moved by a texel:
+  // c1 gained its first texel (it had none), c2 lost one from its start, c3
+  // lost its only texel and c4 gained one.
+  const OLD = [10, 0, 10, 1, 9, 10];
+  const NEW = [10, 1, 9, 0, 10, 10];
+
+  let scaffolds: ScaffoldManager;
+  beforeEach(() => {
+    state.reset();
+    scaffolds = new ScaffoldManager();
+    CurationEngine.setScaffoldManager(scaffolds);
+  });
+
+  it('restores an untouched assembly, and says the boundaries moved', () => {
+    load(OLD);
+    const session = saveAndReload(scaffolds);
+    const plan = planSessionRestore(session, freshMap(NEW));
+    expect(plan.contigOrder).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(plan.contigs.map((c) => [c.pixelStart, c.pixelEnd])).toEqual([[0, 10], [10, 11], [11, 20], [20, 20], [20, 30], [30, 40]]);
+    expect(plan.warnings).toHaveLength(1);
+    expect(plan.warnings[0]).toMatch(/4 contigs on this map moved by one texel/);
+  });
+
+  it('carries cuts across: every cut stays at the texel of the map it was made at', () => {
+    load(OLD);
+    CurationEngine.cut(2, 4);          // c2 [10,20) -> [10,14) + [14,20)
+    CurationEngine.cut(5, 3);          // c4 [21,30) -> [21,24) + [24,30)
+    const session = saveAndReload(scaffolds);
+    const plan = planSessionRestore(session, freshMap(NEW));
+    const spans = plan.contigOrder.map((id) => [plan.contigs[id].name, plan.contigs[id].pixelStart, plan.contigs[id].pixelEnd]);
+    expect(spans).toEqual([
+      ['c0', 0, 10],
+      ['c1', 10, 11],                  // now one texel
+      ['c2_L', 11, 14],                // lost texel 10 to c1; the cut is still at texel 14
+      ['c2_R', 14, 20],
+      ['c3', 20, 20],                  // no texel now
+      ['c4_L', 20, 24],                // gained texel 20 from c3; the cut is still at texel 24
+      ['c4_R', 24, 30],
+      ['c5', 30, 40],
+    ]);
+  });
+
+  it('keeps the curated order, orientation and ownership through random edits', () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      load(OLD);
+      randomEdits(mulberry32(seed), 14);
+      const before = state.get();
+      const session = saveAndReload(scaffolds);
+
+      const plan = planSessionRestore(session, freshMap(NEW));   // throws if any texel is lost or repeated
+      expect(plan.contigOrder, `seed ${seed}`).toEqual(before.contigOrder);
+      expect(plan.contigs.map((c) => c.name), `seed ${seed}`).toEqual(before.map!.contigs.map((c) => c.name));
+      // Orientation of every contig still made of one sequence is unchanged.
+      // (A joined contig's flag can change when a part of it no longer owns a
+      // texel: it then reads one span in one direction.)
+      const single = (c: ContigInfo) => !c.pixelSegments && (c.sequenceSegments?.length ?? 1) === 1;
+      before.map!.contigs.forEach((c, id) => {
+        if (single(c) && c.pixelEnd > c.pixelStart && plan.contigs[id].pixelEnd > plan.contigs[id].pixelStart) {
+          expect(plan.contigs[id].inverted, `seed ${seed}, ${c.name}`).toBe(c.inverted);
+        }
+      });
+
+      // The picture is the same: every texel of the map is shown where it
+      // was, apart from the two that changed hands (10, from c2 to c1, and
+      // 20, from c3 to c4), which go with their new contig.
+      const texelsBefore = describeAssembly(before.map!.contigs, before.contigOrder).texels;
+      const texelsNow = describeAssembly(plan.contigs, plan.contigOrder).texels;
+      const settled = (a: number[]) => a.filter((t) => t !== 10 && t !== 20);
+      expect(settled(texelsNow), `seed ${seed}`).toEqual(settled(texelsBefore));
+      expect([...texelsNow].sort((x, y) => x - y), `seed ${seed}`).toEqual(Array.from({ length: 40 }, (_, t) => t));
+
+      // The restored assembly can be edited and saved again without a warning.
+      state.reset();
+      state.update({ map: { ...freshMap(NEW), contigs: plan.contigs }, contigOrder: plan.contigOrder });
+      const again = planSessionRestore(saveAndReload(scaffolds), freshMap(NEW));
+      expect(again.warnings, `seed ${seed}`).toEqual([]);
+      expect(describeAssembly(again.contigs, again.contigOrder).texels, `seed ${seed}`)
+        .toEqual(describeAssembly(plan.contigs, plan.contigOrder).texels);
+    }
+  });
+
+  it('still refuses a session from a map whose contigs sit elsewhere', () => {
+    load([10, 5, 5, 1, 9, 10]);
+    const session = saveAndReload(scaffolds);
+    expect(() => planSessionRestore(session, freshMap(NEW)))
+      .toThrow(/different assembly \(contig 2, "c1", spans texels 10 to 15 in the session and 10 to 11 in this file\)/);
+  });
+
+  it('has nothing to say about a session saved under the current boundaries', () => {
+    load(NEW);
+    CurationEngine.cut(2, 4);
+    expect(planSessionRestore(saveAndReload(scaffolds), freshMap(NEW)).warnings).toEqual([]);
+  });
+});
+
+// The same, on real maps. Skipped where the files are absent.
+const REAL_MAPS = [
+  'test-data/Phascolarctos_cinereus.pretext',
+  'test-data/Coturnix_chinensis_post.pretext',
+  'test-data/case-study/quail/bCotChi1.combined.pretext',
+  'test-data/Anilios_waitii_post.pretext',
+].map((f) => resolve(__dirname, '../..', f)).filter((f) => existsSync(f));
+
+(REAL_MAPS.length > 0 ? describe : describe.skip)('old sessions on real maps', () => {
+  it.each(REAL_MAPS)('a session saved under the earlier boundaries restores on %s', (path) => {
+    const bytes = readFileSync(path);
+    const { header, contigs } = readPretextHeader(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+    const N = header.numberOfPixels1D;
+    const mapWith = (spans: Array<[number, number]>): MapData => ({
+      filename: 'real.pretext', textureSize: N, numMipMaps: 1, tileResolution: N, tilesPerDimension: 1,
+      contigs: contigs.map((c, i) => ({
+        name: c.name, originalIndex: i, length: c.length,
+        pixelStart: spans[i][0], pixelEnd: spans[i][1], inverted: false, scaffoldId: null,
+      })),
+      fileContigCount: contigs.length, contactMap: null, rawTiles: null, parsedHeader: null, extensions: new Map(),
+    });
+    const current = contigs.map((c) => [c.pixelStart, c.pixelEnd] as [number, number]);
+    // The earlier rule: the running sum of the fractions in double precision.
+    const earlier: Array<[number, number]> = [];
+    let sum = 0;
+    contigs.forEach((c, i) => {
+      const start = Math.min(N, Math.floor(sum * N));
+      sum += c.fractionalLength;
+      earlier.push([start, i === contigs.length - 1 ? N : Math.min(N, Math.floor(sum * N))]);
+    });
+    const shifted = earlier.map((e, i) => i).filter((i) => earlier[i][0] !== current[i][0] || earlier[i][1] !== current[i][1]);
+    expect(shifted.length, 'this map is one the change affected').toBeGreaterThan(0);
+
+    // Curate under the earlier layout, cutting every affected contig that can
+    // be cut and its neighbours, then moving, inverting and joining around them.
+    const scaffolds = new ScaffoldManager();
+    CurationEngine.setScaffoldManager(scaffolds);
+    state.reset();
+    state.update({ map: mapWith(earlier), contigOrder: contigs.map((_, i) => i) });
+    const targets = [...new Set(shifted.flatMap((i) => [i - 1, i, i + 1]))]
+      .filter((i) => i >= 0 && i < contigs.length).sort((a, b) => b - a);
+    for (const i of targets) {
+      const pos = state.get().contigOrder.indexOf(i);
+      const w = earlier[i][1] - earlier[i][0];
+      if (pos !== -1 && w >= 2) CurationEngine.cut(pos, w === 2 ? 1 : 1 + (i % (w - 1)));
+    }
+    randomEdits(mulberry32(7), 40);
+    const before = state.get();
+    const texelsBefore = describeAssembly(before.map!.contigs, before.contigOrder).texels;
+    const session = saveAndReload(scaffolds);
+
+    const plan = planSessionRestore(session, mapWith(current));
+    expect(plan.warnings).toHaveLength(1);
+    expect(plan.warnings[0]).toMatch(/moved by one texel/);
+    expect(plan.contigOrder).toEqual(before.contigOrder);
+
+    // Texels whose owner changed between the two layouts.
+    const ownerOf = (spans: Array<[number, number]>) => {
+      const o = new Int32Array(N).fill(-1);
+      spans.forEach(([a, b], i) => { for (let t = a; t < b; t++) o[t] = i; });
+      return o;
+    };
+    const was = ownerOf(earlier);
+    const now = ownerOf(current);
+    const changed = new Set<number>();
+    for (let t = 0; t < N; t++) if (was[t] !== now[t]) changed.add(t);
+    expect(changed.size).toBeGreaterThan(0);
+    expect(changed.size).toBeLessThanOrEqual(shifted.length);
+
+    const texelsNow = describeAssembly(plan.contigs, plan.contigOrder).texels;
+    expect(texelsNow).toHaveLength(N);
+    expect(new Set(texelsNow).size).toBe(N);
+    const settled = (a: number[]) => a.filter((t) => !changed.has(t));
+    expect(settled(texelsNow)).toEqual(settled(texelsBefore));
   });
 });

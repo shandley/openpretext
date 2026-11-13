@@ -9,7 +9,7 @@
  */
 
 import type { ContigInfo, MapData, PixelSegment } from '../core/State';
-import { getPixelSegments } from '../core/DisplayMapping';
+import { getPixelSegments, pixelFieldsFor } from '../core/DisplayMapping';
 import type { SessionData } from './SessionManager';
 import { fromLegacyTag, sortTags, type MetaTagInfo } from '../curation/MetaTagManager';
 
@@ -84,7 +84,98 @@ function checkCoverage(contigs: ContigInfo[], order: number[], file: ContigInfo[
   if (i !== shown.length) throw fail();
 }
 
-function planFromContigTable(session: SessionData, map: MapData): SessionLayout {
+/**
+ * Re-express a saved contig table in the map's texel layout, when the two
+ * differ only in where the file's contigs begin and end.
+ *
+ * The map's picture has not changed, only which contig the texel at some
+ * boundaries is counted as. So every texel stays where the curator put it: a
+ * cut stays at the same texel of the map. What changes is at the edges of the
+ * file's contigs: a piece that reached the edge of its contig still does, so
+ * it gains or loses the texel that changed hands. A piece left with no texels
+ * (all it held now belongs to a neighbour) keeps its entry with zero width.
+ */
+function relayout(saved: ContigInfo[], file: ContigInfo[]): ContigInfo[] {
+  // The file's contigs that owned texels under the saved layout, in file order.
+  const owners = file
+    .map((_, i) => ({ i, start: saved[i].pixelStart, end: saved[i].pixelEnd }))
+    .filter((o) => o.end > o.start);
+
+  /** A span of the saved layout as spans of the map's, in file order. */
+  const moveSpan = (start: number, end: number): Array<[number, number]> => {
+    const out: Array<[number, number]> = [];
+    // First owner whose end is past `start`.
+    let lo = 0;
+    let hi = owners.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (owners[mid].end <= start) lo = mid + 1; else hi = mid;
+    }
+    for (let k = lo; k < owners.length && owners[k].start < end; k++) {
+      const o = owners[k];
+      const now = file[o.i];
+      // Texels keep their positions; a span that reached an edge of the
+      // contig reaches its edge still.
+      const clamp = (t: number) => Math.min(now.pixelEnd, Math.max(now.pixelStart, t));
+      const a = start <= o.start ? now.pixelStart : clamp(start);
+      const b = end >= o.end ? now.pixelEnd : clamp(end);
+      if (b <= a) continue;
+      const last = out[out.length - 1];
+      if (last && last[1] === a) last[1] = b; else out.push([a, b]);
+    }
+    return out;
+  };
+
+  // A contig made by a cut or join also records which stretch of which
+  // sequence each of its parts is, in base pairs. That says more than its
+  // texel spans do: a sequence that owned no texel when the session was saved
+  // has no span to move, but it is still named there, so the texel it owns
+  // now goes to the contig it was joined into.
+  const byName = new Map<string, number>();
+  let namesUnique = true;
+  file.forEach((c, i) => { if (byName.has(c.name)) namesUnique = false; else byName.set(c.name, i); });
+  const fromSequence = (c: ContigInfo): PixelSegment[] | null => {
+    if (!namesUnique || !c.sequenceSegments || c.sequenceSegments.length === 0) return null;
+    const out: PixelSegment[] = [];
+    for (const q of c.sequenceSegments) {
+      const i = byName.get(q.sourceName);
+      if (i === undefined) return null;
+      const length = saved[i].length;
+      const oldWidth = saved[i].pixelEnd - saved[i].pixelStart;
+      const now = file[i];
+      // The texel offsets this stretch had, recovered from its base pairs.
+      const k0 = length > 0 ? Math.round((q.start * oldWidth) / length) : 0;
+      const k1 = length > 0 ? Math.round((q.end * oldWidth) / length) : oldWidth;
+      // The same texels of the map, except that a stretch running to an end
+      // of its sequence runs to the end of the sequence's texels as they are now.
+      const clamp = (t: number) => Math.min(now.pixelEnd, Math.max(now.pixelStart, t));
+      const a = q.start <= 0 || k0 <= 0 ? now.pixelStart : clamp(saved[i].pixelStart + k0);
+      const b = q.end >= length || k1 >= oldWidth ? now.pixelEnd : clamp(saved[i].pixelStart + k1);
+      if (b > a) out.push({ start: a, end: b, reversed: q.revComp });
+    }
+    return out;
+  };
+
+  return saved.map((c, i) => {
+    if (i < file.length) return { ...c, pixelStart: file[i].pixelStart, pixelEnd: file[i].pixelEnd };
+    let segments = fromSequence(c);
+    if (segments === null) {
+      segments = [];
+      for (const seg of getPixelSegments(c)) {
+        const moved = moveSpan(seg.start, seg.end).map(([a, b]) => ({ start: a, end: b, reversed: seg.reversed }));
+        // A reversed slice reads the file backward, so its parts do too.
+        segments.push(...(seg.reversed ? moved.reverse() : moved));
+      }
+    }
+    const { pixelSegments: _dropped, ...rest } = c;
+    const fields = pixelFieldsFor(segments, c.inverted);
+    const out: ContigInfo = { ...rest, ...fields };
+    if (fields.pixelSegments === undefined) delete out.pixelSegments;
+    return out;
+  });
+}
+
+function planFromContigTable(session: SessionData, map: MapData, notes: string[]): SessionLayout {
   const file = fileContigs(map);
   const saved = session.contigs!;
   const assembly = session.assembly!;
@@ -96,16 +187,38 @@ function planFromContigTable(session: SessionData, map: MapData): SessionLayout 
     );
   }
   if (saved.length < file.length) throw new Error('its contig table is incomplete');
+  let shifted = 0;
   for (let i = 0; i < file.length; i++) {
     const a = saved[i];
     const b = file[i];
-    if (a.name !== b.name || a.pixelStart !== b.pixelStart || a.pixelEnd !== b.pixelEnd || a.pixelSegments) {
+    if (a.name !== b.name || a.pixelSegments) {
       throw new Error(`it was saved for a different assembly (contig ${i + 1} is "${a.name}", this file has "${b.name}")`);
     }
+    if (a.pixelStart !== b.pixelStart || a.pixelEnd !== b.pixelEnd) {
+      // Sessions saved before contig boundaries were derived the way
+      // PretextView derives them (see PretextParser, step 5) can differ from
+      // the map by one texel at some boundaries. Anything larger is another map.
+      if (Math.abs(a.pixelStart - b.pixelStart) > 1 || Math.abs(a.pixelEnd - b.pixelEnd) > 1) {
+        throw new Error(
+          `it was saved for a different assembly (contig ${i + 1}, "${a.name}", spans texels ` +
+          `${a.pixelStart} to ${a.pixelEnd} in the session and ${b.pixelStart} to ${b.pixelEnd} in this file)`);
+      }
+      shifted++;
+    }
+  }
+  // Move every texel position in the session from the layout it was saved
+  // under to the map's. The session's own contigs are untouched; `savedTable`
+  // is what is read from here on.
+  const savedTable = shifted > 0 ? relayout(saved, file) : saved;
+  if (shifted > 0) {
+    notes.push(
+      `This session was saved before OpenPretext placed contig boundaries exactly as PretextView does. ` +
+      `${shifted} contig${shifted === 1 ? '' : 's'} on this map moved by one texel, and the session was adjusted to match. ` +
+      'Check any cut that was made at the very edge of a contig.');
   }
 
   const scaffoldIds = new Set(session.scaffolds.map((sc) => sc.id));
-  const contigs: ContigInfo[] = saved.map((c, i) => {
+  const contigs: ContigInfo[] = savedTable.map((c, i) => {
     if (c.pixelEnd < c.pixelStart) throw new Error(`contig ${i} has a negative width`);
     if (c.pixelSegments) {
       let width = 0;
@@ -177,8 +290,9 @@ function planFromLegacy(session: SessionData, map: MapData): SessionLayout {
  * @throws Error whose message completes "This session cannot be restored: ..."
  */
 export function planSessionRestore(session: SessionData, map: MapData): SessionRestorePlan {
+  const notes: string[] = [];
   const layout = session.contigs && session.assembly
-    ? planFromContigTable(session, map)
+    ? planFromContigTable(session, map, notes)
     : planFromLegacy(session, map);
 
   // Tags and exclusions attach to contigs the session places. One that names
@@ -204,7 +318,7 @@ export function planSessionRestore(session: SessionData, map: MapData): SessionR
     }
     tags.push([id, info.notes !== undefined ? { tags: list, notes: info.notes } : { tags: list }]);
   }
-  const warnings: string[] = [];
+  const warnings: string[] = [...notes];
   if (unnamed.length > 0) {
     warnings.push(
       `${unnamed.length} sex chromosome tag${unnamed.length === 1 ? '' : 's'} could not be restored, because the ` +
