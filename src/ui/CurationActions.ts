@@ -7,6 +7,7 @@ import { state } from '../core/State';
 import { CurationEngine, undoBatch, redoBatch, type DroppedMark } from '../curation/CurationEngine';
 import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
+import { events } from '../core/EventBus';
 
 export function performUndo(ctx: AppContext): void {
   // When the most recent operation belongs to a batch (a script run, autosort,
@@ -39,26 +40,49 @@ export function performRedo(ctx: AppContext): void {
     ctx.showToast(`Redo stopped. ${blocked}`, REFUSAL_TOAST_MS);
     return;
   }
-  if (next?.batchId) {
-    ctx.suppressCurationRefresh = true;
-    let count = 0;
-    try {
-      count = redoBatch(next.batchId);
-    } finally {
-      ctx.suppressCurationRefresh = false;
-    }
-    ctx.refreshAfterCuration();
-    // A join inside the batch can be blocked part-way; the rest stays undone.
-    const stoppedAt = CurationEngine.redoBlockedReason();
-    if (stoppedAt) {
-      ctx.showToast(`Redo stopped after ${count} operation${count === 1 ? '' : 's'}. ${stoppedAt}`, REFUSAL_TOAST_MS);
+  // A redone join gives its contig fresh marks if a part's marks were changed
+  // while the join was undone, and may then not keep a tag. Collect those so
+  // the curator is told, as they are for a join made by hand.
+  const dropped: DroppedMark[] = [];
+  const stopListening = events.on('curation:join', (d) => {
+    if (d.dropped) dropped.push(...(d.dropped as DroppedMark[]));
+  });
+  const say = (message: string, duration?: number) => {
+    if (dropped.length === 0) {
+      if (duration === undefined) ctx.showToast(message); else ctx.showToast(message, duration);
       return;
     }
-    ctx.showToast(count > 1 ? `Redo (${count} operations)` : 'Redo');
-    return;
-  }
-  if (CurationEngine.redo()) {
-    ctx.showToast('Redo');
+    const end = /[.!?]$/.test(message) ? '' : '.';
+    ctx.showToast(
+      `${message}${end} Not kept on a joined contig, because its two parts differ: ${describeDroppedTags(dropped)}.`,
+      REFUSAL_TOAST_MS,
+    );
+  };
+
+  try {
+    if (next?.batchId) {
+      ctx.suppressCurationRefresh = true;
+      let count = 0;
+      try {
+        count = redoBatch(next.batchId);
+      } finally {
+        ctx.suppressCurationRefresh = false;
+      }
+      ctx.refreshAfterCuration();
+      // A join inside the batch can be blocked part-way; the rest stays undone.
+      const stoppedAt = CurationEngine.redoBlockedReason();
+      if (stoppedAt) {
+        say(`Redo stopped after ${count} operation${count === 1 ? '' : 's'}. ${stoppedAt}`, REFUSAL_TOAST_MS);
+        return;
+      }
+      say(count > 1 ? `Redo (${count} operations)` : 'Redo');
+      return;
+    }
+    if (CurationEngine.redo()) {
+      say('Redo');
+    }
+  } finally {
+    stopListening();
   }
 }
 

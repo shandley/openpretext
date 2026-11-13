@@ -193,7 +193,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   join (which then joins nothing), in scripts and their preview, and on redo.
   Exclude or include both and the join goes ahead. A joined contig keeps a tag
   when both parts carry the same one; otherwise the tag is not kept and the
-  message says which.
+  message says which, including when the join is redone after a part's tag
+  was changed.
 - **Incomplete and damaged `.pretext` files are refused.** A file cut short by
   an unfinished download or copy used to load with the missing part of the map
   drawn blank, and a tile that failed to decompress was replaced with zeros,

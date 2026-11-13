@@ -58,6 +58,7 @@ import { CurationEngine, undoBatch, redoBatch } from '../../src/curation/Curatio
 import { SelectionManager } from '../../src/curation/SelectionManager';
 import { contigExclusion } from '../../src/curation/ContigExclusion';
 import { state } from '../../src/core/State';
+import { events } from '../../src/core/EventBus';
 
 import type { AppContext } from '../../src/ui/AppContext';
 
@@ -161,6 +162,43 @@ describe('CurationActions', () => {
   // performRedo
   // -------------------------------------------------------------------------
   describe('performRedo', () => {
+    it('should name a tag that a redone join did not keep', () => {
+      (CurationEngine.redo as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+        events.emit('curation:join', { contigIndex: 1, dropped: [{ kind: 'tag', contig: 'b', tag: 'haplotig' }] });
+        return true;
+      });
+      const ctx = createMockCtx();
+
+      performRedo(ctx);
+
+      expect(ctx.showToast).toHaveBeenCalledTimes(1);
+      expect(ctx.showToast).toHaveBeenCalledWith(
+        'Redo. Not kept on a joined contig, because its two parts differ: the haplotig tag on "b".', 12_000);
+
+      // The listener is gone afterwards: a later join is not reported by redo.
+      events.emit('curation:join', { contigIndex: 0, dropped: [{ kind: 'tag', contig: 'x', tag: 'haplotig' }] });
+      (CurationEngine.redo as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
+      performRedo(ctx);
+      expect(ctx.showToast).toHaveBeenLastCalledWith('Redo');
+    });
+
+    it('should name tags not kept by joins inside a redone batch', () => {
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValueOnce({ redoStack: [{ type: 'join', batchId: 'b1' }] });
+      (redoBatch as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+        events.emit('curation:join', { contigIndex: 1, dropped: [{ kind: 'tag', contig: 'b', tag: 'haplotig' }] });
+        events.emit('curation:join', { contigIndex: 0, dropped: [] });
+        events.emit('curation:join', { contigIndex: 0, dropped: [{ kind: 'tag', contig: 'd', tag: 'unlocalised' }] });
+        return 3;
+      });
+      const ctx = createMockCtx();
+
+      performRedo(ctx);
+
+      expect(ctx.showToast).toHaveBeenCalledWith(
+        'Redo (3 operations). Not kept on a joined contig, because its two parts differ: ' +
+        'the haplotig tag on "b" and the unlocalised tag on "d".', 12_000);
+    });
+
     it('should say why and not redo when the next redo is held back', () => {
       (CurationEngine.redoBlockedReason as ReturnType<typeof vi.fn>).mockReturnValueOnce('Cannot join "b" and "c": reason.');
       const ctx = createMockCtx();

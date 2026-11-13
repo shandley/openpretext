@@ -305,3 +305,30 @@ test('tags and exclusions follow a contig through a cut, and a join that would c
 
   expect(errors).toEqual([]);
 });
+
+test('redoing a join says so when a tag added in between is not kept', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto('/');
+  await loadPretext(page, FILE_A, 'first.pretext', 5);
+
+  await page.evaluate(() => {
+    const { state, CurationEngine, metaTags } = (window as any).__openpretext;
+    CurationEngine.join(1);                     // a2 + a3
+    CurationEngine.undo();
+    metaTags.setTag(state.get().contigOrder[1], 'haplotig');   // tag a2 while the join is undone
+  });
+  await page.locator('#btn-redo').click();
+  await expect(page.locator('.toast').filter({
+    hasText: 'Redo. Not kept on a joined contig, because its two parts differ: the haplotig tag on "a2".',
+  })).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('#status-contigs')).toHaveText('4 contigs');
+
+  // Undo brings a2 back with its tag; an ordinary redo says only "Redo".
+  await page.locator('#btn-undo').click();
+  await page.keyboard.press('i');
+  await expect(page.locator('#contig-list .contig-badge.metatag-haplotig')).toHaveCount(1);
+  await page.locator('#btn-redo').click();
+  await expect(page.locator('.toast').filter({ hasText: /^Redo$/ })).toBeVisible({ timeout: 5_000 });
+
+  expect(errors).toEqual([]);
+});
