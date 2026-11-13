@@ -45,10 +45,14 @@ function loadMap(): MapData {
 }
 
 d('king quail: PretextView AGP in, the same AGP out', () => {
-  const text = readFileSync(AGP, 'utf8');
-  const original = text.split('\n').filter((l) => l !== '');
+  // Read inside the tests: a skipped describe still runs its body, and the
+  // files are not there in CI.
+  const readText = () => readFileSync(AGP, 'utf8');
+  const linesOf = (text: string) => text.split('\n').filter((l) => l !== '');
 
   it('reads the file without complaint', () => {
+    const text = readText();
+    const original = linesOf(text);
     const parsed = parseAGP(text);
     expect(parsed.skippedLines).toEqual([]);
     expect(parsed.resolution).toBeCloseTo(59245.052002, 6);
@@ -63,6 +67,8 @@ d('king quail: PretextView AGP in, the same AGP out', () => {
   });
 
   it('writes back the rows it read', () => {
+    const text = readText();
+    const original = linesOf(text);
     const map = loadMap();
     const plan = planAGPImport(parseAGP(text), map);
 
@@ -88,6 +94,7 @@ d('king quail: PretextView AGP in, the same AGP out', () => {
   });
 
   it('writes the resolution line PretextView wrote', () => {
+    const original = linesOf(readText());
     const header = generateAGPHeader(loadMap(), 'pretextview').split('\n');
     expect(header[0]).toBe(original[0]);
     expect(header[2]).toBe(original[2]);
