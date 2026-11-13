@@ -172,6 +172,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **Incomplete and damaged `.pretext` files are refused.** A file cut short by
+  an unfinished download or copy used to load with the missing part of the map
+  drawn blank, and a tile that failed to decompress was replaced with zeros,
+  both without a word to the user. A header with impossible values could hang
+  the page. The reader now checks the header, every contig length and the
+  presence and size of every map tile, and refuses the file with a message
+  that says what is wrong (for example which tile the file ends in). A refused
+  file changes nothing: the landing screen stays up, or the assembly already
+  loaded and its edits stay as they were. If the map is whole but a track
+  after it is cut short or damaged, the map loads and a warning names the
+  track that was left out. The checks are listed in `docs/PRETEXT_FORMAT.md`,
+  section 6.4.
 - **Browser shortcuts no longer edit the assembly.** In Edit mode, Cmd/Ctrl+C
   (copy) cut the contig under the pointer, Cmd/Ctrl+F (find) inverted the
   selection, and Cmd/Ctrl+J and +H joined and excluded. Single-key shortcuts

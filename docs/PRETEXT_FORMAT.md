@@ -346,6 +346,41 @@ loop continues scanning for extension magic bytes until it reaches the end of
 the file. Each graph extension has its own `psgh` magic, compressed size, and
 data block.
 
+### 6.4 What OpenPretext checks when it reads a file
+
+The format has no checksums, so the reader checks every size the format
+implies and refuses a file that fails any of them. A refused file changes
+nothing in the app. The checks are in `src/formats/PretextParser.ts`
+(`readPretextHeader`, `parsePretextFile`).
+
+Refused, with a message naming the problem:
+
+- The file is shorter than 12 bytes, or does not start with `pstm`.
+- The compressed header runs past the end of the file, does not decompress, or
+  decompresses to a size other than the one declared.
+- The header is not exactly `15 + 68 * contigCount` bytes, or declares no contigs.
+- The genome length is zero.
+- A contig's fractional length is not a number, is negative or exceeds 1, or
+  the fractions do not sum to 1 within 0.001. (Real files sum to 1 within 1e-8.)
+- `textureRes` is outside 2 to 13, `nTextRes` exceeds 8, or `mipMapLevels` is
+  outside 1 to `textureRes - 1` (the coarsest level must hold one BC4 block).
+- The file ends before or inside any texture block. A file cut short is never
+  shown with the missing region blank.
+- A texture block is empty, does not decompress, or decompresses to a size
+  other than `Bytes_Per_Texture`.
+- The coarsest level of the whole map exceeds 4096 texels per side.
+
+Loaded, with a warning shown to the user and the affected track left out:
+
+- A graph extension that is cut short, does not decompress, or does not hold
+  exactly `64 + 4 * Number_of_Pixels_1D` bytes.
+- Bytes after the last texture block or extension that do not start with a
+  known extension magic. Unlike PretextView, OpenPretext does not scan such
+  bytes for a later extension; it stops reading there.
+
+A block whose bytes are altered in a way that still decompresses to the right
+size cannot be detected.
+
 ---
 
 ## 7. Summary of Data Types

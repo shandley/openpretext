@@ -7,7 +7,7 @@ import type { SpecimenEntry } from '../data/SpecimenCatalog';
 import { SPECIMEN_DATA_BASE_URL } from '../data/SpecimenCatalog';
 import { state } from '../core/State';
 import { events } from '../core/EventBus';
-import { isPretextFile } from '../formats/PretextParser';
+import { isPretextFile, PretextFormatError } from '../formats/PretextParser';
 import { ParseWorkerClient } from '../formats/ParseWorkerClient';
 import { generateSyntheticMap } from '../formats/SyntheticData';
 import { generateDemoTracks } from '../formats/SyntheticTracks';
@@ -34,9 +34,7 @@ async function loadPretextFromBuffer(
   const statusEl = document.getElementById('status-file')!;
 
   if (!isPretextFile(buffer)) {
-    statusEl.textContent = 'Invalid file format';
-    ctx.showToast('Invalid file — not a .pretext file');
-    return;
+    throw new PretextFormatError("Not a .pretext file: it does not start with the 'pstm' signature.");
   }
 
   // Parse + assemble the overview off the main thread (no UI freeze on big files).
@@ -103,6 +101,41 @@ async function loadPretextFromBuffer(
     await applyOverviewMode(ctx);
   }
   ctx.showToast(`Loaded ${filename} — ${parsed.contigs.length} contigs, ${mapSize}px`);
+  // The map is whole, but something after it (a track) was not read. Say so,
+  // and for long enough to be read.
+  if (parsed.warnings.length > 0) {
+    for (const w of parsed.warnings) console.warn(`${filename}: ${w}`);
+    ctx.showToast(`${filename} loaded with a problem: ${parsed.warnings.join(' ')}`, LOAD_PROBLEM_TOAST_MS);
+  }
+}
+
+/** How long a load failure or warning stays on screen. */
+const LOAD_PROBLEM_TOAST_MS = 15_000;
+
+/**
+ * A load failed. Nothing was replaced (the parser refuses a file before any
+ * state changes), so the status bar goes back to naming what is still loaded.
+ */
+function reportLoadFailure(ctx: AppContext, what: string, err: unknown): void {
+  console.error(`Error loading ${what}:`, err);
+  const reason = err instanceof Error ? err.message : 'Unknown error';
+  const statusEl = document.getElementById('status-file');
+  const current = state.get().map;
+  if (statusEl) {
+    statusEl.textContent = current ? current.filename : `Could not load ${what}`;
+    statusEl.title = current ? '' : reason;
+  }
+  ctx.showToast(`Could not load ${what}. ${reason}`, LOAD_PROBLEM_TOAST_MS);
+}
+
+/** Leave the landing screen only if there is a map to show. */
+function finishLoad(): void {
+  hideLoading();
+  if (!state.get().map) return;
+  const statusEl = document.getElementById('status-file');
+  if (statusEl) statusEl.title = '';
+  document.getElementById('welcome')!.style.display = 'none';
+  document.body?.classList.remove('no-file');
 }
 
 export async function loadPretextFile(ctx: AppContext, file: File): Promise<void> {
@@ -115,14 +148,10 @@ export async function loadPretextFile(ctx: AppContext, file: File): Promise<void
     const buffer = await file.arrayBuffer();
     await loadPretextFromBuffer(ctx, buffer, file.name);
   } catch (err) {
-    console.error('Error loading file:', err);
-    document.getElementById('status-file')!.textContent = 'Error loading file';
-    ctx.showToast(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    reportLoadFailure(ctx, file.name, err);
   }
 
-  hideLoading();
-  document.getElementById('welcome')!.style.display = 'none';
-  document.body?.classList.remove('no-file');
+  finishLoad();
 }
 
 /**
@@ -171,14 +200,10 @@ export async function loadSpecimen(ctx: AppContext, specimen: SpecimenEntry): Pr
 
     await loadPretextFromBuffer(ctx, combined.buffer, specimen.releaseAsset);
   } catch (err) {
-    console.error(`Error loading specimen ${specimen.id}:`, err);
-    document.getElementById('status-file')!.textContent = 'Error loading specimen';
-    ctx.showToast(`Error: ${err instanceof Error ? err.message : `Failed to download ${specimen.commonName}`}`);
+    reportLoadFailure(ctx, specimen.commonName, err);
   }
 
-  hideLoading();
-  document.getElementById('welcome')!.style.display = 'none';
-  document.body?.classList.remove('no-file');
+  finishLoad();
 }
 
 /** Backwards-compatible wrapper that loads the koala specimen. */

@@ -79,6 +79,12 @@ export interface PretextFile {
    */
   tilesDecoded: Float32Array[][];
   extensions: PretextExtension[];
+  /**
+   * Problems found after the map itself: a track that is cut short, damaged or
+   * the wrong size, or bytes that are not a track. Each is a sentence for the
+   * user. The map is complete whenever parsing returns at all.
+   */
+  warnings: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -195,46 +201,91 @@ function decodeBC4Level(
 }
 
 // ---------------------------------------------------------------------------
-// Helper: compute linear tile index from (x, y) coordinates
+// Validation
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the linear index of tile (x, y) in the upper-triangular layout.
- * Assumes x <= y. Matches the C++ `texture_id_cal` function.
+ * The file is not a usable .pretext file: too short, damaged, inconsistent or
+ * outside what this reader supports. The message is written for the person
+ * who chose the file.
+ *
+ * Damage to the header or to any map tile is always this error, never a map
+ * with a blank region: a curator must not be shown part of the data as if it
+ * were all of it. Damage to the optional tracks after the map is reported in
+ * `warnings` instead, and the map still loads.
  */
+export class PretextFormatError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PretextFormatError';
+  }
+}
+
+/** A tile's side is 2^n texels; BC4 needs at least one 4x4 block. */
+const MIN_TEXTURE_RES_LOG2 = 2;
+const MAX_TEXTURE_RES_LOG2 = 13;
+/** Tiles per side is 2^n. PretextMap writes 32 (64 in high-resolution mode). */
+const MAX_TILES_LOG2 = 8;
+/** Fixed part of the header: genome length (8), contig count (4), three texture bytes. */
+const HEADER_FIXED_BYTES = 15;
+const HEADER_BYTES_PER_CONTIG = 68;
+/** Declared header sizes above this are refused before anything is inflated. */
+const MAX_HEADER_BYTES = 1 << 27;
 /**
- * Inflate every tile's raw-DEFLATE bytes. Prefers the browser-native
- * DecompressionStream('deflate-raw') (~1.8x faster than pako in practice and run
- * in parallel); falls back to pako.inflateRaw when unavailable. Null entries
- * (truncated tiles) yield a zeroed buffer.
+ * Contig lengths are stored as float32 fractions of the genome and must fill
+ * the map. Real files sum to 1 within about 1e-8.
  */
+const FRACTION_SUM_TOLERANCE = 1e-3;
+/** Largest overview (texels per side) held in memory as one matrix. */
+export const MAX_OVERVIEW_SIZE = 4096;
+
+const INCOMPLETE_HINT = 'It is probably an unfinished download or copy.';
+
+function tryInflateRaw(data: Uint8Array): Uint8Array | null {
+  try {
+    const out = pako.inflateRaw(data);
+    return out instanceof Uint8Array ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tile inflation
+// ---------------------------------------------------------------------------
+
 /** Tiles inflated concurrently per batch. Large enough to keep DecompressionStream
  *  near-fully parallel, small enough that progress spreads across the inflate on
  *  large files instead of arriving in one burst when a single Promise.all settles. */
 const INFLATE_BATCH = 128;
 
+/**
+ * Inflate every tile's raw-DEFLATE bytes. Prefers the browser-native
+ * DecompressionStream('deflate-raw') (~1.8x faster than pako in practice and run
+ * in parallel); falls back to pako.inflateRaw when unavailable or when it
+ * rejects the data. A tile that neither can inflate comes back as null; the
+ * caller decides what that means.
+ */
 async function inflateRawTiles(
-  comps: (Uint8Array | null)[],
-  fallbackLen: number,
+  comps: Uint8Array[],
   onTileDone?: () => void,
-): Promise<Uint8Array[]> {
+): Promise<(Uint8Array | null)[]> {
   const hasDS =
     typeof DecompressionStream !== 'undefined' &&
     typeof Blob !== 'undefined' &&
     typeof Response !== 'undefined';
   if (hasDS) {
-    const out: Uint8Array[] = new Array(comps.length);
+    const out: (Uint8Array | null)[] = new Array(comps.length).fill(null);
     for (let start = 0; start < comps.length; start += INFLATE_BATCH) {
       const end = Math.min(start + INFLATE_BATCH, comps.length);
       await Promise.all(
         comps.slice(start, end).map(async (c, k) => {
           const i = start + k;
-          if (!c) { out[i] = new Uint8Array(fallbackLen); onTileDone?.(); return; }
           try {
             const stream = new Blob([c as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
             out[i] = new Uint8Array(await new Response(stream).arrayBuffer());
           } catch {
-            try { out[i] = pako.inflateRaw(c); } catch { out[i] = new Uint8Array(fallbackLen); }
+            out[i] = tryInflateRaw(c);
           } finally {
             onTileDone?.();
           }
@@ -245,11 +296,19 @@ async function inflateRawTiles(
   }
   return comps.map((c) => {
     onTileDone?.();
-    if (!c) return new Uint8Array(fallbackLen);
-    try { return pako.inflateRaw(c); } catch { return new Uint8Array(fallbackLen); }
+    return tryInflateRaw(c);
   });
 }
 
+// ---------------------------------------------------------------------------
+// Helper: compute linear tile index from (x, y) coordinates
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the linear index of tile (x, y) in the upper-triangular layout.
+ * x and y are 0-based tile coordinates, swapped if needed so that x <= y.
+ * Matches the C++ `texture_id_cal` function.
+ */
 export function tileLinearIndex(x: number, y: number, n: number): number {
   if (x > y) {
     const tmp = x;
@@ -260,12 +319,208 @@ export function tileLinearIndex(x: number, y: number, n: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// Header
+// ---------------------------------------------------------------------------
+
+function readName(bytes: Uint8Array, offset: number): string {
+  let name = '';
+  for (let j = 0; j < 64; j++) {
+    const ch = bytes[offset + j];
+    if (ch === 0) break;
+    name += String.fromCharCode(ch);
+  }
+  return name;
+}
+
+/**
+ * Read and validate the header of a .pretext file. Returns the header, the
+ * contig table and the offset of the first map tile. Throws PretextFormatError
+ * for anything that is not a well-formed header this reader supports.
+ */
+export function readPretextHeader(buffer: ArrayBuffer): {
+  header: PretextHeader;
+  contigs: PretextContig[];
+  tilesOffset: number;
+} {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+
+  // ---- 1. Magic bytes ----
+  if (
+    bytes.length < 4 ||
+    bytes[0] !== 0x70 || // 'p'
+    bytes[1] !== 0x73 || // 's'
+    bytes[2] !== 0x74 || // 't'
+    bytes[3] !== 0x6d    // 'm'
+  ) {
+    throw new PretextFormatError(
+      bytes.length === 0
+        ? 'Not a .pretext file: the file is empty.'
+        : "Not a .pretext file: it does not start with the 'pstm' signature.",
+    );
+  }
+  if (bytes.length < 12) {
+    throw new PretextFormatError(
+      `This .pretext file is too short to hold a header (${bytes.length} bytes). ${INCOMPLETE_HINT}`,
+    );
+  }
+
+  // ---- 2. Compressed / uncompressed header sizes ----
+  const nBytesHeaderComp = view.getUint32(4, true);
+  const nBytesHeader = view.getUint32(8, true);
+  const tilesOffset = 12 + nBytesHeaderComp;
+  if (nBytesHeaderComp === 0 || nBytesHeader > MAX_HEADER_BYTES) {
+    throw new PretextFormatError(
+      `The file header is corrupt: it declares ${nBytesHeaderComp} compressed and ${nBytesHeader} uncompressed bytes.`,
+    );
+  }
+  if (tilesOffset > bytes.length) {
+    throw new PretextFormatError(
+      `The header runs past the end of the file (it needs ${tilesOffset} bytes, the file has ${bytes.length}). ` +
+        INCOMPLETE_HINT,
+    );
+  }
+
+  // ---- 3. Decompress ----
+  const headerBytes = tryInflateRaw(bytes.subarray(12, tilesOffset));
+  if (!headerBytes) {
+    throw new PretextFormatError('The file header is corrupt: it does not decompress.');
+  }
+  if (headerBytes.length !== nBytesHeader) {
+    throw new PretextFormatError(
+      `The file header is corrupt: it declares ${nBytesHeader} bytes but holds ${headerBytes.length}.`,
+    );
+  }
+  if (headerBytes.length < HEADER_FIXED_BYTES) {
+    throw new PretextFormatError(
+      `The file header is corrupt: it holds ${headerBytes.length} bytes, fewer than any header needs.`,
+    );
+  }
+
+  // ---- 4. Fields ----
+  const hdrView = new DataView(headerBytes.buffer, headerBytes.byteOffset, headerBytes.byteLength);
+
+  const totalGenomeLength = hdrView.getBigUint64(0, true);
+  if (totalGenomeLength === 0n || totalGenomeLength > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new PretextFormatError(
+      `The file header is corrupt: it gives a genome length of ${totalGenomeLength} bp.`,
+    );
+  }
+  const totalGenomeLengthNum = Number(totalGenomeLength);
+
+  // The header is exactly the fixed fields plus one record per contig, so the
+  // contig count can be checked before it is used to read anything.
+  const numberOfContigs = hdrView.getUint32(8, true);
+  const expectedBytes = HEADER_FIXED_BYTES + HEADER_BYTES_PER_CONTIG * numberOfContigs;
+  if (numberOfContigs === 0) {
+    throw new PretextFormatError('The file header is corrupt: it declares no contigs.');
+  }
+  if (expectedBytes !== headerBytes.length) {
+    throw new PretextFormatError(
+      `The file header is corrupt: it declares ${numberOfContigs} contigs, which need ${expectedBytes} bytes, ` +
+        `but holds ${headerBytes.length}.`,
+    );
+  }
+
+  const contigs: PretextContig[] = [];
+  let hdrOff = 12;
+  let fractionSum = 0;
+  for (let i = 0; i < numberOfContigs; i++) {
+    const fractionalLength = hdrView.getFloat32(hdrOff, true);
+    const name = readName(headerBytes, hdrOff + 4);
+    hdrOff += HEADER_BYTES_PER_CONTIG;
+    if (!Number.isFinite(fractionalLength) || fractionalLength < 0 || fractionalLength > 1) {
+      throw new PretextFormatError(
+        `The file header is corrupt: contig ${i + 1} (${name}) has an invalid length (${fractionalLength} of the genome).`,
+      );
+    }
+    fractionSum += fractionalLength;
+    contigs.push({ name, fractionalLength, length: 0, pixelStart: 0, pixelEnd: 0 });
+  }
+  if (Math.abs(fractionSum - 1) > FRACTION_SUM_TOLERANCE) {
+    throw new PretextFormatError(
+      `The file header is corrupt: contig lengths add up to ${(fractionSum * 100).toFixed(2)}% of the genome, not 100%.`,
+    );
+  }
+
+  // Texture parameters (3 bytes)
+  const textureRes = headerBytes[hdrOff];        // log2(single texture resolution)
+  const nTextRes = headerBytes[hdrOff + 1];      // log2(number of textures per dimension)
+  const mipMapLevels = headerBytes[hdrOff + 2];  // number of mipmap levels
+
+  if (textureRes < MIN_TEXTURE_RES_LOG2 || textureRes > MAX_TEXTURE_RES_LOG2) {
+    throw new PretextFormatError(
+      `Unsupported tile size: the header gives 2^${textureRes} texels per tile side ` +
+        `(supported: 2^${MIN_TEXTURE_RES_LOG2} to 2^${MAX_TEXTURE_RES_LOG2}). The header may be corrupt.`,
+    );
+  }
+  if (nTextRes > MAX_TILES_LOG2) {
+    throw new PretextFormatError(
+      `Unsupported map layout: the header gives 2^${nTextRes} tiles per side ` +
+        `(supported: up to 2^${MAX_TILES_LOG2}). The header may be corrupt.`,
+    );
+  }
+  // The coarsest stored level must still be one whole BC4 block (4 texels).
+  const maxMipLevels = textureRes - 1;
+  if (mipMapLevels < 1 || mipMapLevels > maxMipLevels) {
+    throw new PretextFormatError(
+      `The file header is corrupt: it declares ${mipMapLevels} mip levels, ` +
+        `but a tile of 2^${textureRes} texels holds between 1 and ${maxMipLevels}.`,
+    );
+  }
+
+  const textureResolution = 1 << textureRes;
+  const numberOfTextures1D = 1 << nTextRes;
+  const numberOfPixels1D = textureResolution * numberOfTextures1D;
+  const numberOfTextureBlocks =
+    ((numberOfTextures1D + 1) * numberOfTextures1D) >> 1;
+
+  // Decompressed size of one tile: every level at half a byte per texel (BC4).
+  let bytesPerTexture = 0;
+  for (let lev = 0; lev < mipMapLevels; lev++) {
+    bytesPerTexture += 2 ** (2 * (textureRes - lev));
+  }
+  bytesPerTexture /= 2;
+
+  // ---- 5. Contig positions on the map ----
+  {
+    let cumulativeFrac = 0;
+    for (let i = 0; i < numberOfContigs; i++) {
+      const startFrac = cumulativeFrac;
+      cumulativeFrac += contigs[i].fractionalLength;
+
+      contigs[i].length = Math.round(
+        contigs[i].fractionalLength * totalGenomeLengthNum,
+      );
+      contigs[i].pixelStart = Math.min(numberOfPixels1D, Math.floor(startFrac * numberOfPixels1D));
+      contigs[i].pixelEnd = Math.min(numberOfPixels1D, Math.floor(cumulativeFrac * numberOfPixels1D));
+    }
+    // The last contig extends to the end of the map.
+    contigs[numberOfContigs - 1].pixelEnd = numberOfPixels1D;
+  }
+
+  return {
+    header: {
+      totalGenomeLength,
+      numberOfContigs,
+      textureRes,
+      nTextRes,
+      mipMapLevels,
+      textureResolution,
+      numberOfTextures1D,
+      numberOfPixels1D,
+      numberOfTextureBlocks,
+      bytesPerTexture,
+    },
+    contigs,
+    tilesOffset,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Main parser
 // ---------------------------------------------------------------------------
 
-/**
- * Parse a .pretext file from an ArrayBuffer.
- */
 export interface ParseOptions {
   /**
    * Which mipmap levels to decode. If not provided, all levels are decoded.
@@ -287,147 +542,22 @@ export interface ParseOptions {
   onProgress?: (message: string, percent: number) => void;
 }
 
+/**
+ * Parse a .pretext file from an ArrayBuffer.
+ *
+ * Throws PretextFormatError if the header or any map tile is missing, damaged
+ * or the wrong size. Problems with the tracks after the map are returned in
+ * `warnings`; the affected track is left out.
+ */
 export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptions): Promise<PretextFile> {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
-  let offset = 0;
 
-  // ---- 1. Validate magic bytes ----
-  if (
-    bytes[0] !== 0x70 || // 'p'
-    bytes[1] !== 0x73 || // 's'
-    bytes[2] !== 0x74 || // 't'
-    bytes[3] !== 0x6d    // 'm'
-  ) {
-    throw new Error(
-      `Invalid pretext file: expected magic 'pstm', got ` +
-        `'${String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3])}'`,
-    );
-  }
-  offset = 4;
-
-  // ---- 2. Read compressed / uncompressed header sizes ----
-  const nBytesHeaderComp = view.getUint32(offset, true);
-  offset += 4;
-  const nBytesHeader = view.getUint32(offset, true);
-  offset += 4;
-
-  // ---- 3. Decompress header ----
-  const compressedHeader = bytes.slice(offset, offset + nBytesHeaderComp);
-  offset += nBytesHeaderComp;
-
-  let headerBytes: Uint8Array;
-  try {
-    headerBytes = pako.inflateRaw(compressedHeader);
-  } catch (e) {
-    throw new Error(`Failed to decompress pretext header: ${e}`);
-  }
-
-  if (headerBytes.length !== nBytesHeader) {
-    throw new Error(
-      `Header size mismatch: expected ${nBytesHeader}, got ${headerBytes.length}`,
-    );
-  }
-
-  // ---- 4. Parse decompressed header ----
-  const hdrView = new DataView(
-    headerBytes.buffer,
-    headerBytes.byteOffset,
-    headerBytes.byteLength,
-  );
-  let hdrOff = 0;
-
-  // Total genome length (u64, little-endian)
-  const totalGenomeLengthLo = hdrView.getUint32(hdrOff, true);
-  const totalGenomeLengthHi = hdrView.getUint32(hdrOff + 4, true);
-  const totalGenomeLength =
-    BigInt(totalGenomeLengthLo) | (BigInt(totalGenomeLengthHi) << 32n);
-  const totalGenomeLengthNum = Number(totalGenomeLength);
-  hdrOff += 8;
-
-  // Number of contigs (u32)
-  const numberOfContigs = hdrView.getUint32(hdrOff, true);
-  hdrOff += 4;
-
-  // Per-contig records
-  const contigs: PretextContig[] = [];
-  for (let i = 0; i < numberOfContigs; i++) {
-    // Fractional length (f32)
-    const fractionalLength = hdrView.getFloat32(hdrOff, true);
-    hdrOff += 4;
-
-    // Contig name: 64 bytes (u32[16]), null-terminated ASCII string
-    const nameBytes = headerBytes.slice(hdrOff, hdrOff + 64);
-    hdrOff += 64;
-
-    let name = '';
-    for (let j = 0; j < 64; j++) {
-      if (nameBytes[j] === 0) break;
-      name += String.fromCharCode(nameBytes[j]);
-    }
-
-    contigs.push({
-      name,
-      fractionalLength,
-      length: 0,      // filled in below
-      pixelStart: 0,  // filled in below
-      pixelEnd: 0,    // filled in below
-    });
-  }
-
-  // Texture parameters (3 bytes)
-  const textureRes = headerBytes[hdrOff++];   // log2(single texture resolution)
-  const nTextRes = headerBytes[hdrOff++];     // log2(number of textures per dimension)
-  const mipMapLevels = headerBytes[hdrOff];   // number of mipmap levels
-
-  const textureResolution = 1 << textureRes;
-  const numberOfTextures1D = 1 << nTextRes;
-  const numberOfPixels1D = textureResolution * numberOfTextures1D;
-  const numberOfTextureBlocks =
-    ((numberOfTextures1D + 1) * numberOfTextures1D) >> 1;
-
-  // Compute Bytes_Per_Texture (decompressed size of one tile)
-  let bytesPerTexture = 0;
-  {
-    let tRes = textureRes;
-    for (let i = 0; i < mipMapLevels; i++) {
-      bytesPerTexture += 1 << (2 * tRes);
-      tRes--;
-    }
-    bytesPerTexture >>= 1; // BC4: 0.5 bytes per pixel
-  }
-
-  // ---- 5. Reconstruct pixel positions for contigs ----
-  {
-    let cumulativeFrac = 0;
-    for (let i = 0; i < numberOfContigs; i++) {
-      const startFrac = cumulativeFrac;
-      cumulativeFrac += contigs[i].fractionalLength;
-
-      contigs[i].length = Math.round(
-        contigs[i].fractionalLength * totalGenomeLengthNum,
-      );
-      contigs[i].pixelStart = Math.floor(startFrac * numberOfPixels1D);
-      contigs[i].pixelEnd = Math.floor(cumulativeFrac * numberOfPixels1D);
-    }
-    // Ensure the last contig extends to the end
-    if (numberOfContigs > 0) {
-      contigs[numberOfContigs - 1].pixelEnd = numberOfPixels1D;
-    }
-  }
-
-  const header: PretextHeader = {
-    totalGenomeLength,
-    numberOfContigs,
-    textureRes,
-    nTextRes,
-    mipMapLevels,
-    textureResolution,
-    numberOfTextures1D,
-    numberOfPixels1D,
-    numberOfTextureBlocks,
-    bytesPerTexture,
-  };
+  const { header, contigs, tilesOffset } = readPretextHeader(buffer);
+  const {
+    mipMapLevels, textureResolution, numberOfPixels1D, numberOfTextureBlocks, bytesPerTexture,
+  } = header;
+  let offset = tilesOffset;
 
   // Resolve coarsestOnly into decodeLevels
   if (options?.coarsestOnly && !options.decodeLevels) {
@@ -435,25 +565,28 @@ export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptio
   }
 
   // ---- 6. Read texture blocks ----
-  const tiles: Uint8Array[] = new Array(numberOfTextureBlocks);
-  const tilesDecoded: Float32Array[][] = new Array(numberOfTextureBlocks);
-
   // Phase 1: walk the tile section and collect each tile's compressed bytes
   // (cheap zero-copy subarrays; advances `offset` for extension parsing below).
-  const compTiles: (Uint8Array | null)[] = new Array(numberOfTextureBlocks).fill(null);
-  let lastBlock = numberOfTextureBlocks;
+  // Every tile must be present: a file that ends early is refused, not shown
+  // with the missing part blank.
+  const compTiles: Uint8Array[] = new Array(numberOfTextureBlocks);
   for (let i = 0; i < numberOfTextureBlocks; i++) {
+    const tileLabel = `tile ${i + 1} of ${numberOfTextureBlocks}`;
     if (offset + 4 > bytes.length) {
-      console.warn(`Unexpected end of file at texture block ${i}/${numberOfTextureBlocks}`);
-      lastBlock = i;
-      break;
+      throw new PretextFormatError(
+        `The file is incomplete: it ends before map ${tileLabel} (${bytes.length} bytes). ${INCOMPLETE_HINT}`,
+      );
     }
     const compSize = view.getUint32(offset, true);
     offset += 4;
+    if (compSize === 0) {
+      throw new PretextFormatError(`The file is corrupt: map ${tileLabel} is empty.`);
+    }
     if (offset + compSize > bytes.length) {
-      console.warn(`Texture block ${i} compressed data extends past end of file`);
-      lastBlock = i;
-      break;
+      throw new PretextFormatError(
+        `The file is incomplete: it ends inside map ${tileLabel} ` +
+          `(${bytes.length} bytes, at least ${offset + compSize} needed). ${INCOMPLETE_HINT}`,
+      );
     }
     compTiles[i] = bytes.subarray(offset, offset + compSize);
     offset += compSize;
@@ -466,9 +599,8 @@ export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptio
   const onProgress = options?.onProgress;
   let inflated = 0;
   const inflateStep = Math.max(1, Math.floor(numberOfTextureBlocks / 25));
-  const decompressedTiles = await inflateRawTiles(
+  const inflatedTiles = await inflateRawTiles(
     compTiles,
-    bytesPerTexture,
     onProgress
       ? () => {
           inflated++;
@@ -479,103 +611,103 @@ export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptio
       : undefined,
   );
 
-  // Phase 3: store raw bytes and decode the requested mip levels per tile
-  // (80–100% of this function's scale).
-  const decodeLevels = options?.decodeLevels;
-  const decodeStep = Math.max(1, Math.floor(lastBlock / 15));
-  for (let i = 0; i < lastBlock; i++) {
-    if (onProgress && (i % decodeStep === 0)) {
-      onProgress('Decoding tiles…', 80 + Math.round((i / lastBlock) * 20));
+  // Every tile must hold exactly the bytes its levels need. Deflate carries no
+  // checksum, so this size check is the only evidence that a tile is whole.
+  const tiles: Uint8Array[] = new Array(numberOfTextureBlocks);
+  for (let i = 0; i < numberOfTextureBlocks; i++) {
+    const tile = inflatedTiles[i];
+    const tileLabel = `tile ${i + 1} of ${numberOfTextureBlocks}`;
+    if (!tile) {
+      throw new PretextFormatError(`The file is corrupt: map ${tileLabel} does not decompress.`);
     }
-    const decompressed = decompressedTiles[i];
-    tiles[i] = decompressed;
+    if (tile.length !== bytesPerTexture) {
+      throw new PretextFormatError(
+        `The file is corrupt: map ${tileLabel} holds ${tile.length} bytes, not the ${bytesPerTexture} its header calls for.`,
+      );
+    }
+    tiles[i] = tile;
+  }
 
+  // Phase 3: decode the requested mip levels per tile
+  // (80–100% of this function's scale).
+  const tilesDecoded: Float32Array[][] = new Array(numberOfTextureBlocks);
+  const decodeLevels = options?.decodeLevels;
+  const decodeStep = Math.max(1, Math.floor(numberOfTextureBlocks / 15));
+  for (let i = 0; i < numberOfTextureBlocks; i++) {
+    if (onProgress && (i % decodeStep === 0)) {
+      onProgress('Decoding tiles…', 80 + Math.round((i / numberOfTextureBlocks) * 20));
+    }
     const levels: Float32Array[] = new Array(mipMapLevels);
     let levelOffset = 0;
     let levelRes = textureResolution;
     for (let lev = 0; lev < mipMapLevels; lev++) {
-      const levelBytes = (levelRes * levelRes) >> 1; // BC4: 0.5 bytes/pixel
       if (!decodeLevels || decodeLevels.includes(lev)) {
-        if (levelOffset + levelBytes <= decompressed.length) {
-          levels[lev] = decodeBC4Level(decompressed, levelOffset, levelRes);
-        } else {
-          levels[lev] = new Float32Array(levelRes * levelRes);
-        }
+        levels[lev] = decodeBC4Level(tiles[i], levelOffset, levelRes);
       }
-      levelOffset += levelBytes;
+      levelOffset += (levelRes * levelRes) >> 1; // BC4: 0.5 bytes/pixel
       levelRes >>= 1;
     }
     tilesDecoded[i] = levels;
   }
 
-  // ---- 7. Read extensions ----
+  // ---- 7. Read extensions (tracks) ----
+  // Tracks follow the last tile directly, each starting with 'psgh'. A damaged
+  // track is left out and reported; the map itself is already known to be whole.
   const extensions: PretextExtension[] = [];
-  const GRAPH_MAGIC = [0x70, 0x73, 0x67, 0x68]; // 'psgh'
+  const warnings: string[] = [];
+  const expectedSize = 64 + 4 * numberOfPixels1D;
 
-  while (offset + 4 <= bytes.length) {
-    // Check for graph extension magic
-    if (
-      bytes[offset] === GRAPH_MAGIC[0] &&
-      bytes[offset + 1] === GRAPH_MAGIC[1] &&
-      bytes[offset + 2] === GRAPH_MAGIC[2] &&
-      bytes[offset + 3] === GRAPH_MAGIC[3]
-    ) {
-      offset += 4;
-
-      if (offset + 4 > bytes.length) break;
-      const compSize = view.getUint32(offset, true);
-      offset += 4;
-
-      if (offset + compSize > bytes.length) {
-        console.warn('Extension compressed data extends past end of file');
-        break;
-      }
-
-      const compData = bytes.slice(offset, offset + compSize);
-      offset += compSize;
-
-      // Expected decompressed size: 64 bytes name + 4 * numberOfPixels1D bytes values
-      const expectedSize = 64 + 4 * numberOfPixels1D;
-
-      let decompressed: Uint8Array;
-      try {
-        decompressed = pako.inflateRaw(compData);
-      } catch (e) {
-        console.warn(`Failed to decompress graph extension: ${e}`);
-        continue;
-      }
-
-      if (decompressed.length < expectedSize) {
-        console.warn(
-          `Graph extension too small: expected ${expectedSize}, got ${decompressed.length}`,
-        );
-        continue;
-      }
-
-      // Parse extension name (first 64 bytes, null-terminated string)
-      let extName = '';
-      for (let j = 0; j < 64; j++) {
-        if (decompressed[j] === 0) break;
-        extName += String.fromCharCode(decompressed[j]);
-      }
-
-      // Parse graph values (s32 array starting at byte 64)
-      const valuesView = new DataView(
-        decompressed.buffer,
-        decompressed.byteOffset + 64,
-        4 * numberOfPixels1D,
+  for (let trackNo = 1; offset < bytes.length; trackNo++) {
+    const remaining = bytes.length - offset;
+    const isTrack =
+      remaining >= 4 &&
+      bytes[offset] === 0x70 &&     // 'p'
+      bytes[offset + 1] === 0x73 && // 's'
+      bytes[offset + 2] === 0x67 && // 'g'
+      bytes[offset + 3] === 0x68;   // 'h'
+    if (!isTrack) {
+      // Not something this reader knows. Searching it for a track signature
+      // would be guessing, so everything from here on is left unread.
+      warnings.push(
+        `${remaining} bytes after the map were not recognised and were ignored. ` +
+          'Any tracks stored there were not loaded.',
       );
-      const values = new Int32Array(numberOfPixels1D);
-      for (let j = 0; j < numberOfPixels1D; j++) {
-        values[j] = valuesView.getInt32(j * 4, true);
-      }
-
-      extensions.push({ name: extName, data: values });
-    } else {
-      // Unknown data; try advancing one byte and scanning
-      // This handles potential padding or unknown extension types.
-      offset++;
+      break;
     }
+    if (remaining < 8) {
+      warnings.push(`Track ${trackNo} is incomplete (the file ends inside it) and was not loaded.`);
+      break;
+    }
+    const compSize = view.getUint32(offset + 4, true);
+    offset += 8;
+    if (offset + compSize > bytes.length) {
+      warnings.push(`Track ${trackNo} is incomplete (the file ends inside it) and was not loaded.`);
+      break;
+    }
+    const decompressed = tryInflateRaw(bytes.subarray(offset, offset + compSize));
+    offset += compSize;
+
+    if (!decompressed || decompressed.length < 64) {
+      warnings.push(`Track ${trackNo} is corrupt (it does not decompress) and was not loaded.`);
+      continue;
+    }
+    const extName = readName(decompressed, 0);
+    if (decompressed.length !== expectedSize) {
+      const values = Math.floor((decompressed.length - 64) / 4);
+      warnings.push(
+        `Track ${trackNo} ("${extName}") holds ${values} values, but the map is ${numberOfPixels1D} texels wide. ` +
+          'It was not loaded.',
+      );
+      continue;
+    }
+
+    // Graph values: one s32 per map texel, starting at byte 64.
+    const valuesView = new DataView(decompressed.buffer, decompressed.byteOffset + 64, 4 * numberOfPixels1D);
+    const values = new Int32Array(numberOfPixels1D);
+    for (let j = 0; j < numberOfPixels1D; j++) {
+      values[j] = valuesView.getInt32(j * 4, true);
+    }
+    extensions.push({ name: extName, data: values });
   }
 
   return {
@@ -584,6 +716,7 @@ export async function parsePretextFile(buffer: ArrayBuffer, options?: ParseOptio
     tiles,
     tilesDecoded,
     extensions,
+    warnings,
   };
 }
 
@@ -603,6 +736,8 @@ export interface AssembledPretext {
   overviewSize: number;
   /** Full-resolution map dimension (numberOfPixels1D). */
   mapSize: number;
+  /** See PretextFile.warnings. */
+  warnings: string[];
 }
 
 /**
@@ -617,6 +752,18 @@ export async function parseAndAssemble(
   onProgress?: (message: string, percent: number) => void,
 ): Promise<AssembledPretext> {
   onProgress?.('Parsing header and metadata...', 10);
+  // The overview is the coarsest stored level of every tile, held as one
+  // matrix. Check that it is a size that can be held before reading any tile.
+  {
+    const h = readPretextHeader(buffer).header;
+    const size = h.numberOfTextures1D * (h.textureResolution >> (h.mipMapLevels - 1));
+    if (size > MAX_OVERVIEW_SIZE) {
+      throw new PretextFormatError(
+        `This file cannot be opened: its coarsest stored level makes an overview of ${size} texels per side, ` +
+          `and the largest supported is ${MAX_OVERVIEW_SIZE}.`,
+      );
+    }
+  }
   // Map the parser's own 0–100 progress (the slow inflate + decode phase, which
   // dominates load time on large files) into the 10–65% band of the overall bar.
   const parsed = await parsePretextFile(buffer, {
@@ -640,18 +787,15 @@ export async function parseAndAssemble(
   for (let tx = 0; tx < N; tx++) {
     for (let ty = tx; ty < N; ty++) {
       const linIdx = tileLinearIndex(tx, ty, N);
-      const tileData = parsed.tilesDecoded[linIdx]?.[coarsestMip];
-      if (!tileData) { tilesDone++; continue; }
+      const tileData = parsed.tilesDecoded[linIdx][coarsestMip];
 
       for (let py = 0; py < coarsestRes; py++) {
         for (let px = 0; px < coarsestRes; px++) {
           const val = tileData[py * coarsestRes + px];
           const gx = tx * coarsestRes + px;
           const gy = ty * coarsestRes + py;
-          if (gx < overviewSize && gy < overviewSize) {
-            overview[gy * overviewSize + gx] = val;
-            overview[gx * overviewSize + gy] = val;
-          }
+          overview[gy * overviewSize + gx] = val;
+          overview[gx * overviewSize + gy] = val;
         }
       }
 
@@ -673,6 +817,7 @@ export async function parseAndAssemble(
     overview,
     overviewSize,
     mapSize,
+    warnings: parsed.warnings,
   };
 }
 
@@ -766,14 +911,6 @@ export function isPretextFile(buffer: ArrayBuffer): boolean {
   );
 }
 
-/**
- * Compute the linear tile index for a given (x, y) tile coordinate.
- * Exported for use by renderers that need to map tile coordinates to
- * the tiles[] array.
- *
- * x and y are 0-based tile coordinates. The function automatically
- * swaps to ensure x <= y (upper triangle).
- */
 /**
  * Decode a single BC4 mipmap level from raw BC4 bytes.
  * Exported for cases where callers want to decode individual levels
