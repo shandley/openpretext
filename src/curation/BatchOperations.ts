@@ -163,22 +163,35 @@ export function batchJoinSelected(): BatchResult {
     return { operationsPerformed: 0, description: 'No adjacent selected contigs to join' };
   }
 
+  // Refuse the whole batch if any pair mixes an excluded contig with one that
+  // is not (see CurationEngine.join), before anything is changed.
+  for (const run of runs) {
+    for (let j = 0; j < run.length - 1; j++) {
+      const blocked = CurationEngine.joinBlockedReason(run[j]);
+      if (blocked) return { operationsPerformed: 0, description: `Nothing was joined. ${blocked}` };
+    }
+  }
+
   // Process runs from right to left (so joining doesn't shift earlier runs)
   let totalJoins = 0;
+  let droppedTags = 0;
   for (let r = runs.length - 1; r >= 0; r--) {
     const run = runs[r];
     // Within a run, join from right to left. Joining at index i merges
     // contigs at i and i+1. For a run of length N, we need N-1 joins.
     // Start from the second-to-last element in the run going backward.
     for (let j = run.length - 2; j >= 0; j--) {
-      CurationEngine.join(run[j]);
+      droppedTags += CurationEngine.join(run[j]).length;
       totalJoins++;
     }
   }
 
   return {
     operationsPerformed: totalJoins,
-    description: `Joined ${totalJoins} adjacent contig pair(s) across ${runs.length} contiguous run(s)`,
+    description: `Joined ${totalJoins} adjacent contig pair(s) across ${runs.length} contiguous run(s)` +
+      (droppedTags > 0
+        ? `. ${droppedTags} tag${droppedTags === 1 ? ' was' : 's were'} not kept because the joined parts' tags differ`
+        : ''),
   };
 }
 

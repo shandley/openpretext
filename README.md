@@ -48,7 +48,7 @@ WebGL2 contact map with tile-based level-of-detail, an LRU cache, and background
 
 ### Curation
 
-Cut, join, invert, and move contigs with full undo and redo. Drag-and-drop reordering, a click / shift-range / ctrl-toggle selection system, contig exclusion (hide from export without deleting), scaffold painting for chromosome assignment, waypoint markers, batch operations (select by name or size, batch cut / join / invert, sort by length), and meta tags to classify contigs as haplotig, contaminant, unlocalised, or sex chromosome.
+Cut, join, invert, and move contigs with full undo and redo. Drag-and-drop reordering, a click / shift-range / ctrl-toggle selection system, contig exclusion (hide from export without deleting), scaffold painting for chromosome assignment, waypoint markers, batch operations (select by name or size, batch cut / join / invert, sort by length), and meta tags to classify contigs as haplotig, contaminant, unlocalised, or sex chromosome. Tags and exclusions follow a contig when it is cut; a join of an excluded contig with an included one is refused, because either result would change what is exported.
 
 ### Automated curation
 

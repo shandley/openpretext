@@ -10,8 +10,10 @@ vi.mock('../../src/curation/CurationEngine', () => ({
     redo: vi.fn(),
     invert: vi.fn(),
     cut: vi.fn(),
-    join: vi.fn(),
+    join: vi.fn(() => []),
     move: vi.fn(),
+    joinBlockedReason: vi.fn(() => null),
+    redoBlockedReason: vi.fn(() => null),
   },
   undoBatch: vi.fn(() => 0),
   redoBatch: vi.fn(() => 0),
@@ -159,6 +161,16 @@ describe('CurationActions', () => {
   // performRedo
   // -------------------------------------------------------------------------
   describe('performRedo', () => {
+    it('should say why and not redo when the next redo is held back', () => {
+      (CurationEngine.redoBlockedReason as ReturnType<typeof vi.fn>).mockReturnValueOnce('Cannot join "b" and "c": reason.');
+      const ctx = createMockCtx();
+
+      performRedo(ctx);
+
+      expect(CurationEngine.redo).not.toHaveBeenCalled();
+      expect(ctx.showToast).toHaveBeenCalledWith('Redo stopped. Cannot join "b" and "c": reason.', 12_000);
+    });
+
     it('should call CurationEngine.redo and show toast when redo succeeds', () => {
       (CurationEngine.redo as ReturnType<typeof vi.fn>).mockReturnValue(true);
       const ctx = createMockCtx();
@@ -331,6 +343,33 @@ describe('CurationActions', () => {
   // joinSelectedContigs
   // -------------------------------------------------------------------------
   describe('joinSelectedContigs', () => {
+    it('should say why and not join when the engine would refuse the join', () => {
+      (SelectionManager.getSelectedIndices as ReturnType<typeof vi.fn>).mockReturnValue([1]);
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({ contigOrder: [0, 1, 2, 3] });
+      (CurationEngine.joinBlockedReason as ReturnType<typeof vi.fn>).mockReturnValueOnce('Cannot join "b" and "c": reason.');
+      const ctx = createMockCtx({ currentMode: 'edit' });
+
+      joinSelectedContigs(ctx);
+
+      expect(CurationEngine.join).not.toHaveBeenCalled();
+      expect(SelectionManager.clearSelection).not.toHaveBeenCalled();
+      expect(ctx.showToast).toHaveBeenCalledWith('Cannot join "b" and "c": reason.', 12_000);
+    });
+
+    it('should name a tag the joined contig did not keep', () => {
+      (SelectionManager.getSelectedIndices as ReturnType<typeof vi.fn>).mockReturnValue([1]);
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue({ contigOrder: [0, 1, 2, 3] });
+      (CurationEngine.join as ReturnType<typeof vi.fn>).mockReturnValueOnce([
+        { kind: 'tag', contig: 'b', tag: 'sex_chromosome' },
+      ]);
+      const ctx = createMockCtx({ currentMode: 'edit' });
+
+      joinSelectedContigs(ctx);
+
+      expect(ctx.showToast).toHaveBeenCalledWith(
+        'Joined contigs. Not kept, because the two parts differ: the sex chromosome tag on "b".');
+    });
+
     it('should be a no-op when not in edit mode', () => {
       const ctx = createMockCtx({ currentMode: 'navigate' });
 

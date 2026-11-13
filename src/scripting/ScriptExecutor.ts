@@ -273,6 +273,19 @@ export function executeCommand(cmd: ScriptCommand, ctx: ScriptContext): ScriptRe
           };
         }
         const joinAt = Math.min(idx1, idx2);
+        // Checked here as well as in the engine so that a preview run, which
+        // does not call the engine, reports it too.
+        if (ctx.query && ctx.query.isExcluded(joinAt) !== ctx.query.isExcluded(joinAt + 1)) {
+          const names = ctx.state.get();
+          const name = (i: number) => names.map!.contigs[names.contigOrder[i]]?.name ?? `#${i}`;
+          const [out, kept] = ctx.query.isExcluded(joinAt) ? [joinAt, joinAt + 1] : [joinAt + 1, joinAt];
+          return {
+            success: false,
+            message: `Cannot join: '${name(out)}' is excluded from export and '${name(kept)}' is not. ` +
+              'Exclude both or include both first.',
+            line: cmd.line,
+          };
+        }
         ctx.curation.join(joinAt);
         return {
           success: true,

@@ -264,3 +264,44 @@ test('redo reapplies a whole batch, as undo removes it', async ({ page }) => {
 
   expect(errors).toEqual([]);
 });
+
+test('tags and exclusions follow a contig through a cut, and a join that would change the export is refused', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto('/');
+  await loadPretext(page, FILE_A, 'first.pretext', 5);
+
+  // Exclude and tag a2, then cut it.
+  await page.evaluate(() => {
+    const { state, CurationEngine, metaTags, contigExclusion } = (window as any).__openpretext;
+    const a2 = state.get().contigOrder[1];
+    contigExclusion.toggle(a2);
+    metaTags.setTag(a2, 'contaminant', 'bacterial');
+    CurationEngine.cut(1, 120);
+  });
+  await expect(page.locator('#status-contigs')).toHaveText('6 contigs');
+  await page.keyboard.press('i');
+  await expect(page.locator('#contig-list .contig-badge.excluded')).toHaveCount(2);
+  await expect(page.locator('#contig-list .contig-badge.metatag-contaminant')).toHaveCount(2);
+
+  // Joining an excluded piece to its included neighbour is refused in the UI.
+  await page.keyboard.press('e');
+  const before = await assembly(page);
+  await page.evaluate(() => {
+    const { state } = (window as any).__openpretext;
+    state.update({ selectedContigs: new Set([2, 3]) });   // a2_R (excluded) and a3
+  });
+  await page.keyboard.press('j');
+  await expect(page.locator('.toast').filter({ hasText: /Cannot join "a2_R" and "a3": "a2_R" is excluded from export and "a3" is not/ }))
+    .toBeVisible({ timeout: 5_000 });
+  const after = await assembly(page);
+  expect(after.order).toEqual(before.order);
+  expect(after.undo).toBe(before.undo);
+
+  // Undo the cut: one contig again, still excluded and tagged.
+  await page.locator('#btn-undo').click();
+  await expect(page.locator('#status-contigs')).toHaveText('5 contigs');
+  await expect(page.locator('#contig-list .contig-badge.excluded')).toHaveCount(1);
+  await expect(page.locator('#contig-list .contig-badge.metatag-contaminant')).toHaveCount(1);
+
+  expect(errors).toEqual([]);
+});

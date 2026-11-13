@@ -4,7 +4,7 @@
 
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
-import { CurationEngine, undoBatch, redoBatch } from '../curation/CurationEngine';
+import { CurationEngine, undoBatch, redoBatch, type DroppedMark } from '../curation/CurationEngine';
 import { SelectionManager } from '../curation/SelectionManager';
 import { contigExclusion } from '../curation/ContigExclusion';
 
@@ -34,6 +34,11 @@ export function performRedo(ctx: AppContext): void {
   // Mirror of performUndo: a batch that was undone as one action is redone as one.
   const redoStack = state.get().redoStack ?? [];
   const next = redoStack[redoStack.length - 1];
+  const blocked = CurationEngine.redoBlockedReason();
+  if (blocked) {
+    ctx.showToast(`Redo stopped. ${blocked}`, REFUSAL_TOAST_MS);
+    return;
+  }
   if (next?.batchId) {
     ctx.suppressCurationRefresh = true;
     let count = 0;
@@ -43,6 +48,12 @@ export function performRedo(ctx: AppContext): void {
       ctx.suppressCurationRefresh = false;
     }
     ctx.refreshAfterCuration();
+    // A join inside the batch can be blocked part-way; the rest stays undone.
+    const stoppedAt = CurationEngine.redoBlockedReason();
+    if (stoppedAt) {
+      ctx.showToast(`Redo stopped after ${count} operation${count === 1 ? '' : 's'}. ${stoppedAt}`, REFUSAL_TOAST_MS);
+      return;
+    }
     ctx.showToast(count > 1 ? `Redo (${count} operations)` : 'Redo');
     return;
   }
@@ -90,6 +101,27 @@ export function cutAtCursorPosition(ctx: AppContext): void {
   ctx.showToast(`Cut: ${contig.name} at offset ${pixelOffset}`);
 }
 
+/** How long a refusal that needs reading stays on screen. */
+const REFUSAL_TOAST_MS = 12_000;
+
+/** "the haplotig tag on "a"", for each tag a join did not keep. */
+export function describeDroppedTags(dropped: DroppedMark[]): string {
+  return dropped.map((d) => `the ${d.tag.replace('_', ' ')} tag on "${d.contig}"`).join(' and ');
+}
+
+function joinAt(ctx: AppContext, orderIndex: number): void {
+  const blocked = CurationEngine.joinBlockedReason(orderIndex);
+  if (blocked) {
+    ctx.showToast(blocked, REFUSAL_TOAST_MS);
+    return;
+  }
+  const dropped = CurationEngine.join(orderIndex);
+  SelectionManager.clearSelection();
+  ctx.showToast(dropped.length > 0
+    ? `Joined contigs. Not kept, because the two parts differ: ${describeDroppedTags(dropped)}.`
+    : 'Joined contigs');
+}
+
 export function joinSelectedContigs(ctx: AppContext): void {
   if (ctx.currentMode !== 'edit') return;
   const selected = SelectionManager.getSelectedIndices();
@@ -101,18 +133,14 @@ export function joinSelectedContigs(ctx: AppContext): void {
       ctx.showToast('No right neighbor to join with');
       return;
     }
-    CurationEngine.join(idx);
-    SelectionManager.clearSelection();
-    ctx.showToast('Joined contigs');
+    joinAt(ctx, idx);
   } else if (selected.length === 2) {
     const sorted = [...selected].sort((a, b) => a - b);
     if (sorted[1] - sorted[0] !== 1) {
       ctx.showToast('Selected contigs must be adjacent to join');
       return;
     }
-    CurationEngine.join(sorted[0]);
-    SelectionManager.clearSelection();
-    ctx.showToast('Joined contigs');
+    joinAt(ctx, sorted[0]);
   } else {
     ctx.showToast('Select 1 or 2 adjacent contigs to join');
   }

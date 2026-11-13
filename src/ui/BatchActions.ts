@@ -84,7 +84,9 @@ export function runBatchJoin(ctx: AppContext): void {
     ctx.suppressCurationRefresh = false;
   }
   if (result.operationsPerformed === 0) {
-    ctx.showToast('Select adjacent contigs to batch join');
+    // Says why: nothing selected, nothing adjacent, or a refused join.
+    if (result.description.length > 60) ctx.showToast(result.description, 12_000);
+    else ctx.showToast(result.description);
     return;
   }
   SelectionManager.clearSelection();

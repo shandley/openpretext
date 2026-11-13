@@ -15,6 +15,8 @@ import {
 } from '../core/DisplayMapping';
 import type { PixelSegment } from '../core/State';
 import type { ScaffoldManager } from './ScaffoldManager';
+import { metaTags, type MetaTagInfo, type MetaTagType } from './MetaTagManager';
+import { contigExclusion } from './ContigExclusion';
 
 /**
  * Optional ScaffoldManager reference for scaffold_paint undo/redo.
@@ -214,6 +216,11 @@ export function cut(contigOrderIndex: number, pixelOffset: number): void {
   const rightId = map.contigs.length + 1;
   state.appendContigs(leftContig, rightContig);
 
+  // Both pieces take the tag and exclusion of the contig they came from.
+  const marks = marksOf(contigId);
+  setMarks(leftId, marks);
+  setMarks(rightId, marks);
+
   // Replace the original contig in the order
   const newOrder = [...s.contigOrder];
   newOrder.splice(contigOrderIndex, 1, leftId, rightId);
@@ -230,6 +237,7 @@ export function cut(contigOrderIndex: number, pixelOffset: number): void {
       leftId,
       rightId,
       previousOrder: [...s.contigOrder],
+      marks,
     },
   };
 
@@ -250,6 +258,111 @@ export function undoCut(op: CurationOperation): void {
 }
 
 // ---------------------------------------------------------------------------
+// Tags and exclusions across cut and join
+// ---------------------------------------------------------------------------
+//
+// Tags (haplotig, contaminant, ...) and exclusions are keyed by contig id. A
+// cut or join puts new contigs, with new ids, in place of the ones it acts on,
+// so the marks have to be carried over or the new contigs start bare: an
+// excluded contaminant that is cut would be written to the exported FASTA.
+//
+//   - Both pieces of a cut take the marks of the contig that was cut.
+//   - An excluded contig cannot be joined to one that is not excluded. Either
+//     result would change what is exported without the curator having said
+//     so: the joined contig would put the excluded sequence back, or take the
+//     other part out with it. The join is refused (as is a redo of one) until
+//     both parts are excluded or neither is.
+//   - A joined contig keeps a tag only if both parts carry the same one. Tags
+//     are annotations and do not affect exports; one that is not kept is
+//     returned by join() and reported on the 'curation:join' event.
+//
+// The contigs an operation replaced keep their ids and their marks, so undo
+// brings them back as they were. Redo brings the new contigs back with the
+// marks they had, unless the curator changed a mark on a replaced contig while
+// the operation was undone; then the new contigs are marked afresh from it.
+
+/** The tag and exclusion on one contig. */
+interface ContigMarks {
+  tag: MetaTagInfo | null;
+  excluded: boolean;
+}
+
+/** A tag that a join did not carry over to the joined contig. */
+export interface DroppedMark {
+  kind: 'tag';
+  /** Name of the part that carried the tag. */
+  contig: string;
+  tag: MetaTagType;
+}
+
+/** Why contigs `firstId` and `secondId` must not be joined, or null if they may be. */
+function exclusionConflict(firstId: number, secondId: number): string | null {
+  const firstExcluded = contigExclusion.isExcluded(firstId);
+  if (firstExcluded === contigExclusion.isExcluded(secondId)) return null;
+  const contigs = state.get().map!.contigs;
+  const first = contigs[firstId].name;
+  const second = contigs[secondId].name;
+  const [out, kept] = firstExcluded ? [first, second] : [second, first];
+  return `Cannot join "${first}" and "${second}": "${out}" is excluded from export and "${kept}" is not. ` +
+    'Exclude both or include both first.';
+}
+
+/**
+ * Why the contigs at `contigOrderIndex` and the one after it cannot be joined
+ * because of their exclusion state, or null if that does not stand in the way.
+ */
+export function joinBlockedReason(contigOrderIndex: number): string | null {
+  const s = state.get();
+  if (!s.map) return null;
+  const firstId = s.contigOrder[contigOrderIndex];
+  const secondId = s.contigOrder[contigOrderIndex + 1];
+  if (firstId === undefined || secondId === undefined) return null;
+  return exclusionConflict(firstId, secondId);
+}
+
+/** Why the next redo cannot be applied, or null if it can (or there is none). */
+export function redoBlockedReason(): string | null {
+  const s = state.get();
+  const op = s.redoStack[s.redoStack.length - 1];
+  if (!s.map || !op || op.type !== 'join') return null;
+  return exclusionConflict(op.data.firstId as number, op.data.secondId as number);
+}
+
+function marksOf(contigId: number): ContigMarks {
+  const tag = metaTags.getTag(contigId);
+  return { tag: tag ? { ...tag } : null, excluded: contigExclusion.isExcluded(contigId) };
+}
+
+function sameMarks(a: ContigMarks, b: ContigMarks): boolean {
+  return a.excluded === b.excluded &&
+    (a.tag?.tag ?? null) === (b.tag?.tag ?? null) &&
+    (a.tag?.notes ?? null) === (b.tag?.notes ?? null);
+}
+
+function setMarks(contigId: number, marks: ContigMarks): void {
+  if (marks.tag) metaTags.setTag(contigId, marks.tag.tag, marks.tag.notes);
+  else if (metaTags.hasTag(contigId)) metaTags.removeTag(contigId);
+  contigExclusion.set(contigId, marks.excluded);
+}
+
+/** The marks a contig joined from `first` and `second` keeps, and those it does not. */
+function joinMarks(
+  first: ContigMarks, firstName: string, second: ContigMarks, secondName: string,
+): { marks: ContigMarks; dropped: DroppedMark[] } {
+  const dropped: DroppedMark[] = [];
+  let tag: MetaTagInfo | null = null;
+  if (first.tag && second.tag && first.tag.tag === second.tag.tag) {
+    const notes = [...new Set([first.tag.notes, second.tag.notes].filter((n): n is string => !!n))];
+    tag = notes.length > 0 ? { tag: first.tag.tag, notes: notes.join('; ') } : { tag: first.tag.tag };
+  } else {
+    if (first.tag) dropped.push({ kind: 'tag', contig: firstName, tag: first.tag.tag });
+    if (second.tag) dropped.push({ kind: 'tag', contig: secondName, tag: second.tag.tag });
+  }
+  // The two agree on exclusion: a join of parts that differ is refused.
+  return { marks: { tag, excluded: first.excluded && second.excluded }, dropped };
+}
+
+// ---------------------------------------------------------------------------
 // JOIN
 // ---------------------------------------------------------------------------
 
@@ -263,9 +376,13 @@ export function undoCut(op: CurationOperation): void {
  * records its texels as `pixelSegments`. A join never changes which file
  * texel any display texel shows.
  *
+ * Refused (throws, changing nothing) when one of the two is excluded from
+ * export and the other is not; see `joinBlockedReason`.
+ *
  * @param contigOrderIndex - Index of the first of the two adjacent contigs.
+ * @returns Tags the joined contig did not keep because the parts' tags differ.
  */
-export function join(contigOrderIndex: number): void {
+export function join(contigOrderIndex: number): DroppedMark[] {
   requireMap();
   requireValidIndex(contigOrderIndex);
 
@@ -282,6 +399,9 @@ export function join(contigOrderIndex: number): void {
   const secondId = s.contigOrder[contigOrderIndex + 1];
   const first = map.contigs[firstId];
   const second = map.contigs[secondId];
+
+  const conflict = exclusionConflict(firstId, secondId);
+  if (conflict) throw new Error(conflict);
 
   // Concatenate both contigs' sequence provenance so FASTA export can rebuild
   // the merged sequence. The single `inverted` strand flag can only represent
@@ -310,6 +430,12 @@ export function join(contigOrderIndex: number): void {
   const mergedId = map.contigs.length;
   state.appendContigs(merged);
 
+  // The joined contig keeps a tag only if both parts carry the same one.
+  const firstMarks = marksOf(firstId);
+  const secondMarks = marksOf(secondId);
+  const { marks: mergedMarks, dropped } = joinMarks(firstMarks, first.name, secondMarks, second.name);
+  setMarks(mergedId, mergedMarks);
+
   // Replace the pair in the order
   const newOrder = [...s.contigOrder];
   newOrder.splice(contigOrderIndex, 2, mergedId);
@@ -324,13 +450,16 @@ export function join(contigOrderIndex: number): void {
       secondId,
       mergedId,
       previousOrder: [...s.contigOrder],
+      firstMarks,
+      secondMarks,
     },
   };
 
   state.update({ contigOrder: newOrder });
   state.pushOperation(op);
-  events.emit('curation:join', { contigIndex: contigOrderIndex });
+  events.emit('curation:join', { contigIndex: contigOrderIndex, dropped });
   events.emit('render:request', {});
+  return dropped;
 }
 
 /**
@@ -536,6 +665,8 @@ export function redo(): boolean {
   if (s.redoStack.length === 0) return false;
 
   const op = s.redoStack[s.redoStack.length - 1];
+  // A join whose parts now differ in exclusion stays on the redo stack.
+  if (redoBlockedReason()) return false;
   const newRedoStack = s.redoStack.slice(0, -1);
 
   // Update redo stack before re-executing (the operation will push to undo)
@@ -617,7 +748,7 @@ export function redoBatch(batchId: string): number {
     if (s.redoStack.length === 0) break;
     const next = s.redoStack[s.redoStack.length - 1];
     if (next.batchId !== batchId) break;
-    redo();
+    if (!redo()) break;
     count++;
   }
   return count;
@@ -647,8 +778,18 @@ function reapplyCut(op: CurationOperation): void {
     newOrder.splice(idx, 1, leftId, rightId);
   }
 
+  // The pieces still carry the marks they had. If the contig's own marks were
+  // changed while the cut was undone, the pieces take the new ones.
+  const marksAtCut = op.data.marks as ContigMarks | undefined;
+  const marksNow = marksOf(originalContigId);
+  if (marksAtCut && !sameMarks(marksAtCut, marksNow)) {
+    setMarks(leftId, marksNow);
+    setMarks(rightId, marksNow);
+  }
+
   const newOp: CurationOperation = {
     ...op,
+    data: { ...op.data, marks: marksNow },
     timestamp: Date.now(),
   };
 
@@ -667,14 +808,32 @@ function reapplyJoin(op: CurationOperation): void {
   const newOrder = [...previousOrder];
   newOrder.splice(contigOrderIndex, 2, mergedId);
 
+  // As for a cut: keep the joined contig's marks unless a part's marks were
+  // changed while the join was undone.
+  const contigs = state.get().map!.contigs;
+  const firstId = op.data.firstId as number;
+  const secondId = op.data.secondId as number;
+  const firstNow = marksOf(firstId);
+  const secondNow = marksOf(secondId);
+  const firstThen = op.data.firstMarks as ContigMarks | undefined;
+  const secondThen = op.data.secondMarks as ContigMarks | undefined;
+  const { marks: mergedMarks, dropped } = joinMarks(
+    firstNow, contigs[firstId].name, secondNow, contigs[secondId].name,
+  );
+  const changed = !!firstThen && !!secondThen &&
+    !(sameMarks(firstThen, firstNow) && sameMarks(secondThen, secondNow));
+  if (changed) setMarks(mergedId, mergedMarks);
+
   const newOp: CurationOperation = {
     ...op,
+    data: { ...op.data, firstMarks: firstNow, secondMarks: secondNow },
     timestamp: Date.now(),
   };
 
   state.update({ contigOrder: newOrder });
   state.pushOperation(newOp);
-  events.emit('curation:join', { contigIndex: contigOrderIndex });
+  // Only a freshly derived set of marks has anything new to report.
+  events.emit('curation:join', { contigIndex: contigOrderIndex, dropped: changed ? dropped : [] });
   events.emit('render:request', {});
 }
 
@@ -733,5 +892,7 @@ export const CurationEngine = {
   redo,
   undoBatch,
   redoBatch,
+  joinBlockedReason,
+  redoBlockedReason,
   setScaffoldManager,
 };

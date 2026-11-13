@@ -8,8 +8,10 @@
  *
  * Keys stored here are contig IDs (the values in the contigOrder array, i.e.
  * indices into map.contigs), NOT positions in contigOrder. Keying by identity
- * means an exclusion follows its contig across reorders (move/sort) and is
- * naturally dropped when that contig is destroyed by a cut/join.
+ * means an exclusion follows its contig across reorders (move/sort). A cut or
+ * join replaces contigs with new ones; CurationEngine carries the exclusion
+ * over (both pieces of a cut inherit it, and a join of an excluded contig with
+ * an included one is refused).
  */
 
 class ContigExclusionManager {

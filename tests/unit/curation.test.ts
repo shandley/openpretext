@@ -253,7 +253,7 @@ describe('CurationEngine', () => {
       CurationEngine.join(0);
 
       expect(collected.length).toBe(1);
-      expect(collected[0]).toEqual({ contigIndex: 0 });
+      expect(collected[0]).toEqual({ contigIndex: 0, dropped: [] });
 
       unsub();
     });

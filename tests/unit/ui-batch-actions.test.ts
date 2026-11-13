@@ -391,7 +391,7 @@ describe('BatchActions', () => {
       runBatchJoin(ctx);
 
       expect(batchJoinSelected).toHaveBeenCalled();
-      expect(ctx.showToast).toHaveBeenCalledWith('Select adjacent contigs to batch join');
+      expect(ctx.showToast).toHaveBeenCalledWith('Need at least 2 selected contigs to join');
       expect(ctx.refreshAfterCuration).not.toHaveBeenCalled();
       expect(SelectionManager.clearSelection).not.toHaveBeenCalled();
     });

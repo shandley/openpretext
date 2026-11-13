@@ -15,7 +15,8 @@ export interface AppEvents {
   'curation:cut': { contigIndex: number; position: number };
   'curation:invert': { contigIndex: number };
   'curation:move': { fromIndex: number; toIndex: number };
-  'curation:join': { contigIndex: number };
+  /** `dropped`: tags the joined contig did not keep (see CurationEngine.join). */
+  'curation:join': { contigIndex: number; dropped?: Array<{ kind: 'tag'; contig: string; tag: string }> };
   'curation:undo': {};
   'curation:redo': {};
   'grid:toggled': { visible: boolean };

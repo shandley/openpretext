@@ -180,6 +180,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **Tags and exclusions survive a cut or join.** Cutting an excluded contig
+  produced two pieces that were no longer excluded, so sequence the curator had
+  removed (a contaminant, say) went back into the exported FASTA, AGP and BED.
+  Tags were lost the same way. Now both pieces of a cut take the tag, notes
+  and exclusion of the contig they came from, and undo restores the contig
+  with its marks.
+- **A join that would change the export is refused.** Joining an excluded
+  contig to an included one has no safe automatic result: the joined contig
+  either exports the excluded sequence or drops the included one. The join is
+  now refused with a message naming the two contigs, in the editor, in batch
+  join (which then joins nothing), in scripts and their preview, and on redo.
+  Exclude or include both and the join goes ahead. A joined contig keeps a tag
+  when both parts carry the same one; otherwise the tag is not kept and the
+  message says which.
 - **Incomplete and damaged `.pretext` files are refused.** A file cut short by
   an unfinished download or copy used to load with the missing part of the map
   drawn blank, and a tile that failed to decompress was replaced with zeros,
