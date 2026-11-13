@@ -498,11 +498,18 @@ export function readPretextHeader(buffer: ArrayBuffer): {
   bytesPerTexture /= 2;
 
   // ---- 5. Contig positions on the map ----
+  // Which texels belong to which contig is not stored; every reader derives it
+  // from the running sum of the fractions. The sum is kept in single precision
+  // because PretextView keeps it in an f32 (`total += contigFracs[index]`,
+  // then `(u32)((f64)Number_of_Pixels_1D * (f64)total)`). A double-precision
+  // sum puts some boundaries one texel away from PretextView's, which moves
+  // the contig boundary on the map and changes the coordinates in an exported
+  // AGP. A contig whose span comes out empty owns no texel.
   {
     let cumulativeFrac = 0;
     for (let i = 0; i < numberOfContigs; i++) {
       const startFrac = cumulativeFrac;
-      cumulativeFrac += contigs[i].fractionalLength;
+      cumulativeFrac = Math.fround(cumulativeFrac + contigs[i].fractionalLength);
 
       contigs[i].length = Math.round(
         contigs[i].fractionalLength * totalGenomeLengthNum,
