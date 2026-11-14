@@ -183,8 +183,10 @@ describe('Tooltip', () => {
     it('should show tooltip with correct content for a valid contig', () => {
       (state.get as ReturnType<typeof vi.fn>).mockReturnValue({
         map: {
-          contigs: {
-            42: {
+          textureSize: 1000,
+          genomeLength: 100000,
+          contigs: [
+            {
               name: 'scaffold_1',
               length: 5000,
               pixelStart: 10,
@@ -192,15 +194,16 @@ describe('Tooltip', () => {
               inverted: false,
               scaffoldId: null,
             },
-          },
+          ],
         },
-        contigOrder: [42],
+        contigOrder: [0],
       });
       (formatBp as ReturnType<typeof vi.fn>).mockReturnValue('5.0 kb');
 
       const ctx = createMockCtx({
         hoveredContigIndex: 0,
-        mouseMapPos: { x: 1.5, y: 2.5 },
+        contigBoundaries: [0.1],
+        mouseMapPos: { x: 0.05, y: 0.02 },
       });
 
       updateTooltip(ctx, 200, 300);
@@ -211,7 +214,11 @@ describe('Tooltip', () => {
       expect(tooltipEl.innerHTML).toContain('100 px'); // pixelEnd - pixelStart = 100
       expect(tooltipEl.innerHTML).toContain('1 / 1'); // order
       expect(tooltipEl.innerHTML).toContain('Forward'); // not inverted
-      expect(tooltipEl.innerHTML).toContain('1.500, 2.500'); // map pos
+      // Display texel 50 is texel 50 of the sequence; 100 bp per texel.
+      expect(tooltipEl.innerHTML).toContain('scaffold_1: 5,001 bp');
+      expect(tooltipEl.innerHTML).toContain('50 of 100');
+      expect(tooltipEl.innerHTML).toContain('scaffold_1: 2,001 bp'); // the row under the cursor
+      expect(tooltipEl.innerHTML).toContain('after 5,000 bp (offset 50)'); // edit mode: where C would cut
       expect(tooltipEl.classList.add).toHaveBeenCalledWith('visible');
     });
 

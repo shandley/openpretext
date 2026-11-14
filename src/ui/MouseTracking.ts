@@ -5,6 +5,7 @@
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { updateTooltip, hideTooltip } from './Tooltip';
+import { locateDisplayTexel } from '../core/SequenceCoords';
 
 export function setupMouseTracking(ctx: AppContext, canvas: HTMLCanvasElement): void {
   canvas.addEventListener('mousemove', (e) => {
@@ -34,7 +35,12 @@ export function setupMouseTracking(ctx: AppContext, canvas: HTMLCanvasElement): 
     if (s.map && ctx.hoveredContigIndex >= 0) {
       const contigId = s.contigOrder[ctx.hoveredContigIndex];
       const contig = s.map.contigs[contigId];
-      posEl.textContent = contig ? contig.name : '\u2014';
+      // The contig, then the sequence and base pair under the cursor.
+      const p = locateDisplayTexel(s.map, s.contigOrder, Math.floor(mx * s.map.textureSize));
+      const bp = p ? `: ${p.bpStart.toLocaleString('en-US')} bp` : '';
+      // A cut or joined contig has its own name; give the sequence as well.
+      const where = p && contig && p.sequence !== contig.name ? ` \u00b7 ${p.sequence}${bp}` : bp;
+      posEl.textContent = contig ? `${contig.name}${where}` : '\u2014';
     } else {
       posEl.textContent = '\u2014';
     }

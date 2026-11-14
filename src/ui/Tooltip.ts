@@ -8,6 +8,7 @@ import { escapeHtml, cssColor } from './Html';
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { formatBp } from './Sidebar';
+import { locateDisplayTexel, boundaryAtOffset, cutOffsetAt, type SequencePosition } from '../core/SequenceCoords';
 
 let tooltipVisible = false;
 
@@ -46,10 +47,30 @@ export function updateTooltip(ctx: AppContext, clientX: number, clientY: number)
     html += `<div class="tooltip-row"><span class="label">Scaffold</span><span class="value"><span class="tooltip-badge" style="background:${cssColor(scaffoldInfo.color)};color:#fff;">${escapeHtml(scaffoldInfo.name)}</span></span></div>`;
   }
 
-  // Show position in map space
-  const mx = ctx.mouseMapPos.x;
-  const my = ctx.mouseMapPos.y;
-  html += `<div class="tooltip-row" style="margin-top:4px;font-size:10px;opacity:0.6"><span>Map pos</span><span>${mx.toFixed(3)}, ${my.toFixed(3)}</span></div>`;
+  // Where the cursor is in the sequences the map was built from. The column
+  // under the cursor first, then the row when it is a different place.
+  const N = s.map.textureSize;
+  const at = (v: number) => (v >= 0 && v < 1 ? locateDisplayTexel(s.map!, s.contigOrder, Math.floor(v * N)) : null);
+  const px = at(ctx.mouseMapPos.x);
+  const py = at(ctx.mouseMapPos.y);
+  const where = (p: SequencePosition) => `${escapeHtml(p.sequence)}: ${p.bpStart.toLocaleString('en-US')}`;
+  const row = (label: string, value: string) =>
+    `<div class="tooltip-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
+  if (px) {
+    html += row('Position', `${where(px)} bp`);
+    html += row('Texel', `${px.offset} of ${px.contigTexels}`);
+    if (py && (py.sourceIndex !== px.sourceIndex || py.sequenceTexel !== px.sequenceTexel)) {
+      html += row('Against', `${where(py)} bp`);
+    }
+    if (ctx.currentMode === 'edit') {
+      // What pressing C would do from here.
+      const prev = ctx.hoveredContigIndex === 0 ? 0 : ctx.contigBoundaries[ctx.hoveredContigIndex - 1];
+      const cur = ctx.contigBoundaries[ctx.hoveredContigIndex];
+      const offset = cutOffsetAt(px.contigTexels, (ctx.mouseMapPos.x - prev) / (cur - prev));
+      const b = boundaryAtOffset(s.map, s.contigOrder, ctx.hoveredContigIndex, offset);
+      if (b) html += row('Cut here', `after ${b.bp.toLocaleString('en-US')} bp (offset ${offset})`);
+    }
+  }
 
   tooltip.innerHTML = html;
 

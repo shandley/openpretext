@@ -43,6 +43,12 @@ export const DSL_REFERENCE: DSLCommandDoc[] = [
   },
   {
     category: 'Curation',
+    syntax: 'cut <sequence> at <bp>',
+    summary: 'Break an original sequence at a base-pair position (bp, kb or Mb), on the nearest texel boundary. Works wherever the position now lies on the map.',
+    example: 'cut scaffold_1 at 24.09Mb',
+  },
+  {
+    category: 'Curation',
     syntax: 'join <contig1> <contig2>',
     summary: 'Join two adjacent contigs into one; they must be neighbours in the current order.',
     example: 'join chr1 chr2',

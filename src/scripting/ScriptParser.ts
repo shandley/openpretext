@@ -208,10 +208,18 @@ export function parseLine(line: string, lineNumber: number = 1): ScriptCommand |
   const keyword = tokens[0].toLowerCase();
 
   switch (keyword) {
-    // ----- cut <contig> <pixel_offset> -----
+    // ----- cut <contig> <pixel_offset> | cut <sequence> at <bp> -----
     case 'cut': {
       if (tokens.length < 3) {
         throw new Error(`Line ${lineNumber}: 'cut' requires <contig> and <pixel_offset> arguments`);
+      }
+      // cut <sequence> at <bp>: a position in an original sequence.
+      if (tokens[2].toLowerCase() === 'at') {
+        if (tokens.length < 4) {
+          throw new Error(`Line ${lineNumber}: 'cut <sequence> at' requires a position, for example 'cut scaffold_1 at 24.09Mb'`);
+        }
+        const bp = parseUnitValue(tokens[3].replace(/,/g, ''), lineNumber, "'cut ... at' position");
+        return { type: 'cut', args: { sequence: tokens[1], bp }, line: lineNumber };
       }
       const contig = parseContigRef(tokens[1]);
       const pixelOffset = parseInt(tokens[2], 10);

@@ -6,6 +6,7 @@ import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { CurationEngine, undoBatch, redoBatch, type DroppedMark } from '../curation/CurationEngine';
 import { SelectionManager } from '../curation/SelectionManager';
+import { boundaryAtOffset, cutOffsetAt } from '../core/SequenceCoords';
 import { contigExclusion } from '../curation/ContigExclusion';
 import { events } from '../core/EventBus';
 
@@ -113,16 +114,20 @@ export function cutAtCursorPosition(ctx: AppContext): void {
   const contigId = s.contigOrder[ctx.hoveredContigIndex];
   const contig = s.map.contigs[contigId];
   const contigPixelLength = contig.pixelEnd - contig.pixelStart;
-  const pixelOffset = Math.round(fraction * contigPixelLength);
+  const pixelOffset = cutOffsetAt(contigPixelLength, fraction);
 
   if (pixelOffset <= 0 || pixelOffset >= contigPixelLength) {
     ctx.showToast('Cannot cut at edge of contig');
     return;
   }
 
+  // Read the position before the cut changes the layout.
+  const boundary = boundaryAtOffset(s.map, s.contigOrder, ctx.hoveredContigIndex, pixelOffset);
   CurationEngine.cut(ctx.hoveredContigIndex, pixelOffset);
   SelectionManager.clearSelection();
-  ctx.showToast(`Cut: ${contig.name} at offset ${pixelOffset}`);
+  ctx.showToast(boundary
+    ? `Cut: ${boundary.sequence} after ${boundary.bp.toLocaleString('en-US')} bp (offset ${pixelOffset})`
+    : `Cut: ${contig.name} at offset ${pixelOffset}`);
 }
 
 /** How long a refusal that needs reading stays on screen. */

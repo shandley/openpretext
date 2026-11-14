@@ -13,6 +13,7 @@
 import type { ScriptCommand, ContigRef } from './ScriptParser';
 import type { ContigInfo, AppState, MapData } from '../core/State';
 import type { ScaffoldManager, Scaffold } from '../curation/ScaffoldManager';
+import { findSequenceCut } from '../core/SequenceCoords';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -248,6 +249,18 @@ export function executeCommand(cmd: ScriptCommand, ctx: ScriptContext): ScriptRe
 
       // ----- cut <contig> <pixel_offset> -----
       case 'cut': {
+        if (cmd.args.sequence !== undefined) {
+          const before = ctx.state.get();
+          if (!before.map) throw new Error('No map loaded');
+          const found = findSequenceCut(before.map, before.contigOrder, cmd.args.sequence as string, cmd.args.bp as number);
+          ctx.curation.cut(found.orderIndex, found.offset);
+          return {
+            success: true,
+            message: `Cut '${found.boundary.sequence}' after ${found.boundary.bp.toLocaleString('en-US')} bp ` +
+              `(texel ${found.boundary.texel} of ${found.sequenceTexels})`,
+            line: cmd.line,
+          };
+        }
         const orderIndex = resolveContigRef(cmd.args.contig, ctx.state);
         const pixelOffset = cmd.args.pixelOffset as number;
         ctx.curation.cut(orderIndex, pixelOffset);
