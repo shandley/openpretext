@@ -28,6 +28,7 @@ import { APP_VERSION } from '../core/Version';
 import {
   buildAGPObjects, checkTiling, formatResolution, genomeLengthOf, type AGPObject,
 } from './AGPModel';
+import { haplotypeOrderWarnings } from './HaplotypeOrder';
 
 export type AGPFlavor = 'pretextview' | 'standard';
 
@@ -136,6 +137,15 @@ export function agpExportProblems(map: MapData, order: number[], marks: Marks = 
 
   for (const p of checkTiling(objects)) problems.push(`Internal error, please report it: ${p}.`);
   return problems;
+}
+
+/**
+ * Things the curator should look at before using the file, which do not stop
+ * it being written. Today: how `pretext-to-asm` will pair haplotypes (see
+ * HaplotypeOrder.ts).
+ */
+export function agpExportWarnings(map: MapData, order: number[], marks: Pick<Marks, 'tagsOf'> = LIVE_MARKS): string[] {
+  return haplotypeOrderWarnings(map, order, marks.tagsOf);
 }
 
 /**

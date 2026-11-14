@@ -10,7 +10,7 @@ import { downloadBED } from '../export/BEDWriter';
 import { downloadFASTA } from '../export/FASTAWriter';
 import { parseFASTA, parseFASTAStream } from '../formats/FASTAParser';
 import { parseAGP, planAGPImport, AGPImportError } from '../formats/AGPParser';
-import { AGPExportBlocked, type AGPFlavor } from '../export/AGPWriter';
+import { AGPExportBlocked, agpExportWarnings, type AGPFlavor } from '../export/AGPWriter';
 import { parseBedGraph, bedGraphToTrack } from '../formats/BedGraphParser';
 import { computeFastaTrackData } from '../analysis/FastaTracks';
 import { refreshCuratorTracks } from './CuratorTracks';
@@ -41,6 +41,13 @@ export function exportAGP(ctx: AppContext, flavor: AGPFlavor = 'pretextview'): v
   }
   try {
     downloadAGP(s, undefined, { flavor });
+    // The pipeline file is read by pretext-to-asm; say what it will make of it.
+    const warnings = flavor === 'pretextview' ? agpExportWarnings(s.map, s.contigOrder) : [];
+    if (warnings.length > 0) {
+      console.warn('AGP exported with warnings:', warnings);
+      ctx.showToast(`AGP exported. Check before using it: ${warnings.join(' ')}`, 30_000);
+      return;
+    }
     ctx.showToast(flavor === 'standard' ? 'Standard AGP exported (9 columns, no tags)' : 'AGP exported');
   } catch (err) {
     if (err instanceof AGPExportBlocked) {

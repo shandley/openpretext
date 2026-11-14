@@ -18,6 +18,7 @@ vi.mock('../../src/core/State', () => ({
 
 vi.mock('../../src/export/AGPWriter', () => ({
   downloadAGP: vi.fn(),
+  agpExportWarnings: vi.fn(() => []),
   AGPExportBlocked: class AGPExportBlocked extends Error {
     constructor(public readonly problems: string[]) { super(problems.join(' ')); }
   },
@@ -95,7 +96,7 @@ import {
 } from '../../src/ui/ExportSession';
 
 import { state } from '../../src/core/State';
-import { downloadAGP, AGPExportBlocked } from '../../src/export/AGPWriter';
+import { downloadAGP, agpExportWarnings, AGPExportBlocked } from '../../src/export/AGPWriter';
 import { downloadBED } from '../../src/export/BEDWriter';
 import { downloadFASTA } from '../../src/export/FASTAWriter';
 import { downloadSnapshot } from '../../src/export/SnapshotExporter';
@@ -224,6 +225,29 @@ describe('ExportSession', () => {
 
       expect(downloadAGP).toHaveBeenCalledWith(fakeState, undefined, { flavor: 'pretextview' });
       expect(ctx.showToast).toHaveBeenCalledWith('AGP exported');
+    });
+
+    it('should export and then show what the curator should check', () => {
+      const fakeState = { map: { filename: 'test.pretext' }, contigOrder: [0] };
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue(fakeState);
+      (agpExportWarnings as ReturnType<typeof vi.fn>).mockReturnValueOnce(['Haplotype order: look here.']);
+      const ctx = createMockCtx();
+
+      exportAGP(ctx);
+
+      expect(downloadAGP).toHaveBeenCalled();
+      expect(ctx.showToast).toHaveBeenCalledWith('AGP exported. Check before using it: Haplotype order: look here.', 30_000);
+    });
+
+    it('should not check haplotype order for the standard file, which carries no tags', () => {
+      const fakeState = { map: { filename: 'test.pretext' }, contigOrder: [0] };
+      (state.get as ReturnType<typeof vi.fn>).mockReturnValue(fakeState);
+      (agpExportWarnings as ReturnType<typeof vi.fn>).mockClear();
+      const ctx = createMockCtx();
+
+      exportAGP(ctx, 'standard');
+
+      expect(agpExportWarnings).not.toHaveBeenCalled();
     });
 
     it('should export the nine-column file when asked for the standard flavour', () => {

@@ -133,6 +133,36 @@ So every excluded contig must carry `Haplotig`, `Contaminant` or
 
 Each of these is an error in `pretext-to-asm` or a silent mistake downstream.
 
+### What the export warns about: haplotype order
+
+When a map holds two haplotypes, `pretext-to-asm` decides which scaffolds are
+the two copies of one chromosome from their position in the file. It walks the
+painted scaffolds in map order and expects each chromosome to be followed by
+its partner in the other haplotype:
+
+```
+Hap_1 chr 1, Hap_2 chr 1, Hap_1 chr 2, Hap_2 chr 2, ...
+```
+
+Scaffolds of one haplotype that follow one another are taken for parts of one
+chromosome and named `SUPER_1A`, `SUPER_1B` and so on. The tool gives no
+message. Painting all of haplotype 1 and then all of haplotype 2 names every
+chromosome this way.
+
+OpenPretext writes the file and then says so, naming the first scaffolds
+involved. It also warns about two layouts on which `pretext-to-asm` stops: a
+painted scaffold with no haplotype tag when others have one, and a chromosome
+left with no scaffold of the first haplotype.
+
+For a chromosome that has no partner, tag it `Singleton`. The tag acts on what
+follows: the next scaffold of the same haplotype then starts a new chromosome.
+A scaffold tagged with a chromosome name (`X`, `W`, ...) takes no part in the
+pairing. Curations that use `Primary` or `Target` are not checked.
+
+The check repeats the grouping in `pretext-to-asm` 1.4.1. It says nothing
+about the VGP scripts, whose `split_agp` step divides the file by the `Hap_1`
+and `Hap_2` tags.
+
 ### Sequences too small for the map
 
 A sequence shorter than about one texel owns no texel and has no row, as in
@@ -180,6 +210,13 @@ produces from the pipeline AGP, not this one.
   give identical output. This checks the writer, not the interface: the maps
   are rebuilt from the AGPs, because those curations' map files are not
   public.
+- **The haplotype-order warning, against the Sanger tool.**
+  `bench/haplotype-order-check.ts` lays a made-up genome of three chromosomes
+  and two haplotypes out in eight orders, runs `pretext-to-asm` on each
+  export, and compares the tool's result with the warning: the number of
+  scaffolds given lettered names, and whether the tool stopped. They agree on
+  all eight. The genome is made up, so this checks the grouping rule and
+  nothing about real maps.
 - **Against the VGP scripts.** `bench/vgp-acceptance.ts` runs `split_agp` from
   `vgl-curation` on PretextView's AGP and on OpenPretext's rewrite of it and
   compares the outputs: the whole of `split_agp` on the Galaxy tool's own test

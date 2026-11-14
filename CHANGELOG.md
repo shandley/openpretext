@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **A warning about haplotype order when exporting AGP.** `pretext-to-asm`
+  pairs the two copies of a chromosome by their position in the file, and
+  names scaffolds of one haplotype that follow one another as parts of one
+  chromosome (`SUPER_1A`, `SUPER_1B`) without a message. The export now says
+  when the layout will do this, and when it holds one of two layouts the tool
+  stops on (a painted scaffold with no haplotype tag among tagged ones; a
+  chromosome with no scaffold of the first haplotype). The file is still
+  written. The rule is transcribed from agp-tpf-utils 1.4.1 and
+  `bench/haplotype-order-check.ts` compares it with the tool on eight made-up
+  layouts. See `docs/AGP_EXPORT.md`.
+- **The cursor's position in sequence coordinates.** The tooltip and the
+  status bar give the original sequence and base pair under the cursor, the
+  texel within the contig, the position of the row under the cursor when it is
+  a different place, and in edit mode where pressing `C` would cut. The
+  figures use the AGP writer's arithmetic, so they are the coordinates an
+  export would carry. They replace a "Map pos" fraction with three decimals,
+  which on a 32,768-texel map resolved to about 33 texels.
+- **`cut <sequence> at <bp>` in the script console.** Breaks an original
+  sequence at a base-pair position (`cut scaffold_1 at 24.09Mb`) on the
+  nearest texel boundary, wherever that position now lies on the map: inside
+  an inverted, moved, cut or joined contig. The message reports where the
+  break went.
 - **AGP export that the curation pipelines can read.** The exported AGP now
   has PretextView's layout, which is the input to Sanger's `pretext-to-asm`
   and the VGP post-curation scripts: the map resolution in the header, every
