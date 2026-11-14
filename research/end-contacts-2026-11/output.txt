@@ -1,0 +1,69 @@
+### end-contacts-check
+map fAplLin1.HiC.combined.decontam.multimap.20251030.pretext
+  69 pieces, 136 ends; window 24 texels; 2 AGP rows renamed with hap_
+  curator joins: 9 (18 ends); neighbours left as in the file: 0
+  curator's partner ranked first: 11/18 (61%); in the first three: 18/18 (100%)
+    ends with a full window: first 9/12 (75%)
+    ends with a smaller window (short pieces): first 2/6 (33%)
+  score of the curator's partner: median 0.92, lowest 0.83
+### end-contacts-check --same-haplotype
+map fAplLin1.HiC.combined.decontam.multimap.20251030.pretext
+  69 pieces, 136 ends; window 24 texels; 2 AGP rows renamed with hap_
+  curator joins: 9 (18 ends); neighbours left as in the file: 0
+  curator's partner ranked first: 15/18 (83%); in the first three: 18/18 (100%)
+    ends with a full window: first 10/12 (83%)
+    ends with a smaller window (short pieces): first 5/6 (83%)
+  score of the curator's partner: median 0.92, lowest 0.83
+### continuity-dips-check
+fAplLin1.HiC.combined.decontam.multimap.20251030.pretext  window 24 threshold 0.5
+  curator breaks inside scorable sequence: 9; with a dip within one window: 5; too near an end or in a short sequence: 0
+  dips where the curator did not cut: 0
+  missed: scaffold_1.H2_1@683(0.97) scaffold_2.H2_1@411(0.63) scaffold_5.H1_1@525(0.68) scaffold_2.H1_1@587(0.82)
+  extra: 
+
+### end-contacts-check
+map fChaTrf1.haps_combined.mapped.PT.pretext
+  110 pieces, 210 ends; window 24 texels
+  curator joins: 3 (6 ends); neighbours left as in the file: 0
+  curator's partner ranked first: 0/6 (0%); in the first three: 1/6 (17%)
+    ends with a full window: first 0/4 (0%)
+    ends with a smaller window (short pieces): first 0/2 (0%)
+  score of the curator's partner: median 0.84, lowest 0.69
+### end-contacts-check --same-haplotype
+map fChaTrf1.haps_combined.mapped.PT.pretext
+  110 pieces, 210 ends; window 24 texels
+  curator joins: 3 (6 ends); neighbours left as in the file: 0
+  curator's partner ranked first: 2/6 (33%); in the first three: 6/6 (100%)
+    ends with a full window: first 0/4 (0%)
+    ends with a smaller window (short pieces): first 2/2 (100%)
+  score of the curator's partner: median 0.84, lowest 0.69
+### continuity-dips-check
+fChaTrf1.haps_combined.mapped.PT.pretext  window 24 threshold 0.5
+  curator breaks inside scorable sequence: 5; with a dip within one window: 1; too near an end or in a short sequence: 0
+  dips where the curator did not cut: 2
+  missed: H1.scaffold_22@236(0.85) H1.scaffold_22@242(0.85) H2.scaffold_23@240(0.88) H2.scaffold_23@245(0.88)
+  extra: H1.scaffold_16@260(0.46) H2.scaffold_17@376(0.40)
+
+### end-contacts-check
+map bCotChi1.combined.pretext
+  673 pieces, 1026 ends; window 24 texels
+  curator joins: 56 (112 ends); neighbours left as in the file: 2
+  curator's partner ranked first: 8/112 (7%); in the first three: 40/112 (36%)
+    ends with a full window: first 0/10 (0%)
+    ends with a smaller window (short pieces): first 8/102 (8%)
+  score of the curator's partner: median 0.90, lowest 0.27
+### end-contacts-check --same-haplotype
+map bCotChi1.combined.pretext
+  673 pieces, 1026 ends; window 24 texels
+  curator joins: 56 (112 ends); neighbours left as in the file: 2
+  curator's partner ranked first: 22/112 (20%); in the first three: 70/112 (63%)
+    ends with a full window: first 2/10 (20%)
+    ends with a smaller window (short pieces): first 20/102 (20%)
+  score of the curator's partner: median 0.90, lowest 0.27
+### continuity-dips-check
+bCotChi1.combined.pretext  window 24 threshold 0.5
+  curator breaks inside scorable sequence: 23; with a dip within one window: 5; too near an end or in a short sequence: 5
+  dips where the curator did not cut: 2
+  missed: H1.scaffold_1@1214(0.84) H1.scaffold_4@1344(0.75) H1.scaffold_5@918(0.96) H1.scaffold_5@1155(0.68) H1.scaffold_6@904(0.66) H1.scaffold_10@101(0.34) H1.scaffold_2@263(1.09) H1.scaffold_2@1495(0.74) H1.scaffold_2@271(1.09) H1.scaffold_2@1500(0.74) H2.scaffold_1@2653(1.03) H2.scaffold_2@1355(0.96) H2.scaffold_2@861(0.72) H2.scaffold_3@39(0.91)
+  extra: H2.scaffold_6@60(0.48) H2.scaffold_10@400(0.50)
+

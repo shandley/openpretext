@@ -14,6 +14,7 @@ import type { ScriptCommand, ContigRef } from './ScriptParser';
 import type { ContigInfo, AppState, MapData } from '../core/State';
 import type { ScaffoldManager, Scaffold } from '../curation/ScaffoldManager';
 import { findSequenceCut } from '../core/SequenceCoords';
+import { describeContacts, localSampler } from '../analysis/EndContacts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +30,13 @@ export interface ScriptResult {
   message: string;
   /** The 1-based source line number of the command. */
   line: number;
+  /**
+   * More output that arrives after the command returns: a read-only analysis
+   * computed off the main thread. Resolves with text to show under `message`,
+   * or rejects with the reason there is none. The command itself has already
+   * succeeded or failed by the time this is set.
+   */
+  followUp?: Promise<string>;
 }
 
 /**
@@ -123,6 +131,13 @@ export interface ScriptContext {
   batch?: BatchAPI;
   nav?: NavAPI;
   query?: QueryAPI;
+  /**
+   * Reads the contacts of a contig's ends for the layout given (see
+   * analysis/EndContacts). In the app this runs in the tile worker, which
+   * holds the tile bytes. Absent in contexts that keep the tiles themselves,
+   * where the command reads them directly.
+   */
+  contacts?: (map: MapData, order: number[], orderIndex: number) => Promise<string[]>;
   /** Optional callback for echo messages. Defaults to console.log. */
   onEcho?: (message: string) => void;
 }
@@ -583,6 +598,29 @@ export function executeCommand(cmd: ScriptCommand, ctx: ScriptContext): ScriptRe
         return {
           success: true,
           message: message,
+          line: cmd.line,
+        };
+      }
+
+      // ----- contacts <contig> -----
+      case 'contacts': {
+        const orderIndex = resolveContigRef(cmd.args.contig, ctx.state);
+        const s = ctx.state.get();
+        const map = s.map!;
+        const name = map.contigs[s.contigOrder[orderIndex]].name;
+        const heading = `Contacts of '${name}' (1.00 = contact between true neighbours on this map)`;
+        if (ctx.contacts) {
+          // The layout is handed over now, so later commands do not change the answer.
+          const followUp = ctx.contacts(map, [...s.contigOrder], orderIndex).then((lines) => lines.join('\n'));
+          // A caller that does not show follow-ups must not turn a failed read into an unhandled rejection.
+          followUp.catch(() => {});
+          return { success: true, message: heading, line: cmd.line, followUp };
+        }
+        const sampler = localSampler(map);
+        if (!sampler) throw new Error('Contacts are read from the map file\'s detail tiles, which this map does not have');
+        return {
+          success: true,
+          message: [heading, ...describeContacts(sampler, map, s.contigOrder, orderIndex)].join('\n'),
           line: cmd.line,
         };
       }

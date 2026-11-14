@@ -16,6 +16,8 @@ import { assembleOverview as assembleOverviewSync, type OverviewMode } from '../
 import type { TileKey } from './TileManager';
 import type { PretextHeader } from '../formats/PretextParser';
 import type { TileWorkerResponse } from './TileDecodeWorker';
+import { TileSampler } from '../analysis/TileSampler';
+import { describeContacts, type ContactsMap } from '../analysis/EndContacts';
 
 export interface AssembledOverview { overview: Float32Array; overviewSize: number }
 
@@ -38,6 +40,10 @@ export class TileDecodeWorkerClient {
   /** Pending assembleOverview() requests, keyed by request id. */
   private overviewReqId = 0;
   private pendingOverview = new Map<number, (r: AssembledOverview) => void>();
+
+  /** Pending contacts() requests, keyed by request id. */
+  private contactsReqId = 0;
+  private pendingContacts = new Map<number, { resolve: (lines: string[]) => void; reject: (e: Error) => void }>();
 
   constructor() {
     this.tryInitWorker();
@@ -77,6 +83,9 @@ export class TileDecodeWorkerClient {
    */
   setSource(rawTiles: Uint8Array[], header: PretextHeader): void {
     this.cancel();
+    // An answer still on its way describes the map being replaced.
+    for (const p of this.pendingContacts.values()) p.reject(new Error('Another map was loaded before the contacts were read'));
+    this.pendingContacts.clear();
     this.header = header;
 
     if (this.usingWorker && this.worker && !this.workerDead) {
@@ -142,6 +151,35 @@ export class TileDecodeWorkerClient {
     return Promise.resolve({ overview: new Float32Array(0), overviewSize: 0 });
   }
 
+  /**
+   * The contacts of one contig's two ends in the given layout, as lines of
+   * text (analysis/EndContacts). Computed where the tile bytes are. Rejects
+   * with a sentence when they cannot be read.
+   */
+  contacts(map: ContactsMap, order: number[], orderIndex: number): Promise<string[]> {
+    if (this.usingWorker && this.worker && !this.workerDead) {
+      return new Promise((resolve, reject) => {
+        const requestId = ++this.contactsReqId;
+        this.pendingContacts.set(requestId, { resolve, reject });
+        // Only the fields the analysis reads: the full map holds typed arrays that must not be copied.
+        const lite: ContactsMap = {
+          contigs: map.contigs, textureSize: map.textureSize,
+          fileContigCount: map.fileContigCount, genomeLength: map.genomeLength,
+        };
+        this.worker!.postMessage({ type: 'contacts', requestId, map: lite, order, orderIndex });
+      });
+    }
+    if (this.rawTiles && this.header) {
+      try {
+        const sampler = new TileSampler({ tiles: this.rawTiles, header: this.header });
+        return Promise.resolve(describeContacts(sampler, map, order, orderIndex));
+      } catch (err) {
+        return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    }
+    return Promise.reject(new Error('Contacts are read from the map file\'s detail tiles, which this map does not have'));
+  }
+
   /** Abandon any in-flight decode. */
   cancel(): void {
     this.generation++;
@@ -166,6 +204,7 @@ export class TileDecodeWorkerClient {
     this.header = null;
     this.onDecoded = null;
     this.pendingOverview.clear();
+    this.pendingContacts.clear();
   }
 
   private handleResponse(msg: TileWorkerResponse): void {
@@ -174,6 +213,14 @@ export class TileDecodeWorkerClient {
       if (resolve) {
         this.pendingOverview.delete(msg.requestId);
         resolve({ overview: msg.overview, overviewSize: msg.overviewSize });
+      }
+      return;
+    }
+    if (msg.type === 'contactsResult') {
+      const pending = this.pendingContacts.get(msg.requestId);
+      if (pending) {
+        this.pendingContacts.delete(msg.requestId);
+        if (msg.lines) pending.resolve(msg.lines); else pending.reject(new Error(msg.error ?? 'The contacts could not be read'));
       }
       return;
     }

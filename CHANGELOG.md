@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **`contacts <contig>` in the script console.** For each end of a contig it
+  prints how strongly the end contacts its current neighbour, where that
+  neighbour ranks among every other contig end on the map, and the five
+  strongest. Scores are read from the file's detail tiles and are relative to
+  the contact between neighbouring stretches of unbroken sequence on the same
+  map (1.00 = like true neighbours). After a cut at a suspected inversion, a
+  piece whose far end scores higher than its near end is the wrong way round.
+  It changes nothing. Checked against three public curations
+  (`research/end-contacts-2026-11/REPORT.md`): it is evidence for a curator,
+  not an answer. On maps holding both haplotypes the other haplotype's copy
+  often outranks the true neighbour, and short pieces tie.
 - **A warning about haplotype order when exporting AGP.** `pretext-to-asm`
   pairs the two copies of a chromosome by their position in the file, and
   names scaffolds of one haplotype that follow one another as parts of one

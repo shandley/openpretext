@@ -15,6 +15,8 @@ import { decodeTile } from './TileDecoder';
 import { assembleOverview, type OverviewMode } from '../formats/PretextParser';
 import type { TileKey } from './TileManager';
 import type { PretextHeader } from '../formats/PretextParser';
+import { TileSampler } from '../analysis/TileSampler';
+import { describeContacts, type ContactsMap } from '../analysis/EndContacts';
 
 // ---------------------------------------------------------------------------
 // Message protocol
@@ -51,7 +53,22 @@ export interface TileAssembleOverviewMessage {
   requestId: number;
 }
 
+/**
+ * main → worker: read the contacts of one contig's ends (analysis/EndContacts).
+ * It runs here for the same reason: this thread holds the tile bytes. The
+ * layout is sent with the request, so the answer is for the layout as it was
+ * when asked.
+ */
+export interface TileContactsMessage {
+  type: 'contacts';
+  requestId: number;
+  map: ContactsMap;
+  order: number[];
+  orderIndex: number;
+}
+
 export type TileWorkerRequest =
+  | TileContactsMessage
   | TileInitMessage
   | TileDecodeMessage
   | TileCancelMessage
@@ -79,7 +96,16 @@ export interface TileOverviewAssembledMessage {
   overviewSize: number;
 }
 
+/** worker → main: the contacts asked for, as lines of text, or why they could not be read. */
+export interface TileContactsResultMessage {
+  type: 'contactsResult';
+  requestId: number;
+  lines?: string[];
+  error?: string;
+}
+
 export type TileWorkerResponse =
+  | TileContactsResultMessage
   | TileDecodedMessage
   | TileBatchCompleteMessage
   | TileOverviewAssembledMessage;
@@ -93,6 +119,8 @@ const CHUNK_SIZE = 2;
 
 let rawTiles: Uint8Array[] | null = null;
 let header: PretextHeader | null = null;
+/** Decoded-tile cache for analyses; rebuilt for each map. */
+let sampler: TileSampler | null = null;
 /** The highest generation seen; a task is stale once its gen is below this. */
 let currentGeneration = 0;
 
@@ -141,8 +169,20 @@ self.onmessage = (event: MessageEvent<TileWorkerRequest>) => {
     case 'init':
       rawTiles = msg.rawTiles;
       header = msg.header;
+      sampler = new TileSampler({ tiles: msg.rawTiles, header: msg.header });
       currentGeneration = 0;
       break;
+    case 'contacts': {
+      const resp: TileContactsResultMessage = { type: 'contactsResult', requestId: msg.requestId };
+      try {
+        if (!sampler) throw new Error('No map file is loaded');
+        resp.lines = describeContacts(sampler, msg.map, msg.order, msg.orderIndex);
+      } catch (err) {
+        resp.error = err instanceof Error ? err.message : String(err);
+      }
+      (self as unknown as Worker).postMessage(resp);
+      break;
+    }
     case 'cancel':
       // Bump the generation so any in-flight task sees itself as stale.
       if (msg.generation > currentGeneration) currentGeneration = msg.generation;

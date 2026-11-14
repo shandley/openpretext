@@ -112,11 +112,33 @@ function renderResultLines(outcome: DSLRunOutcome): string {
   for (const err of outcome.parseErrors) {
     html += `<div class="script-output-error">Parse error (line ${err.line}): ${escapeHtml(err.message)}</div>`;
   }
-  for (const result of outcome.results) {
+  outcome.results.forEach((result, i) => {
     const cls = result.success ? 'script-output-success' : 'script-output-error';
     html += `<div class="${cls}">Line ${result.line}: ${escapeHtml(result.message)}</div>`;
-  }
+    // Room for output that arrives later (see attachFollowUps).
+    if (result.followUp) html += `<div class="script-output-info" data-follow-up="${i}">  reading the map...</div>`;
+  });
   return html;
+}
+
+/**
+ * Fill in output that arrives after a command returned. Call once the lines
+ * from renderResultLines are in `outputEl`. If the output is replaced before
+ * an answer comes, its placeholder is gone and the answer is dropped.
+ */
+function attachFollowUps(outputEl: HTMLElement, outcome: DSLRunOutcome): void {
+  outcome.results.forEach((result, i) => {
+    if (!result.followUp) return;
+    const slot = outputEl.querySelector<HTMLElement>(`[data-follow-up="${i}"]`);
+    if (!slot) return;
+    result.followUp.then(
+      (text) => { slot.textContent = text; },
+      (err) => {
+        slot.className = 'script-output-error';
+        slot.textContent = `  ${err instanceof Error ? err.message : String(err)}`;
+      },
+    );
+  });
 }
 
 function fmtBp(bp: number): string {
@@ -292,6 +314,7 @@ export function runScript(ctx: AppContext): void {
   }
 
   outputEl.innerHTML = html || '<span class="script-output-info">No commands to execute.</span>';
+  attachFollowUps(outputEl, outcome);
 }
 
 /** Read the trimmed input, or null (and render a message) if there is nothing to preview. */
@@ -326,6 +349,7 @@ export function previewScript(ctx: AppContext): void {
     html += `<div class="script-output-info">${ok} valid, ${problems} problem${problems === 1 ? '' : 's'}. Lines that depend on an earlier line's result may show a false error in preview.</div>`;
   }
   outputEl.innerHTML = html;
+  attachFollowUps(outputEl, outcome);
 }
 
 /** Preview the real effect (contig count, N50, reordering) by running then reverting. */
@@ -349,4 +373,5 @@ export function previewScriptEffects(ctx: AppContext): void {
     html += `<div class="script-output-info">${diff.applied} operation(s) applied and reverted</div>`;
   }
   outputEl.innerHTML = html;
+  attachFollowUps(outputEl, outcome);
 }

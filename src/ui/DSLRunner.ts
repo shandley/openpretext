@@ -72,8 +72,16 @@ export function buildScriptContext(ctx: AppContext, onEcho: (message: string) =>
       goto: (x, y) => ctx.camera.animateTo({ x, y }),
     },
     query: buildQuery(ctx),
+    contacts: contactsProvider(ctx),
     onEcho,
   };
+}
+
+/** Contacts come from the tile worker, which holds the map's tile bytes. */
+function contactsProvider(ctx: AppContext): ScriptContext['contacts'] {
+  return (map, order, orderIndex) => (ctx.tileDecoder
+    ? ctx.tileDecoder.contacts(map, order, orderIndex)
+    : Promise.reject(new Error('Contacts are read from the map file\'s detail tiles, which this map does not have')));
 }
 
 /**
@@ -157,6 +165,7 @@ function buildDryRunContext(ctx: AppContext, onEcho: (message: string) => void):
     },
     nav: { zoomToContigRange: noop, resetView: noop, goto: noop },
     query: buildQuery(ctx),
+    contacts: contactsProvider(ctx),
     onEcho,
   };
 }

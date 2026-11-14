@@ -185,6 +185,12 @@ export const DSL_REFERENCE: DSLCommandDoc[] = [
   // --------------------------------------------------------------------- //
   {
     category: 'Meta',
+    syntax: 'contacts <contig>',
+    summary: 'For each end of a contig: how strongly it contacts its current neighbour, and the ends anywhere on the map it contacts most. Changes nothing.',
+    example: 'contacts chr1',
+  },
+  {
+    category: 'Meta',
     syntax: 'echo <message>',
     summary: 'Print a message to the script output; useful for annotating scripts.',
     example: 'echo starting curation',

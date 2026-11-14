@@ -17,6 +17,7 @@ const PARSER_KEYWORDS = [
   'zoom',
   'goto',
   'echo',
+  'contacts',
   'autocut',
   'autosort',
   'assert',

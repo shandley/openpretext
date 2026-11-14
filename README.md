@@ -103,7 +103,7 @@ AGP in PretextView's layout, for the Sanger `pretext-to-asm` and VGP post-curati
 
 ### Scripting
 
-A 13-command curation DSL with contig references by name or index (`#0`, `#15`), a script console with syntax highlighting, and replay from a curation log. Cutting, joining, inverting, moving, selection, scaffold assignment, Auto Cut, and Auto Sort all have script equivalents. Meta tags, contig exclusion, and waypoints remain UI-only.
+A 14-command curation DSL with contig references by name or index (`#0`, `#15`), a script console with syntax highlighting, and replay from a curation log. Cutting, joining, inverting, moving, selection, scaffold assignment, Auto Cut, and Auto Sort all have script equivalents. Meta tags, contig exclusion, and waypoints remain UI-only.
 
 ### Tutorials and example data
 
@@ -164,6 +164,7 @@ invert chr3                 # flip a misoriented contig
 move #5 to 0                # move a contig to a new position
 cut chr1 500                # cut at a pixel offset
 cut scaffold_1 at 24.09Mb   # cut an original sequence at a base-pair position
+contacts chr1_L             # what each end of a contig contacts most strongly
 join chr1_L chr1_R          # join two adjacent contigs
 scaffold create Chromosome_1
 scaffold paint #0 Chromosome_1

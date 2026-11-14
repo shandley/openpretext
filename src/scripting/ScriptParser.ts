@@ -37,6 +37,7 @@ export type ScriptCommandType =
   | 'zoom_reset'
   | 'goto'
   | 'echo'
+  | 'contacts'
   | 'autocut'
   | 'autosort';
 
@@ -419,6 +420,14 @@ export function parseLine(line: string, lineNumber: number = 1): ScriptCommand |
       // Everything after "echo" is the message
       const message = tokens.slice(1).join(' ');
       return { type: 'echo', args: { message }, line: lineNumber };
+    }
+
+    // ----- contacts <contig> -----
+    case 'contacts': {
+      if (tokens.length < 2) {
+        throw new Error(`Line ${lineNumber}: 'contacts' requires a <contig> argument`);
+      }
+      return { type: 'contacts', args: { contig: parseContigRef(tokens[1]) }, line: lineNumber };
     }
 
     case 'autocut': {
