@@ -75,8 +75,19 @@ def misassigned(ref, test):
         pairs[ca] = cb
         used_a.add(ca)
         used_b.add(cb)
-    right = sum(n for (ca, cb), n in table.items() if (ca is None and cb is None) or (ca is not None and pairs.get(ca) == cb))
-    return total - right, total
+    # A base is right when neither file paints it, or both paint it and the two
+    # chromosomes are a pair. (Until 17 November 2026 the second test read
+    # `pairs.get(ca) == cb`, which is also true when the reference paints a base
+    # into a chromosome that has no pair and the other file leaves it unpainted.
+    # That counted such bases as right, against the definition above.)
+    right = sum(n for (ca, cb), n in table.items()
+                if (ca is None and cb is None) or (ca is not None and cb is not None and pairs.get(ca) == cb))
+    parts = {
+        'reference_only': sum(n for (ca, cb), n in table.items() if ca is not None and cb is None),
+        'test_only': sum(n for (ca, cb), n in table.items() if ca is None and cb is not None),
+        'other_chromosome': sum(n for (ca, cb), n in table.items() if ca is not None and cb is not None and pairs.get(ca) != cb),
+    }
+    return total - right, total, parts
 
 
 def left_end(r):
@@ -132,15 +143,18 @@ def main():
     _, test = load(sys.argv[2])
     label = sys.argv[3] if len(sys.argv) > 3 else sys.argv[2]
     tol = TOLERANCE_TEXELS * res
-    wrong, total = misassigned(ref, test)
+    wrong, total, parts = misassigned(ref, test)
     rb, rj = breaks_and_joins(ref)
     tb, tj = breaks_and_joins(test)
     hb = matched(rb, tb, lambda r, t: near(r, t, tol))
     hj = matched(rj, tj, lambda r, t: (near(r[0], t[0], tol) and near(r[1], t[1], tol)) or (near(r[0], t[1], tol) and near(r[1], t[0], tol)))
     print(f'{label}')
     print(f'  misassigned bases: {wrong:,} of {total:,} ({100 * wrong / total:.3f}%)')
+    print(f"    painted only in the reference: {parts['reference_only']:,}; painted only in the test: {parts['test_only']:,}; "
+          f"painted in both, different chromosome: {parts['other_chromosome']:,}")
     print(f'  breaks: reference {len(rb)}, test {len(tb)}, matched {hb}')
     print(f'  joins:  reference {len(rj)}, test {len(tj)}, matched {hj}')
 
 
-main()
+if __name__ == '__main__':
+    main()

@@ -299,3 +299,14 @@ screen may well see an inversion that was passed over in a still image.
 
 The files for this run are in `fAplLin1/`. `FROZEN.txt` there records the
 hashes and what had been seen of the answer.
+
+## Third run
+
+Three genomes drawn at random from curations not opened before, with the
+rules committed in advance, are reported in `run3/REPORT.md`. In short: the
+share of bases in the wrong chromosome fell in all three (19.6% to 5.8%,
+13.1% to 2.2%, 4.1% to 2.6%), 4 of the curators' 65 breaks inside
+chromosomes were found, and almost none of the joins of pieces under 5 Mb
+were attempted. That report also records an error found in `score_agp.py`
+and corrected; the figures above for the first two runs are the same under
+the corrected script.

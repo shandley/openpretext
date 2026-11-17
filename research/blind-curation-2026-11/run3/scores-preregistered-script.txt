@@ -1,0 +1,27 @@
+=== mCarSyr1
+no edits
+  misassigned bases: 0 of 7,984,717,432 (0.000%)
+  breaks: reference 52, test 0, matched 0
+  joins:  reference 118, test 0, matched 0
+blind
+  misassigned bases: 361,368,875 of 7,984,717,432 (4.526%)
+  breaks: reference 52, test 15, matched 11
+  joins:  reference 118, test 3, matched 1
+=== fOphCon1
+no edits
+  misassigned bases: 0 of 3,695,147,810 (0.000%)
+  breaks: reference 40, test 0, matched 0
+  joins:  reference 62, test 0, matched 0
+blind
+  misassigned bases: 82,770,919 of 3,695,147,810 (2.240%)
+  breaks: reference 40, test 13, matched 10
+  joins:  reference 62, test 8, matched 3
+=== mBabCel1
+no edits
+  misassigned bases: 0 of 4,832,334,969 (0.000%)
+  breaks: reference 19, test 0, matched 0
+  joins:  reference 66, test 0, matched 0
+blind
+  misassigned bases: 119,304,144 of 4,832,334,969 (2.469%)
+  breaks: reference 19, test 2, matched 2
+  joins:  reference 66, test 8, matched 4

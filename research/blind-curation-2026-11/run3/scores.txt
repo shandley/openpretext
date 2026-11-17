@@ -1,0 +1,72 @@
+=== mCarSyr1
+nothing painted (the exported no-edit file)
+  misassigned bases: 7,018,062,050 of 7,984,717,432 (87.894%)
+    painted only in the reference: 7,018,062,050; painted only in the test: 0; painted in both, different chromosome: 0
+  breaks: reference 52, test 0, matched 0
+  joins:  reference 118, test 0, matched 0
+painted as the blind curation painted, no edits
+  misassigned bases: 1,567,556,412 of 7,984,717,432 (19.632%)
+    painted only in the reference: 385,370,784; painted only in the test: 39,109,717; painted in both, different chromosome: 1,143,075,911
+  breaks: reference 52, test 0, matched 0
+  joins:  reference 118, test 0, matched 0
+blind curation
+  misassigned bases: 464,564,913 of 7,984,717,432 (5.818%)
+    painted only in the reference: 385,370,784; painted only in the test: 39,109,717; painted in both, different chromosome: 40,084,412
+  breaks: reference 52, test 15, matched 11
+  joins:  reference 118, test 3, matched 1
+    of which both pieces from one sequence: curator 6, found 0
+  breaks between chromosomes: curator 25, found 11
+  breaks inside a chromosome: curator 27, found 0
+  joins, smaller piece 5 Mb or more: curator 25, found 1
+  joins, smaller piece under 5 Mb: curator 93, found 0
+  breaks made that the curator did not make: 4
+  joins made that the curator did not make: 2
+
+=== fOphCon1
+nothing painted (the exported no-edit file)
+  misassigned bases: 3,514,382,820 of 3,695,147,810 (95.108%)
+    painted only in the reference: 3,514,382,820; painted only in the test: 0; painted in both, different chromosome: 0
+  breaks: reference 40, test 0, matched 0
+  joins:  reference 62, test 0, matched 0
+painted as the blind curation painted, no edits
+  misassigned bases: 484,785,192 of 3,695,147,810 (13.120%)
+    painted only in the reference: 70,704,852; painted only in the test: 0; painted in both, different chromosome: 414,080,340
+  breaks: reference 40, test 0, matched 0
+  joins:  reference 62, test 0, matched 0
+blind curation
+  misassigned bases: 82,770,919 of 3,695,147,810 (2.240%)
+    painted only in the reference: 74,426,162; painted only in the test: 0; painted in both, different chromosome: 8,344,757
+  breaks: reference 40, test 13, matched 10
+  joins:  reference 62, test 8, matched 3
+    of which both pieces from one sequence: curator 12, found 2
+  breaks between chromosomes: curator 20, found 7
+  breaks inside a chromosome: curator 20, found 3
+  joins, smaller piece 5 Mb or more: curator 10, found 3
+  joins, smaller piece under 5 Mb: curator 52, found 0
+  breaks made that the curator did not make: 3
+  joins made that the curator did not make: 5
+
+=== mBabCel1
+nothing painted (the exported no-edit file)
+  misassigned bases: 4,631,479,457 of 4,832,334,969 (95.844%)
+    painted only in the reference: 4,631,479,457; painted only in the test: 0; painted in both, different chromosome: 0
+  breaks: reference 19, test 0, matched 0
+  joins:  reference 66, test 0, matched 0
+painted as the blind curation painted, no edits
+  misassigned bases: 198,348,684 of 4,832,334,969 (4.105%)
+    painted only in the reference: 46,305,914; painted only in the test: 0; painted in both, different chromosome: 152,042,770
+  breaks: reference 19, test 0, matched 0
+  joins:  reference 66, test 0, matched 0
+blind curation
+  misassigned bases: 126,530,227 of 4,832,334,969 (2.618%)
+    painted only in the reference: 46,305,914; painted only in the test: 0; painted in both, different chromosome: 80,224,313
+  breaks: reference 19, test 2, matched 2
+  joins:  reference 66, test 8, matched 4
+    of which both pieces from one sequence: curator 4, found 1
+  breaks between chromosomes: curator 1, found 1
+  breaks inside a chromosome: curator 18, found 1
+  joins, smaller piece 5 Mb or more: curator 8, found 3
+  joins, smaller piece under 5 Mb: curator 58, found 1
+  breaks made that the curator did not make: 0
+  joins made that the curator did not make: 4
+
