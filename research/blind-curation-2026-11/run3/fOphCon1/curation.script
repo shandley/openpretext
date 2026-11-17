@@ -1,0 +1,184 @@
+# Blind curation of fOphCon1 (third blind run), made from the map alone.
+# Cuts are typed as base pairs in the original sequences; each lands on the nearest texel boundary.
+cut scaffold_1.H1 at 106790329
+cut scaffold_1.H1 at 82432661
+cut scaffold_1.H2 at 74087905
+cut scaffold_1.H2 at 57172858
+cut scaffold_2.H1 at 99460475
+cut scaffold_2.H1 at 76117711
+cut scaffold_2.H2 at 64953780
+cut scaffold_2.H2 at 63149508
+cut scaffold_2.H2 at 61232469
+cut scaffold_3.H2 at 48151500
+cut scaffold_4.H2 at 49730238
+cut scaffold_15.H2 at 10825630
+cut scaffold_8.H1 at 78147516
+# Order: each chromosome as its haplotype-1 scaffold(s), then its haplotype-2 partner(s).
+move scaffold_1.H1_L_L to 0
+move scaffold_7.H2 to 1
+invert scaffold_1.H1_L_R
+move scaffold_1.H1_L_R to 2
+move scaffold_1.H1_R to 3
+move scaffold_1.H2_L_L to 4
+invert scaffold_1.H2_L_R
+move scaffold_1.H2_L_R to 5
+move scaffold_9.H1 to 6
+move scaffold_1.H2_R to 7
+move scaffold_2.H1_L_L to 8
+move scaffold_10.H2 to 9
+move scaffold_2.H1_R to 10
+move scaffold_2.H1_L_R to 11
+move scaffold_20.H2 to 12
+invert scaffold_24.H2
+move scaffold_24.H2 to 13
+move scaffold_17.H1 to 14
+move scaffold_2.H2_L_L_L to 15
+move scaffold_19.H1 to 16
+move scaffold_2.H2_R to 17
+move scaffold_22.H1 to 18
+move scaffold_3.H2_L to 19
+move scaffold_11.H1 to 20
+move scaffold_3.H2_R to 21
+move scaffold_10.H1 to 22
+move scaffold_4.H2_L to 23
+invert scaffold_21.H2
+move scaffold_21.H2 to 24
+move scaffold_12.H1 to 25
+move scaffold_22.H2 to 26
+move scaffold_4.H2_R to 27
+move scaffold_3.H1 to 28
+move scaffold_5.H2 to 29
+move scaffold_4.H1 to 30
+move scaffold_6.H2 to 31
+move scaffold_5.H1 to 32
+move scaffold_8.H2 to 33
+move scaffold_6.H1 to 34
+move scaffold_9.H2 to 35
+move scaffold_7.H1 to 36
+move scaffold_16.H2 to 37
+invert scaffold_15.H2_L
+move scaffold_15.H2_L to 38
+move scaffold_8.H1_L to 39
+move scaffold_8.H1_R to 40
+move scaffold_23.H2 to 41
+move scaffold_15.H2_R to 42
+move scaffold_13.H1 to 43
+move scaffold_11.H2 to 44
+move scaffold_14.H1 to 45
+move scaffold_13.H2 to 46
+move scaffold_15.H1 to 47
+move scaffold_12.H2 to 48
+move scaffold_16.H1 to 49
+move scaffold_14.H2 to 50
+move scaffold_18.H1 to 51
+move scaffold_18.H2 to 52
+move scaffold_20.H1 to 53
+move scaffold_17.H2 to 54
+move scaffold_21.H1 to 55
+move scaffold_19.H2 to 56
+# Paint each unit as one scaffold.
+scaffold create chr01_H1
+scaffold paint #0 chr01_H1
+scaffold create chr01_H2
+scaffold paint #1 chr01_H2
+scaffold create chr02_H1
+scaffold paint #2 chr02_H1
+scaffold paint #3 chr02_H1
+scaffold create chr02_H2
+scaffold paint #4 chr02_H2
+scaffold paint #5 chr02_H2
+scaffold create chr03_H1
+scaffold paint #6 chr03_H1
+scaffold create chr03_H2
+scaffold paint #7 chr03_H2
+scaffold create chr04_H1
+scaffold paint #8 chr04_H1
+scaffold create chr04_H2
+scaffold paint #9 chr04_H2
+scaffold create chr05_H1
+scaffold paint #10 chr05_H1
+scaffold paint #11 chr05_H1
+scaffold create chr05_H2
+scaffold paint #12 chr05_H2
+scaffold paint #13 chr05_H2
+scaffold create chr06_H1
+scaffold paint #14 chr06_H1
+scaffold create chr06_H2
+scaffold paint #15 chr06_H2
+scaffold create chr07_H1
+scaffold paint #16 chr07_H1
+scaffold create chr07_H2
+scaffold paint #17 chr07_H2
+scaffold create chr08_H1
+scaffold paint #18 chr08_H1
+scaffold create chr08_H2
+scaffold paint #19 chr08_H2
+scaffold create chr09_H1
+scaffold paint #20 chr09_H1
+scaffold create chr09_H2
+scaffold paint #21 chr09_H2
+scaffold create chr10_H1
+scaffold paint #22 chr10_H1
+scaffold create chr10_H2
+scaffold paint #23 chr10_H2
+scaffold paint #24 chr10_H2
+scaffold create chr11_H1
+scaffold paint #25 chr11_H1
+scaffold create chr11_H2
+scaffold paint #26 chr11_H2
+scaffold paint #27 chr11_H2
+scaffold create chr12_H1
+scaffold paint #28 chr12_H1
+scaffold create chr12_H2
+scaffold paint #29 chr12_H2
+scaffold create chr13_H1
+scaffold paint #30 chr13_H1
+scaffold create chr13_H2
+scaffold paint #31 chr13_H2
+scaffold create chr14_H1
+scaffold paint #32 chr14_H1
+scaffold create chr14_H2
+scaffold paint #33 chr14_H2
+scaffold create chr15_H1
+scaffold paint #34 chr15_H1
+scaffold create chr15_H2
+scaffold paint #35 chr15_H2
+scaffold create chr16_H1
+scaffold paint #36 chr16_H1
+scaffold create chr16_H2
+scaffold paint #37 chr16_H2
+scaffold paint #38 chr16_H2
+scaffold create chr17_H1
+scaffold paint #39 chr17_H1
+scaffold paint #40 chr17_H1
+scaffold create chr17_H2
+scaffold paint #41 chr17_H2
+scaffold paint #42 chr17_H2
+scaffold create chr18_H1
+scaffold paint #43 chr18_H1
+scaffold create chr18_H2
+scaffold paint #44 chr18_H2
+scaffold create chr19_H1
+scaffold paint #45 chr19_H1
+scaffold create chr19_H2
+scaffold paint #46 chr19_H2
+scaffold create chr20_H1
+scaffold paint #47 chr20_H1
+scaffold create chr20_H2
+scaffold paint #48 chr20_H2
+scaffold create chr21_H1
+scaffold paint #49 chr21_H1
+scaffold create chr21_H2
+scaffold paint #50 chr21_H2
+scaffold create chr22_H1
+scaffold paint #51 chr22_H1
+scaffold create chr22_H2
+scaffold paint #52 chr22_H2
+scaffold create chr23_H1
+scaffold paint #53 chr23_H1
+scaffold create chr23_H2
+scaffold paint #54 chr23_H2
+scaffold create chr24_H1
+scaffold paint #55 chr24_H1
+scaffold create chr24_H2
+scaffold paint #56 chr24_H2

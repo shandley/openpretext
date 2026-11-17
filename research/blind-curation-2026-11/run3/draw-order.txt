@@ -1,0 +1,49 @@
+ 1  mCarSyr1     Carlito_syrichta                     729 MB
+ 2  fOphCon1     Ophthalmolebias_constanciae          176 MB
+ 3  mBabCel1     Babyrousa_celebensis                 165 MB
+ 4  mTenEca1     Tenrec_ecaudatus                     236 MB
+ 5  rAllMis2     Alligator_mississippiensis           189 MB
+ 6  mZapHud1     Zapus_hudsonius                      137 MB
+ 7  mMonRed1     Monophyllus_redmani                  355 MB
+ 8  mLeoRos1     Leontopithecus_rosalia               182 MB
+ 9  mDicSum1     Dicerorhinus_sumatrensis             191 MB
+10  mReiHum1     Reithrodontomys_humulis              154 MB
+11  mTamHud2     Tamiasciurus_hudsonicus              457 MB
+12  mPhyPoe1     Phyllonycteris_poeyi                 224 MB
+13  rCroWil1     Crotalus_willardi                    157 MB
+14  mBlaBre2     Blarina_brevicauda                   104 MB
+15  mAnoDer1     Anomalurus_derbianus                 344 MB
+16  mMyoPil1     Myotis_pilosatibialis                223 MB
+17  xcIllIlle1   Illex_illecebrosus                   247 MB
+18  mSusScr4     Sus_scrofa                           123 MB
+19  mZapHud2     Zapus_hudsonius                      298 MB
+20  mMusNiv1     Mustela_nivalis                      197 MB
+21  aParTow1     Parvimolge_townsendi                1925 MB  (over the size limit, skipped)
+22  mRucEld1     Rucervus_eldii                       147 MB
+23  rLiaOli2     Liasis_olivaceus                     213 MB
+24  aRhiDar2     Rhinoderma_darwinii                  193 MB
+25  mPhyFal1     Phyllops_falcatus                     97 MB
+26  mTupBel1     Tupaia_belangeri                     102 MB
+27  mMyoSod1     Myotis_sodalis                       184 MB
+28  mRhiBla1     Rhinolophus_blasii                   217 MB
+29  mMyoNes1     Myotis_nesopolus                      70 MB
+30  mOliNig2     Oligoryzomys_nigripes                176 MB
+31  mRouMad1     Rousettus_madagascariensis           280 MB
+32  mPerGos1     Peromyscus_gossypinus                151 MB
+33  mPedCap2     Pedetes_capensis                     972 MB
+34  aAnoBae1     Anomaloglossus_baeobatrachus         263 MB
+35  fAleTen1     Alepocephalus_tenebrosus             220 MB
+36  aCryAll3     Cryptobranchus_alleganiensis         305 MB
+37  mTamHud3     Tamiasciurus_hudsonicus              537 MB
+38  mNeoFlo1     Neotoma_floridana                    228 MB
+39  aRanVar5     Ranitomeya_variabilis                312 MB
+40  bTurMig1     Turdus_migratorius                   105 MB
+41  mPteRuf1     Pteropus_rufus                       115 MB
+42  mRhiDar1     Rhinolophus_darlingi                 146 MB
+43  sCarTau1     Carcharias_taurus                    211 MB
+44  mVicPac1     Vicugna_pacos                        238 MB
+45  aEleMan1     Eleutherodactylus_marnockii          202 MB
+46  bTroAed1     Troglodytes_aedon                    152 MB
+47  sEchCoo1     Echinorhinus_cookei                  648 MB
+48  mEidDup1     Eidolon_dupreanum                    105 MB
+49  aThoSpi2     Thorius_spilogaster                 2704 MB  (over the size limit, skipped)
