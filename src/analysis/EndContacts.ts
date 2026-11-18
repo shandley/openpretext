@@ -113,6 +113,8 @@ export class EndContactScorer {
     private readonly map: MapData,
     private readonly order: number[],
     readonly windowTexels = DEFAULT_END_WINDOW,
+    /** Read every box at this level (0 = full resolution). Unset: each box at the level its size calls for. */
+    private readonly level?: number,
   ) {
     this.ends = contigEnds(map, order, windowTexels);
   }
@@ -139,7 +141,7 @@ export class EndContactScorer {
       let skip = Math.floor(step / 2);
       for (const [s, e] of spans) {
         let p = s + lo + skip;
-        for (; p <= e - hi; p += step) samples.push(this.sampler.boxMean(p - lo, p, p, p + hi));
+        for (; p <= e - hi; p += step) samples.push(this.sampler.boxMean(p - lo, p, p, p + hi, this.level));
         skip = Math.max(0, p - (e - hi) - 1);
       }
     }
@@ -163,7 +165,7 @@ export class EndContactScorer {
     const [ax0, ax1] = windowOf(a, wa);
     const [bx0, bx1] = windowOf(b, wb);
     const ref = this.reference(wa, wb);
-    return { score: this.sampler.boxMean(ax0, ax1, bx0, bx1) / ref, window: Math.min(wa, wb) };
+    return { score: this.sampler.boxMean(ax0, ax1, bx0, bx1, this.level) / ref, window: Math.min(wa, wb) };
   }
 
   private endOf(orderIndex: number, side: EndSide): ContigEnd | undefined {

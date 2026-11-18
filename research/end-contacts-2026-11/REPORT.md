@@ -117,3 +117,42 @@ ends. It does not find the piece.
   on a genome not yet opened.
 - Maps of one haplotype, where the largest source of confusion is absent,
   were not tested.
+
+## Added 19 November 2026: do the scores mix zoom levels, and does it matter?
+
+A `.pretext` file stores each zoom level with its own contrast adjustment
+(see `docs/PRETEXT_FORMAT.md`, "Each level has its own contrast"), so a value
+at one level cannot be compared with a value at another. The scorer picks the
+level from the window size. Within one score the box and its reference are
+read at the same level. Within one ranked list they are not: a short contig
+has a short window and is read at a finer level than a long one. On the
+killifish `fOphCon1`, 336 of the 550 top-five entries for 110 long-contig
+ends were read at a different level from a long-against-long pair.
+
+To see whether that harms the ranking, the scorer was given an option to
+read every box at one fixed level, and `bench/end-contacts-check.ts --level`
+was run on six genomes with a curator's file: the three above and the three
+of the third blind curation. The count is how often the curator's partner
+ranks first, and in the first three, among 628 ends (`levels.tsv`).
+
+| Levels used | First, all candidates | First three | First, same haplotype only | First three |
+|---|---|---|---|---|
+| By window size (as shipped) | 102 | 275 | 200 | 377 |
+| Full resolution for every box | 101 | 277 | 206 | 373 |
+| One level coarser for every box | 114 | 237 | 195 | 329 |
+| Two levels coarser for every box | 80 | 191 | 150 | 255 |
+
+Reading everything at full resolution gives the same result as the shipped
+rule, to within a few ends either way, and took about a third longer on the
+killifish (12.8 s against 9.4 s). The coarser fixed levels put fewer partners
+in the first three, most likely because a cell there is wider than a short
+contig and takes in its neighbours.
+
+So mixing levels within a list is real and is not what limits the ranking.
+The shipped rule is kept. The option stays in the scorer for this check.
+
+What this does not settle: the scores are ratios of contrast-adjusted values,
+not of contact counts, at any level. "1.00" means "as bright as true
+neighbours at this window size", and the ties near 1.0 for short pieces come
+from values that sit at the top of the scale next to the diagonal (the
+reference for a one-texel window on the killifish is 0.99 of the maximum).

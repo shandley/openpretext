@@ -165,6 +165,15 @@ describe('EndContactScorer', () => {
   });
 });
 
+describe('EndContactScorer at a fixed level', () => {
+  it('gives the same scores as the default when the file has one level', () => {
+    const { s, sampler, scorer } = scorerNow();
+    const fixed = new EndContactScorer(sampler, s.map!, s.contigOrder, W, 0);
+    expect(fixed.reference(W)).toBe(scorer.reference(W));
+    expect(fixed.report(1, 'left')).toEqual(scorer.report(1, 'left'));
+  });
+});
+
 describe('continuity along a contig', () => {
   it('drops at both ends of the inverted part and nowhere else', () => {
     const { s, sampler, scorer } = scorerNow();

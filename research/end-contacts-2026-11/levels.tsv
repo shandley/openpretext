@@ -1,0 +1,18 @@
+# all candidates
+genome	ends	mixed_first	mixed_top3	0_first	0_top3	1_first	1_top3	2_first	2_top3
+fAplLin1	18	11	18	11	18	12	17	11	17
+fChaTrf1	6	0	1	0	1	0	1	0	1
+bCotChi1	112	8	40	9	41	15	35	6	26
+fOphCon1	124	24	73	24	74	28	71	24	65
+mBabCel1	132	18	57	19	55	26	44	19	34
+mCarSyr1	236	41	86	38	88	33	69	20	48
+total	628	102	275	101	277	114	237	80	191
+# candidates of the same haplotype only
+genome	ends	mixed_first	mixed_top3	0_first	0_top3	1_first	1_top3	2_first	2_top3
+fAplLin1	18	15	18	14	18	14	18	14	18
+fChaTrf1	6	2	6	2	6	2	6	0	5
+bCotChi1	112	22	70	21	69	32	57	21	43
+fOphCon1	124	54	95	55	95	55	90	51	82
+mBabCel1	132	45	74	48	72	39	68	30	41
+mCarSyr1	236	62	114	66	113	53	90	34	66
+total	628	200	377	206	373	195	329	150	255

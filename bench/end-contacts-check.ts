@@ -56,8 +56,9 @@ const SAME_HAP = process.argv.includes('--same-haplotype');
   const tags = new Map(plan.tags);
   const loose = (id: number) => (tags.get(id) ?? []).some((t) => t === 'Unloc' || REMOVAL_TAGS.includes(t));
 
-  const sampler = new TileSampler({ tiles: loaded.parsed.tiles, header: h });
-  const scorer = new EndContactScorer(sampler, curated, order, WINDOW);
+  const sampler = new TileSampler({ tiles: loaded.parsed.tiles, header: h }, Number(flag('--cache') ?? 160));
+  const LEVEL = flag('--level') === undefined ? undefined : Number(flag('--level'));
+  const scorer = new EndContactScorer(sampler, curated, order, WINDOW, LEVEL);
   const end = (i: number, side: 'left' | 'right') => scorer.ends.find((e) => e.orderIndex === i && e.side === side);
   // Two facing ends that are neighbouring texels of the file were never apart.
   const contiguous = (a: ContigEnd, b: ContigEnd) => Math.abs(a.tip - b.tip) === 1 && a.inward !== b.inward;
