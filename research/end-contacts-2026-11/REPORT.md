@@ -156,3 +156,15 @@ not of contact counts, at any level. "1.00" means "as bright as true
 neighbours at this window size", and the ties near 1.0 for short pieces come
 from values that sit at the top of the scale next to the diagonal (the
 reference for a one-texel window on the killifish is 0.99 of the maximum).
+
+### These six genomes are now development data
+
+The comparison above read the curators' files for all six genomes, including
+the three of the third blind curation. No setting was changed as a result,
+so nothing shipped is fitted to them. But any later change to `contacts`
+chosen with this table in view (for example the "one level coarser" row,
+which ranks more partners first and fewer in the first three) would be
+fitted to these answers. A claim that such a change helps needs genomes not
+yet opened, drawn from the 46 left in
+`research/blind-curation-2026-11/run3/pool.tsv`, with the setting fixed
+before the draw.
