@@ -77,6 +77,7 @@ import { metaTags } from '../curation/MetaTagManager';
 import { computeBinGC, orientEigenvectorByGC } from '../analysis/GCContent';
 import type { CheckerboardResult } from '../analysis/CheckerboardScore';
 import { detectCentromeres, centromereToTracks, type CentromereResult } from '../analysis/CentromereDetector';
+import { revealTracks } from './TrackVisibility';
 
 // ---------------------------------------------------------------------------
 // Field guide deep links
@@ -388,7 +389,7 @@ async function runInsulation(ctx: AppContext): Promise<void> {
 
   ctx.trackRenderer.addTrack(insulationTrack);
   ctx.trackRenderer.addTrack(boundaryTrack);
-  ctx.tracksVisible = true;
+  revealTracks(ctx);
   ctx.updateTrackConfigPanel();
   ctx.showToast(`Insulation: ${result.boundaries.length} TAD boundaries detected`);
   runMisassemblyDetection(ctx);
@@ -478,7 +479,7 @@ async function runCompartments(ctx: AppContext): Promise<void> {
   const track = compartmentToTrack(result, overviewSize, s.map.textureSize);
 
   ctx.trackRenderer.addTrack(track);
-  ctx.tracksVisible = true;
+  revealTracks(ctx);
   ctx.updateTrackConfigPanel();
   ctx.showToast(
     `Compartments: ${result.iterations} iterations, eigenvalue ${result.eigenvalue.toFixed(2)}`
@@ -500,7 +501,7 @@ async function runICENormalization(ctx: AppContext): Promise<void> {
 
   const track = iceToTrack(result, overviewSize, s.map.textureSize);
   ctx.trackRenderer.addTrack(track);
-  ctx.tracksVisible = true;
+  revealTracks(ctx);
   ctx.updateTrackConfigPanel();
   ctx.showToast(`ICE: ${result.iterations} iterations, ${result.maskedBins.length} masked bins`);
 
@@ -534,7 +535,7 @@ async function runKRNormalization(ctx: AppContext): Promise<void> {
 
   const track = krToTrack(result, overviewSize, s.map.textureSize);
   ctx.trackRenderer.addTrack(track);
-  ctx.tracksVisible = true;
+  revealTracks(ctx);
   ctx.updateTrackConfigPanel();
   ctx.showToast(`Sinkhorn-Knopp: ${result.iterations} iterations, ${result.maskedBins.length} masked bins`);
 
@@ -597,7 +598,7 @@ async function runQualityMetrics(ctx: AppContext): Promise<void> {
   // Add per-contig cis ratio track
   const track = qualityToTrack(cachedQuality, ranges, overviewSize, s.map.textureSize);
   ctx.trackRenderer.addTrack(track);
-  ctx.tracksVisible = true;
+  revealTracks(ctx);
   ctx.updateTrackConfigPanel();
 
   const flagCount = cachedQuality.flaggedContigs.length;
@@ -620,7 +621,7 @@ export function runTelomereDetection(ctx: AppContext): void {
   if (cachedTelomere.hits.length > 0) {
     const track = telomereToTrack(cachedTelomere, s.map.textureSize);
     ctx.trackRenderer.addTrack(track);
-    ctx.tracksVisible = true;
+    revealTracks(ctx);
     ctx.updateTrackConfigPanel();
     events.emit('telomere:detected', { hitCount: cachedTelomere.hits.length });
   }
@@ -648,7 +649,7 @@ async function runDirectionality(ctx: AppContext): Promise<void> {
 
   ctx.trackRenderer.addTrack(diTrack);
   ctx.trackRenderer.addTrack(diBoundaryTrack);
-  ctx.tracksVisible = true;
+  revealTracks(ctx);
   ctx.updateTrackConfigPanel();
   ctx.showToast(`Directionality: ${result.boundaries.length} boundaries detected`);
   updateResultsDisplay(ctx);
@@ -1779,7 +1780,7 @@ export function triggerVirtual4C(ctx: AppContext, viewpointBin: number): void {
 
   const track = virtual4CToTrack(cachedV4C, overviewSize, s.map.textureSize);
   ctx.trackRenderer.addTrack(track);
-  ctx.tracksVisible = true;
+  revealTracks(ctx);
   ctx.updateTrackConfigPanel();
   ctx.showToast(`Virtual 4C: viewpoint bin ${viewpointBin}`);
   updateResultsDisplay(ctx);
@@ -2451,7 +2452,7 @@ export function restoreAnalysisState(ctx: AppContext, data: SessionAnalysisData)
     runMisassemblyDetection(ctx);
   }
 
-  ctx.tracksVisible = true;
+  revealTracks(ctx);
   ctx.updateTrackConfigPanel();
   updateResultsDisplay(ctx);
 }

@@ -259,6 +259,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   vulnerabilities)
 
 ### Fixed
+- **Tracks hidden with `X` stay hidden.** Every analysis switched the tracks
+  back on when it finished, and analyses rerun after each edit, so hidden
+  tracks returned within seconds. Hiding them now holds until they are shown
+  again, a track file is loaded, or another assembly is opened.
+- **`zoom <contig>` and a double-click in the contig list frame the contig
+  where it can be seen.** The contig was fitted to the whole canvas, which put
+  its lower part under the script console and its top and left under the
+  tracks. It is now fitted to the uncovered part, with a small margin.
 - **FASTA export of a cut contig no longer drops bases.** Contig lengths in a
   map file are rounded, and the last piece of a cut sequence ended at the
   rounded length, losing the bases past it. Records are now cut at the AGP's

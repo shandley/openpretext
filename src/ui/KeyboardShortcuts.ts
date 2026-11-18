@@ -14,6 +14,7 @@ import { toggleShortcutsModal } from './ShortcutsModal';
 import { isCommandPaletteVisible, toggleCommandPalette } from './CommandPalette';
 import { runAutoSort, runAutoCut } from './BatchActions';
 import { nextWeakJoin, prevWeakJoin } from './AnalysisPanel';
+import { toggleTracks } from './TrackVisibility';
 
 /** Keys the app binds together with Cmd/Ctrl. Every other binding is a bare key. */
 const CMD_SHORTCUT_KEYS = new Set(['s', 'k', 'z', 'o', 'a', 'g']);
@@ -181,9 +182,7 @@ export function setupKeyboardShortcuts(ctx: AppContext): void {
         break;
 
       case 'x':
-        ctx.tracksVisible = !ctx.tracksVisible;
-        ctx.showToast(`Tracks: ${ctx.tracksVisible ? 'visible' : 'hidden'}`);
-        ctx.requestRender();
+        toggleTracks(ctx);
         break;
 
       case 'n':

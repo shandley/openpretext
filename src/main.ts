@@ -129,6 +129,7 @@ class OpenPretextApp {
       currentMode: 'navigate',
       currentColorMap: 'red-white',
       tracksVisible: false,
+      tracksHiddenByUser: false,
       currentWaypointId: null,
       animFrameId: 0,
       referenceSequences: null,

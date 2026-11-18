@@ -55,6 +55,7 @@ export function resetForNewAssembly(ctx: AppContext): void {
   // contig names such as "scaffold_1" recur between assemblies and the export
   // would take the wrong sequence without complaint.
   ctx.trackRenderer?.clearTracks();
+  ctx.tracksHiddenByUser = false; // a new assembly starts with the default
   ctx.fastaTrackData = null;
   if (hadAssembly) ctx.referenceSequences = null;
   updateFastaHint(ctx);

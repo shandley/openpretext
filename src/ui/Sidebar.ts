@@ -13,6 +13,7 @@ import { metaTags, isValidTag, tagKind, type TagKind } from '../curation/MetaTag
 import { move } from '../curation/CurationEngine';
 import { detectChromosomeBlocks } from '../analysis/ScaffoldDetection';
 import { recomputeScaffoldDecay } from './AnalysisPanel';
+import { frameDiagonalRange } from './ViewFraming';
 
 /** Stripe and label colour for a tag: by what it does, with the removals told apart. */
 const TAG_KIND_COLORS: Record<TagKind, string> = {
@@ -158,7 +159,7 @@ export function updateSidebarContigList(ctx: AppContext): void {
       if (idx < 0 || idx >= ctx.contigBoundaries.length) return;
       const start = idx === 0 ? 0 : ctx.contigBoundaries[idx - 1];
       const end = ctx.contigBoundaries[idx];
-      ctx.camera.zoomToRegion(start, start, end, end);
+      frameDiagonalRange(ctx, start, end);
     });
 
     // Drag-and-drop reordering (edit mode only)

@@ -228,6 +228,23 @@ resolution * (resolution / 2)
 ```
 because BC4 stores 8 bytes per 4x4 block = 0.5 bytes per pixel.
 
+#### Each level has its own contrast
+
+The levels of a tile are not averages of one another. PretextMap builds each
+coarser level with a weighted median (`CreateMipMap`) and then stretches and
+histogram-equalises every level separately (`ContrastEqualisation`), so the
+same stretch of genome holds different stored values at different levels. In
+one map measured here, a block far from the diagonal averaged 0.064 at full
+resolution, 0.083 one level up and 0.017 at the coarsest level, on a scale
+of 0 to 1.
+
+A viewer that draws stored values therefore changes colour when it changes
+level: the background is paler or darker and the diagonal wider or narrower.
+PretextView does the same (it samples with `GL_NEAREST_MIPMAP_NEAREST`, one
+level at a time). OpenPretext draws the stored value of whichever level is on
+screen and does not rescale levels to match, because a rescaled value would
+not be the file's. Compare intensities within one zoom level, not between two.
+
 ### 4.5 BC4 (RGTC1) Compression Format
 
 BC4 is a single-channel block compression format. Each 4x4 pixel block is

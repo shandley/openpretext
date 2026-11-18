@@ -13,6 +13,7 @@ import { loadExampleDataset, loadDemoData, returnToLanding } from './FileLoading
 import { performUndo, performRedo } from './CurationActions';
 import { toggleLessonBrowser } from './LessonBrowser';
 import { setupToolbarPopovers } from './ToolbarPopovers';
+import { toggleTracks } from './TrackVisibility';
 
 export function setupToolbar(ctx: AppContext): void {
   setupToolbarPopovers();
@@ -90,10 +91,8 @@ export function setupToolbar(ctx: AppContext): void {
     ctx.minimap.toggle();
   });
   document.getElementById('btn-tracks')?.addEventListener('click', () => {
-    ctx.tracksVisible = !ctx.tracksVisible;
-    ctx.showToast(`Tracks: ${ctx.tracksVisible ? 'visible' : 'hidden'}`);
+    toggleTracks(ctx);
     ctx.updateTrackConfigPanel();
-    ctx.requestRender();
   });
   document.getElementById('btn-sidebar')?.addEventListener('click', () => {
     document.getElementById('sidebar')?.classList.toggle('visible');

@@ -13,6 +13,19 @@ export interface CameraState {
   zoom: number;
 }
 
+/** Strips of the canvas covered by something else, in CSS pixels. */
+export interface ViewInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+const NO_INSETS: ViewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/** Below this many free pixels on a side, insets are ignored. */
+const MIN_FREE_PX = 120;
+
 export class Camera {
   // Current state
   x: number = 0.5;
@@ -325,20 +338,45 @@ export class Camera {
 
   /**
    * Zoom to fit a specific region (in map coordinates 0-1).
+   *
+   * `insets` are strips of the canvas, in CSS pixels, that something else
+   * covers. The region is fitted to, and centred in, what is left. With no
+   * insets it is fitted to the whole canvas.
    */
-  zoomToRegion(x1: number, y1: number, x2: number, y2: number): void {
+  zoomToRegion(x1: number, y1: number, x2: number, y2: number, insets?: ViewInsets): void {
+    this.animateTo(this.frameRegion(x1, y1, x2, y2, insets));
+  }
+
+  /** The camera state that `zoomToRegion` moves to. */
+  frameRegion(x1: number, y1: number, x2: number, y2: number, insets?: ViewInsets): CameraState {
     const cx = (x1 + x2) / 2;
     const cy = (y1 + y2) / 2;
     const width = Math.abs(x2 - x1);
     const height = Math.abs(y2 - y1);
-    // Account for aspect ratio: wider canvas can show more horizontal extent
-    const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
-    const hExtent = aspect > 1 ? width / aspect : width;
-    const vExtent = aspect > 1 ? height : height * aspect;
-    const maxDim = Math.max(hExtent, vExtent);
-    const zoom = 1 / maxDim;
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
 
-    this.animateTo({ x: cx, y: cy, zoom: Math.min(zoom, this.maxZoom) });
+    // Insets that leave too little to draw in are ignored.
+    let { top, right, bottom, left } = insets ?? NO_INSETS;
+    if (w - left - right < MIN_FREE_PX || h - top - bottom < MIN_FREE_PX) {
+      top = right = bottom = left = 0;
+    }
+    const freeW = w - left - right;
+    const freeH = h - top - bottom;
+
+    // The shader draws one map unit as zoom * min(w, h) pixels on both axes.
+    const side = Math.min(w, h);
+    const fit = Math.min(freeW / width, freeH / height) / side;
+    const zoom = Math.min(fit, this.maxZoom);
+
+    // The free area's centre sits (left - right) / 2 pixels right of the
+    // canvas centre, and (top - bottom) / 2 below it.
+    const pxPerUnit = zoom * side;
+    return {
+      x: cx - (left - right) / 2 / pxPerUnit,
+      y: cy - (top - bottom) / 2 / pxPerUnit,
+      zoom,
+    };
   }
 
   /**

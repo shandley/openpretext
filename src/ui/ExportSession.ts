@@ -27,6 +27,7 @@ import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { exportAnalysisState, restoreAnalysisState, updateFastaHint } from './AnalysisPanel';
 import { inflate } from 'pako';
 import { showLoading, updateLoading, hideLoading } from './LoadingOverlay';
+import { showTracks } from './TrackVisibility';
 
 /**
  * Export the curation as AGP. The default is the file PretextView would
@@ -425,7 +426,7 @@ export async function loadBedGraphTrack(ctx: AppContext, file: File): Promise<vo
       { name: result.trackName ?? file.name },
     );
     ctx.trackRenderer.addTrack(track);
-    ctx.tracksVisible = true;
+    showTracks(ctx);
     ctx.showToast(`Track loaded: ${track.name}`);
     ctx.updateTrackConfigPanel();
   } catch (err) {

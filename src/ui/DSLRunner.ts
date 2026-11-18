@@ -13,6 +13,7 @@ import { autoSortContigs, autoCutContigs } from '../curation/BatchOperations';
 import { calculateMetrics } from '../curation/QualityMetrics';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { contigExclusion } from '../curation/ContigExclusion';
+import { frameDiagonalRange } from './ViewFraming';
 import { parseScript, type ParseError } from '../scripting/ScriptParser';
 import { executeScript, type ScriptContext, type ScriptResult, type QueryAPI } from '../scripting/ScriptExecutor';
 
@@ -67,7 +68,7 @@ export function buildScriptContext(ctx: AppContext, onEcho: (message: string) =>
     state,
     batch: { autoCutContigs, autoSortContigs },
     nav: {
-      zoomToContigRange: (start, end) => ctx.camera.zoomToRegion(start, start, end, end),
+      zoomToContigRange: (start, end) => frameDiagonalRange(ctx, start, end),
       resetView: () => ctx.camera.resetView(),
       goto: (x, y) => ctx.camera.animateTo({ x, y }),
     },

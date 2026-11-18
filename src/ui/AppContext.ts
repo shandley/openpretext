@@ -62,6 +62,8 @@ export interface AppContext {
   currentMode: InteractionMode;
   currentColorMap: ColorMapName;
   tracksVisible: boolean;
+  /** Set when the person hides the tracks; analyses then leave them hidden. See TrackVisibility. */
+  tracksHiddenByUser: boolean;
   currentWaypointId: number | null;
   animFrameId: number;
   referenceSequences: Map<string, string> | null;
