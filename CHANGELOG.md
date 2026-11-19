@@ -10,8 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   prints how strongly the end contacts its current neighbour, where that
   neighbour ranks among every other contig end on the map, and the five
   strongest. Scores are read from the file's detail tiles and are relative to
-  the contact between neighbouring stretches of unbroken sequence on the same
-  map (1.00 = like true neighbours). After a cut at a suspected inversion, a
+  the same measure between neighbouring stretches of unbroken sequence on the
+  same map (1.00 = as bright as true neighbours). They are ratios of the
+  map's stored values, which PretextMap has contrast-adjusted, not ratios of
+  contact counts; short pieces near the diagonal tie close to 1. After a cut at a suspected inversion, a
   piece whose far end scores higher than its near end is the wrong way round.
   It changes nothing. Checked against three public curations
   (`research/end-contacts-2026-11/REPORT.md`): it is evidence for a curator,

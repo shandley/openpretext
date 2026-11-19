@@ -608,7 +608,7 @@ export function executeCommand(cmd: ScriptCommand, ctx: ScriptContext): ScriptRe
         const s = ctx.state.get();
         const map = s.map!;
         const name = map.contigs[s.contigOrder[orderIndex]].name;
-        const heading = `Contacts of '${name}' (1.00 = contact between true neighbours on this map)`;
+        const heading = `Contacts of '${name}' (1.00 = as bright as true neighbours on this map)`;
         if (ctx.contacts) {
           // The layout is handed over now, so later commands do not change the answer.
           const followUp = ctx.contacts(map, [...s.contigOrder], orderIndex).then((lines) => lines.join('\n'));

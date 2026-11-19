@@ -76,7 +76,7 @@
       </div>
       <dl class="gloss">
         <div class="gloss-item"><dt id="hi-c">Hi-C</dt><dd>A sequencing method that records how often two pieces of DNA are close together in the nucleus. Nearby sequences produce more contacts.</dd></div>
-        <div class="gloss-item"><dt id="contact-map">Contact map</dt><dd>A square matrix of contact frequencies between genomic positions. Brighter cells mean more contacts. It is the main view in OpenPretext.</dd></div>
+        <div class="gloss-item"><dt id="contact-map">Contact map</dt><dd>A square matrix showing how often pairs of genomic positions were found in contact. Brighter cells mean more contacts. The values in a <code>.pretext</code> file are contrast-adjusted for display, so they rank cells and are not counts. It is the main view in OpenPretext.</dd></div>
         <div class="gloss-item"><dt id="diagonal">Diagonal</dt><dd>The line down the middle of the map where each position meets itself. It is always the strongest signal and the baseline for reading the rest.</dd></div>
         <div class="gloss-item"><dt id="pretext"><span class="mono">.pretext</span></dt><dd>The binary contact-map file OpenPretext reads, produced by PretextMap. It stores the map as a multi-resolution image, so the overview loads without the full data.</dd></div>
         <div class="gloss-item"><dt id="coverage">Coverage</dt><dd>How many sequencing reads span a position, also called read depth. A retained <a href="#haplotig">haplotig</a> sits near half the assembly's coverage.</dd></div>
@@ -107,7 +107,7 @@
         <p>These come from the 3D Analysis panel and are explained in full, with interactive figures, on the <a href="/reading-the-analysis">analysis page</a>.</p>
       </div>
       <dl class="gloss">
-        <div class="gloss-item"><dt id="ps">Contact decay, P(s)</dt><dd>How contact frequency falls as two positions move apart along a chromosome. Its slope on a log-log plot reflects how tightly the genome is packed.</dd></div>
+        <div class="gloss-item"><dt id="ps">Contact decay, P(s)</dt><dd>How contact frequency falls as two positions move apart along a chromosome. Its slope on a log-log plot reflects how tightly the genome is packed. In OpenPretext the slope is fitted to contrast-adjusted map values, so compare it before and after an edit and not against published exponents.</dd></div>
         <div class="gloss-item"><dt id="compartments">A/B compartments</dt><dd>The division of chromatin into an active, gene-rich A compartment and a quiet, dense B compartment. On the map they form a checkerboard.</dd></div>
         <div class="gloss-item"><dt id="saddle">Saddle plot</dt><dd>A single-square summary of compartment strength, made by sorting bins from most B to most A and averaging their contacts.</dd></div>
         <div class="gloss-item"><dt id="insulation">Insulation and TAD boundaries</dt><dd>Insulation dips where a region is walled off from its neighbors. The deepest dips mark boundaries between chromosome neighborhoods.</dd></div>

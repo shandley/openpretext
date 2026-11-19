@@ -186,7 +186,7 @@ export const DSL_REFERENCE: DSLCommandDoc[] = [
   {
     category: 'Meta',
     syntax: 'contacts <contig>',
-    summary: 'For each end of a contig: how strongly it contacts its current neighbour, and the ends anywhere on the map it contacts most. Changes nothing.',
+    summary: 'For each end of a contig: how bright the map is between it and its current neighbour, compared with true neighbours (1.00), and the ends anywhere on the map that score highest. A guide, not a count of contacts. Changes nothing.',
     example: 'contacts chr1',
   },
   {

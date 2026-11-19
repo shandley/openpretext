@@ -1,0 +1,12 @@
+# decay-by-level.ts on nine maps, 19 November 2026.
+# Fitted P(s) slope (and R2) from the level the app uses (1024 px across) and two finer levels.
+# The fit covers up to 500 cells of distance at every level, so finer levels also cover a shorter genomic range.
+Anilios_waitii_post.pretext                   1024px: -1.47 (R2 0.63)   4096px: -1.38 (R2 0.77)   8192px: -0.98 (R2 0.90)
+Coturnix_chinensis_post.pretext               1024px: -1.90 (R2 0.67)   4096px: -2.16 (R2 0.75)   8192px: -1.04 (R2 0.65)
+Taeniopygia_guttata_post.pretext              1024px: -1.24 (R2 0.57)   4096px: -1.19 (R2 0.61)   8192px: -0.87 (R2 0.75)
+Phascolarctos_cinereus.pretext                1024px: -1.60 (R2 0.70)   4096px: -1.29 (R2 0.67)   8192px: -0.46 (R2 0.84)
+bCotChi1.combined.pretext                     1024px: -1.52 (R2 0.57)   4096px: -1.51 (R2 0.49)   8192px: -1.58 (R2 0.78)
+fAplLin1.HiC.combined.decontam.multimap       1024px: -1.31 (R2 0.65)   4096px: -1.33 (R2 0.60)   8192px: -1.49 (R2 0.62)
+fChaTrf1.haps_combined.mapped.PT.pretext      1024px: -0.79 (R2 0.76)   4096px: -0.80 (R2 0.64)   8192px: -1.39 (R2 0.58)
+fOphCon1.HiC.combined.decontam.multimap       1024px: -1.20 (R2 0.79)   4096px: -0.94 (R2 0.76)   8192px: -0.72 (R2 0.82)
+mBabCel1.HiC.combined.decontam.20240812       1024px: -0.65 (R2 0.83)   4096px: -0.59 (R2 0.77)   8192px: -0.53 (R2 0.77)

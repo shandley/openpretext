@@ -228,22 +228,40 @@ resolution * (resolution / 2)
 ```
 because BC4 stores 8 bytes per 4x4 block = 0.5 bytes per pixel.
 
-#### Each level has its own contrast
+#### Each level has its own contrast, and the values are not counts
 
-The levels of a tile are not averages of one another. PretextMap builds each
-coarser level with a weighted median (`CreateMipMap`) and then stretches and
-histogram-equalises every level separately (`ContrastEqualisation`), so the
-same stretch of genome holds different stored values at different levels. In
-one map measured here, a block far from the diagonal averaged 0.064 at full
-resolution, 0.083 one level up and 0.017 at the coarsest level, on a scale
-of 0 to 1.
+The levels of a tile are not averages of one another, and no level holds
+contact counts. PretextMap builds each coarser level with a weighted median
+(`CreateMipMap`). Then, for every level separately (`ContrastEqualisation`),
+it:
 
-A viewer that draws stored values therefore changes colour when it changes
-level: the background is paler or darker and the diagonal wider or narrower.
-PretextView does the same (it samples with `GL_NEAREST_MIPMAP_NEAREST`, one
-level at a time). OpenPretext draws the stored value of whichever level is on
-screen and does not rescale levels to match, because a rescaled value would
-not be the file's. Compare intensities within one zoom level, not between two.
+1. scales rows and columns repeatedly until every row has the same maximum;
+2. compresses each value by halving the position of its set bits, which is
+   close to a square root;
+3. stretches the result to the range 1 to 255;
+4. equalises the histogram, with a cap on how far any value is spread.
+
+(Read from `PretextMap.cpp` at commit `b4166f6` of sanger-tol/PretextMap.)
+
+So the stored value orders the cells of one level by contact, more or less,
+and says nothing exact about how many contacts there were. The same stretch
+of genome holds different values at different levels. In one map measured
+here, a block far from the diagonal averaged 0.064 at full resolution, 0.083
+one level up and 0.017 at the coarsest level, on a scale of 0 to 1.
+
+What follows for a viewer:
+
+- It changes colour when it changes level: the background is paler or darker
+  and the diagonal wider or narrower. PretextView does the same (it samples
+  with `GL_NEAREST_MIPMAP_NEAREST`, one level at a time). OpenPretext draws
+  the stored value of whichever level is on screen and does not rescale
+  levels to match, because a rescaled value would not be the file's. Compare
+  intensities within one zoom level, not between two.
+- Anything computed from the values is computed from adjusted brightness.
+  Where one cell is brighter than another is reliable. Ratios, slopes and
+  sums are not the quantities of the same name in the Hi-C literature. See
+  `research/map-values-2026-11/REPORT.md` for what this means for each
+  analysis in OpenPretext.
 
 ### 4.5 BC4 (RGTC1) Compression Format
 

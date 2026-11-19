@@ -1270,6 +1270,7 @@ function renderSlopePanel(
   svg += `<text x="8" y="${m.top + ph / 2}" text-anchor="middle" font-size="8" fill="#a0a0b0" transform="rotate(-90, 8, ${m.top + ph / 2})">local slope</text>`;
   svg += '</svg>';
   svg += '<div style="text-align:center;font-size:8px;color:var(--text-secondary);margin-top:1px;">Local slope vs distance (green band = healthy −1.5 to −0.8; dashed = global fit)</div>';
+  svg += '<div style="text-align:center;font-size:8px;color:var(--text-secondary);margin-top:1px;">Map values are contrast-adjusted, not counts: compare slopes before and after an edit, not against published exponents.</div>';
   svg += '</div>';
   return svg;
 }

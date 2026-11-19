@@ -3,8 +3,13 @@
  *
  * Computes the mean contact frequency as a function of genomic distance
  * (diagonal offset), fits a power-law in log-log space, and reports the
- * decay exponent. For well-assembled Hi-C data, the exponent is typically
- * -1.0 to -1.5.
+ * decay exponent. For Hi-C contact counts the exponent is typically -1.0 to
+ * -1.5. The matrix given here is not counts: a `.pretext` file stores values
+ * that PretextMap has row-scaled, compressed and contrast-equalised
+ * (docs/PRETEXT_FORMAT.md). The fitted slope describes those values. On nine
+ * real maps it ranged from -0.65 to -1.90 and moved by up to 1.1 between two
+ * zoom levels of one file (research/map-values-2026-11/REPORT.md), so it is
+ * a number to compare before and after an edit, not a physical exponent.
  *
  * Reuses computeIntraDiagonalProfile from AutoSort for the core computation.
  *

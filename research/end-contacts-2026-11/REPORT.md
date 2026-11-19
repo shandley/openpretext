@@ -15,6 +15,11 @@ Two measures, both read from the map file's detail tiles and both expressed
 relative to the contact between neighbouring stretches of unbroken sequence on
 the same map (1.00 = like true neighbours, 0 = like distant sequence).
 
+Note added 19 November 2026: "contact" in this report means the value stored
+in the map file. Those values are contrast-adjusted by PretextMap and are not
+contact counts, so the scores are ratios of brightness. See the section added
+at the end.
+
 1. **End contact.** The mean contact between a window at one contig end and a
    window at another. If two ends belong together the score is near 1. Ranking
    all other ends against one end says what the map puts next to it.

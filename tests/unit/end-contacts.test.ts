@@ -207,7 +207,7 @@ describe('contacts command', () => {
     const [r] = run('contacts s1');
     expect(r.success).toBe(true);
     const lines = r.message.split('\n');
-    expect(lines[0]).toBe("Contacts of 's1' (1.00 = contact between true neighbours on this map)");
+    expect(lines[0]).toBe("Contacts of 's1' (1.00 = as bright as true neighbours on this map)");
     expect(lines[1]).toBe('left end, 24-texel window');
     expect(lines[2]).toBe('  now next to: nothing (edge of the map)');
     expect(lines[4]).toBe('right end, 24-texel window');
@@ -241,7 +241,7 @@ describe('contacts command', () => {
       },
     } as unknown as ScriptContext;
     const results = executeScript(commands, ctx, { continueOnError: true });
-    expect(results[0].message).toBe("Contacts of 's3' (1.00 = contact between true neighbours on this map)");
+    expect(results[0].message).toBe("Contacts of 's3' (1.00 = as bright as true neighbours on this map)");
     // The order given is the one at the time of the command, not after the move.
     expect(seen).toEqual([{ order: [0, 1, 2, 3], orderIndex: 2 }]);
     expect(state.get().contigOrder).toEqual([2, 0, 1, 3]);

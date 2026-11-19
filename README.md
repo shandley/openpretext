@@ -63,7 +63,7 @@ Vision-based analysis through the Anthropic Messages API. It captures the curren
 
 ### 3D genomics analysis
 
-A suite of Hi-C metrics, all computed in a background Web Worker and exportable as BedGraph or TSV:
+A suite of Hi-C metrics, all computed in a background Web Worker and exportable as BedGraph or TSV. They are computed from the values stored in the `.pretext` file, which PretextMap has contrast-adjusted for display. Those values rank cells by contact and are not contact counts, so slopes, ratios and scores here are for comparing one map before and after an edit, not for comparison with published Hi-C figures (see `docs/PRETEXT_FORMAT.md`).
 
 - **Insulation score and TAD boundaries** (Crane et al. 2015): a sliding off-diagonal window with boundaries detected as prominent local minima.
 - **P(s) contact decay**: intra-chromosomal contact frequency versus distance with power-law fitting, whole-genome and per-chromosome, with a comparative baseline overlay, reference-slope guides at -1.0 and -1.5, and a local-slope panel (the windowed log-derivative) that shows where the curve plateaus or rolls off.

@@ -33,7 +33,7 @@
       "title": "Understand the P(s) Decay Chart",
       "instruction": "Below the health score, find the **P(s) decay chart**, a log-log plot showing contact frequency vs genomic distance. Key things to look for:\n\n\u2022 The **exponent** (slope) should be between -1.0 and -1.5 for a well-compacted genome\n\u2022 The **R\u00b2** value indicates how well the power-law fits, and above 0.9 is good\n\u2022 The **range** shows how many distance bins were used for fitting\n\nYou can click **Snapshot Baseline** to save the current P(s) curve. After curation operations, a new curve will overlay the baseline so you can see if your edits improved compaction.",
       "expectedAction": { "type": "observe" },
-      "hint": "Shallow exponents (closer to 0) suggest poor compaction or misassembly. Steep exponents (closer to -2) suggest over-corrected data."
+      "hint": "Shallow exponents (closer to 0) suggest poor compaction or misassembly. Steep exponents (closer to -2) suggest over-corrected data. These ranges come from contact counts. The map file stores contrast-adjusted values, so treat the exponent as a number to compare before and after your edits, not as a measurement to hold against the ranges."
     },
     {
       "id": "view-tracks",

@@ -8,8 +8,18 @@
  * another, divided by the same measure taken between neighbouring windows
  * along unbroken sequence in this map.
  *
- *   about 1   the two ends contact as true neighbours do
- *   near 0    they contact no more than distant sequence
+ *   about 1   the map is as bright between the two ends as between true neighbours
+ *   near 0    as dark as between distant sequence
+ *
+ * What the number is not: a ratio of contact counts. A `.pretext` file holds
+ * map values that PretextMap has scaled by row, compressed and
+ * contrast-equalised, separately at each zoom level (docs/PRETEXT_FORMAT.md,
+ * "Each level has its own contrast"). The score is a ratio of those values:
+ * how bright the box between two ends is, against how bright it is between
+ * true neighbours. Values next to the diagonal sit at the top of the scale,
+ * so short windows score near 1 against many ends. Each box is divided by a
+ * reference read at its own level, but one ranked list can hold boxes read
+ * at different levels (research/end-contacts-2026-11/REPORT.md).
  *
  * It answers "what belongs next to this end, and which way round": after a
  * cut at a suspected inversion, the piece's far end scoring higher against
