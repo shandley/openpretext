@@ -170,7 +170,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - Export buttons for KR bias BedGraph
 - CHANGELOG.md and CONTRIBUTING.md
 
+### Removed
+- **The health score.** A quarter of it measured how close the P(s) slope was
+  to -1.15 and a fifth came from a cis/trans ratio, and both are computed from
+  map values that PretextMap has contrast-adjusted. They are not the
+  quantities those targets were set for: the curated king quail in the
+  specimen catalog scored 12 out of 100 on the decay part. The card, the
+  number in the stats strip and the module are gone. See
+  `research/map-values-2026-11/REPORT.md`.
+- **The "healthy" band on the P(s) chart** (the dotted guides at -1.0 and
+  -1.5 and the shaded band on the local-slope panel). Published exponents
+  are for contact counts. On nine real maps the slope fitted here ran from
+  -0.65 to -1.90 and moved by up to 1.1 between zoom levels of one file.
+
 ### Changed
+- **Balancing is labelled as what it does.** "Normalize (ICE)" and "Normalize
+  (Sinkhorn-Knopp)" are now "Balance rows", and the tracks "ICE Bias" and
+  "SK Bias" are "ICE row factors" and "SK row factors". The calculation is the
+  same. The stored values are already scaled and contrast-adjusted, so
+  balancing them gives another view of the map and does not correct
+  sequencing bias.
+- **Lesson 7 is rewritten** to teach what the analysis numbers are computed
+  from and what they can be used for. Lessons 9, 10, 11 and 13, the
+  analysis-guided AI prompt, the README and the field guide no longer refer
+  to the health score or to a healthy P(s) range.
 - **Excluded contigs are written to the pipeline AGP, and must say why.** The
   downstream tool removes sequence by tag and puts back anything the AGP does
   not mention, so leaving an excluded contig out did not remove it. Each

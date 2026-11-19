@@ -132,9 +132,9 @@
     }
 
     var MSG = {
-      shallow: 'Too shallow. Contacts barely fade with distance, a hint of poor compaction or a misassembly joining distant regions.',
-      healthy: 'Healthy. Contacts fall off the way they do in a well-assembled chromosome.',
-      steep: 'Too steep. The signal drops faster than real chromatin, usually a sign of over-corrected data.'
+      shallow: 'Shallow. Contact fades slowly with distance, so positions far apart still look bright.',
+      middle: 'In between. Contact fades steadily away from the diagonal.',
+      steep: 'Steep. Contact fades quickly, so the signal stays close to the diagonal.'
     };
     function fmt(exp) { return '−' + Math.abs(exp).toFixed(2); }
     function render() {
@@ -142,9 +142,8 @@
       drawMap(exp);
       drawPlot(exp);
       valEl.textContent = fmt(exp);
-      var zone = exp > -1.0 ? 'shallow' : (exp >= -1.5 ? 'healthy' : 'steep');
+      var zone = exp > -1.0 ? 'shallow' : (exp >= -1.5 ? 'middle' : 'steep');
       msgEl.textContent = MSG[zone];
-      root.classList.toggle('is-healthy', zone === 'healthy');
     }
 
     readColors();

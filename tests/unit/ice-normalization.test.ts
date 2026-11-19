@@ -336,7 +336,7 @@ describe('iceToTrack', () => {
       sparseFilterQuantile: 0,
     });
     const track = iceToTrack(result, 8, 16);
-    expect(track.name).toBe('ICE Bias');
+    expect(track.name).toBe('ICE row factors');
     expect(track.type).toBe('line');
     expect(track.data.length).toBe(16);
     expect(track.visible).toBe(true);

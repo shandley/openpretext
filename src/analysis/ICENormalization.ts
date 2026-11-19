@@ -283,7 +283,7 @@ export function iceToTrack(
   }
 
   return {
-    name: 'ICE Bias',
+    name: 'ICE row factors',
     type: 'line',
     data,
     color: '#b482ff',

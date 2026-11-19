@@ -410,12 +410,12 @@ describe('computeKRNormalization', () => {
 // ---------------------------------------------------------------------------
 
 describe('krToTrack', () => {
-  it('returns correct track config name "SK Bias"', () => {
+  it('returns correct track config name "SK row factors"', () => {
     const result = computeKRNormalization(buildDiagonalDecay(8), 8, {
       sparseFilterQuantile: 0,
     });
     const track = krToTrack(result, 8, 16);
-    expect(track.name).toBe('SK Bias');
+    expect(track.name).toBe('SK row factors');
   });
 
   it('returns correct color #ff7675', () => {

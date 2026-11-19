@@ -395,9 +395,9 @@ export function formatDecayStats(result: ContactDecayResult, helpHtml = ''): str
   const r2 = result.rSquared;
   const fitted = Number.isFinite(exp);
 
-  // Color code: green if exponent is in typical Hi-C range [-1.5, -0.8].
-  const inRange = fitted && exp <= -0.8 && exp >= -1.5;
-  const color = fitted ? (inRange ? '#4caf50' : '#f39c12') : 'var(--text-secondary)';
+  // One colour for every fitted slope. The matrix holds contrast-adjusted
+  // values, so no range of slopes is "typical" (see the module comment).
+  const color = fitted ? 'var(--text-primary)' : 'var(--text-secondary)';
 
   let html = '';
   html += `<div class="stats-row"><span>P(s) exponent${helpHtml}</span>`;

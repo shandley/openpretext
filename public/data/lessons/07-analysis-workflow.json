@@ -4,36 +4,36 @@
   "difficulty": "intermediate",
   "estimatedMinutes": 20,
   "specimenId": "koala",
-  "introduction": "OpenPretext includes a suite of 3D genomics analysis tools that reveal structural properties of the genome beyond what's visible in the raw contact map. These analyses help you assess assembly quality, detect misassemblies, and understand chromatin organization.\n\nIn this lesson, you'll learn to:\n\u2022 Run the core analysis pipeline (insulation, P(s) decay, compartments)\n\u2022 Read and interpret analysis tracks and metrics\n\u2022 Understand the composite health score\n\u2022 Normalize the contact matrix with ICE\n\u2022 Export analysis results for external use\n\nWe'll use the koala genome, which has a clean chromosome structure ideal for demonstrating these tools.",
+  "introduction": "OpenPretext computes a set of analyses from the contact map: where contact drops across a position, how it falls with distance, and how the genome splits into two compartments. They are aids for finding places to look at. They are not measurements you can compare with published Hi-C figures, and this lesson explains why.\n\nIn this lesson, you'll learn to:\n\u2022 Run the core analyses (insulation, P(s) decay, compartments)\n\u2022 Know what the numbers are computed from, and what that limits\n\u2022 Read the analysis tracks against the map\n\u2022 Compare a P(s) curve before and after an edit\n\u2022 Export analysis results for external use\n\nWe'll use the koala genome, which has a clean chromosome structure.",
   "steps": [
     {
       "id": "open-sidebar",
       "title": "Open the Sidebar",
-      "instruction": "First, open the sidebar by pressing **I** or clicking the **Info** button in the toolbar. Scroll down to find the **3D Analysis** section. This is your analysis command center, organized into Compute, Results, and Export tabs. The analyses run automatically when the genome loads, so the Results tab opens showing them.",
+      "instruction": "First, open the sidebar by pressing **I** or clicking the **Info** button in the toolbar. Scroll down to find the **3D Analysis** section. It is organized into Compute, Results, and Export tabs. The analyses run automatically when the genome loads, so the Results tab opens showing them.",
       "expectedAction": { "type": "observe" },
       "hint": "The 3D Analysis section is in the sidebar, below the History section."
     },
     {
       "id": "compute-all",
       "title": "Run the Core Analysis Pipeline",
-      "instruction": "The three core analyses run automatically when the genome loads, and the Results tab opens to show them. To run them again yourself, click the **Compute** tab, then **Compute All**. The three analyses are:\n\n\u2022 **Insulation score**: measures how well each genomic region is insulated from its neighbors (detects TAD boundaries)\n\u2022 **P(s) decay**: measures how contact frequency drops with genomic distance (indicates genome compaction)\n\u2022 **A/B compartments**: identifies active (A) and inactive (B) chromatin compartments\n\nAll three run in a background Web Worker so the UI stays responsive. Results appear in the Results tab, which opens automatically.",
+      "instruction": "The three core analyses run automatically when the genome loads, and the Results tab opens to show them. To run them again yourself, click the **Compute** tab, then **Compute All**. The three analyses are:\n\n\u2022 **Insulation score**: how much contact crosses each position. Dips mark places where the two sides contact each other less, such as TAD boundaries and joins between sequences that do not belong together\n\u2022 **P(s) decay**: how the map's values fall as two positions get further apart along a chromosome\n\u2022 **A/B compartments**: the two groups of regions that contact their own group more than the other\n\nAll three run in a background Web Worker so the UI stays responsive.",
       "highlight": { "type": "ui-element", "selector": ".analysis-tab" },
       "expectedAction": { "type": "observe" },
       "hint": "The computation may take a few seconds. Buttons are disabled during computation to prevent conflicts."
     },
     {
-      "id": "read-health-score",
-      "title": "Read the Health Score",
-      "instruction": "After computation, a **Health Score** card appears showing a composite 0 to 100 score. This combines five components:\n\n\u2022 **N50** (20%): contiguity, how large your contigs are\n\u2022 **P(s)** (25%): contact decay quality, how well the power-law fits\n\u2022 **Int** (20%): assembly integrity, fewer misassembly flags is better\n\u2022 **A/B** (15%): compartment strength, how distinct A and B compartments are\n\u2022 **Lib** (20%): library quality (cis/trans ratio), requires scaffold assignments\n\nA score above 70 indicates a well-assembled genome. The koala should score reasonably well. Note which components are strong and which are weak.",
+      "id": "what-the-values-are",
+      "title": "Know What the Numbers Are Computed From",
+      "instruction": "Before reading any number, know what it is made of. A `.pretext` file does not hold contact counts. PretextMap, the program that writes the file, scales the rows, compresses the values, and adjusts the contrast so that the map is easy to read by eye. It does this separately for each zoom level.\n\nWhat this leaves you with:\n\n\u2022 **Reliable**: where things are. A dip in insulation, a change of compartment, a brighter or darker block\n\u2022 **Reliable**: change on one map. If a curve or track moves after an edit, the edit moved it\n\u2022 **Not reliable**: the size of a number. Slopes, ratios and scores computed here are not the quantities of the same name in Hi-C papers, and they should not be compared between genomes\n\nThe same is true of the picture itself: colours change when you zoom between levels, because each level has its own contrast. Compare brightness within one zoom level.",
       "expectedAction": { "type": "observe" },
-      "hint": "Hover over the component abbreviations to see their full names and scores."
+      "hint": "PretextView shows the same adjusted values, so the map looks the same there. The limit only matters when a number is taken from it."
     },
     {
       "id": "ps-chart",
       "title": "Understand the P(s) Decay Chart",
-      "instruction": "Below the health score, find the **P(s) decay chart**, a log-log plot showing contact frequency vs genomic distance. Key things to look for:\n\n\u2022 The **exponent** (slope) should be between -1.0 and -1.5 for a well-compacted genome\n\u2022 The **R\u00b2** value indicates how well the power-law fits, and above 0.9 is good\n\u2022 The **range** shows how many distance bins were used for fitting\n\nYou can click **Snapshot Baseline** to save the current P(s) curve. After curation operations, a new curve will overlay the baseline so you can see if your edits improved compaction.",
+      "instruction": "In the Results tab, find the **P(s) decay chart**, a log-log plot of the map's mean value against distance along a chromosome. Below it, a second panel shows the local slope at each distance.\n\n\u2022 The curve should fall as distance grows. A flat stretch or a rise is worth a look at the map\n\u2022 The **exponent** is the slope of a straight line fitted to the curve, and **R\u00b2** says how well a straight line fits. On real maps the fit is often loose\n\u2022 Neither number is the exponent reported in Hi-C papers, because the values are contrast-adjusted. There is no range the exponent should fall in\n\nThe chart is most useful for comparison. Click **Snapshot Baseline** to save the current curve. After curation, the new curve is drawn over the baseline so you can see what your edits changed.",
       "expectedAction": { "type": "observe" },
-      "hint": "Shallow exponents (closer to 0) suggest poor compaction or misassembly. Steep exponents (closer to -2) suggest over-corrected data. These ranges come from contact counts. The map file stores contrast-adjusted values, so treat the exponent as a number to compare before and after your edits, not as a measurement to hold against the ranges."
+      "hint": "On nine real maps the fitted exponent ran from about -0.65 to -1.90, and it changed by up to 1.1 for one file depending on the zoom level read. Use it for before and after, not as a grade."
     },
     {
       "id": "view-tracks",
@@ -43,24 +43,24 @@
       "hint": "Compare the insulation dips with the visual boundaries between bright contact blocks in the map."
     },
     {
-      "id": "normalize-ice",
-      "title": "Normalize with ICE",
-      "instruction": "Contact maps have systematic biases (GC content, mappability, restriction site density). **ICE normalization** corrects these biases by iteratively balancing row and column sums.\n\nOpen the **Compute** tab, then click **Normalize (ICE)** to run the normalization. After it completes, notice:\n\u2022 A new 'ICE Bias' track appears showing per-bin correction factors\n\u2022 The P(s) curve and compartments are automatically recomputed on the normalized data\n\u2022 The P(s) exponent may change, and this is the bias-corrected value",
+      "id": "balance-rows",
+      "title": "Balance the Rows",
+      "instruction": "Some rows of a map are brighter than others overall. **Balance rows (ICE)** rescales rows and columns until their sums are even, which can make the compartment pattern easier to see.\n\nOpen the **Compute** tab, then click **Balance rows (ICE)**. After it completes, notice:\n\u2022 A new 'ICE row factors' track shows how much each row was rescaled\n\u2022 The P(s) curve and compartments are recomputed on the balanced map\n\nWith contact counts, this step corrects for sequencing bias. Here it works on values PretextMap has already scaled and contrast-adjusted, so treat it as another way of looking at the map, not as a correction.",
       "highlight": { "type": "ui-element", "selector": ".analysis-tab" },
       "expectedAction": { "type": "observe" },
-      "hint": "ICE typically runs 10-50 iterations. Bins with very low coverage are masked (excluded from normalization)."
+      "hint": "ICE typically runs 10-50 iterations. Rows with very little signal are left out."
     },
     {
       "id": "export-results",
       "title": "Export Analysis Data",
-      "instruction": "Analysis results can be exported for use in external tools (R, Python, IGV). Click the **Export** tab to find the export buttons:\n\n\u2022 **Insulation (BedGraph)** loads in genome browsers\n\u2022 **P(s) (TSV)** has distance and contact frequency columns\n\u2022 **Compartments (BedGraph)** holds eigenvector values\n\nThese files use genomic coordinates derived from your contig ordering and sizes.",
+      "instruction": "Analysis results can be exported for use in external tools (R, Python, IGV). Click the **Export** tab to find the export buttons:\n\n\u2022 **Insulation (BedGraph)** loads in genome browsers\n\u2022 **P(s) (TSV)** has distance and mean map value columns\n\u2022 **Compartments (BedGraph)** holds eigenvector values\n\nThese files use genomic coordinates derived from your contig ordering and sizes. Anyone who uses them should know they come from contrast-adjusted map values.",
       "expectedAction": { "type": "observe" },
       "hint": "BedGraph files can be loaded back into OpenPretext via the Load Track button to compare analyses across different sessions."
     },
     {
       "id": "summary",
       "title": "Analysis Summary",
-      "instruction": "You've learned the core analysis workflow:\n\n1. **Compute All** runs insulation, P(s), and compartments in parallel\n2. The **health score** gives a quick quality overview\n3. The **P(s) chart** shows genome compaction quality with baseline comparison\n4. **Analysis tracks** overlay results on the contact map for visual inspection\n5. **ICE normalization** corrects systematic biases\n6. **Export** saves results for external analysis\n\nIn your curation workflow, run analysis early to identify problems, curate to fix them, and re-run analysis to verify improvement. The health score is your compass; aim to increase it with each round of curation.",
+      "instruction": "You've learned the core analysis workflow:\n\n1. **Compute All** runs insulation, P(s), and compartments\n2. The numbers come from contrast-adjusted map values: positions and changes are reliable, sizes are not\n3. **Analysis tracks** put the results beside the contact map so you can check each one by eye\n4. The **P(s) chart** with a baseline shows what an edit changed\n5. **Balance rows** gives another view of the map\n6. **Export** saves results for external analysis\n\nIn your curation workflow, use the analyses to find places to look, and decide from the map. No single number here says whether an assembly is good.",
       "expectedAction": { "type": "observe" }
     }
   ],

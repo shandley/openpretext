@@ -418,7 +418,7 @@
       overflow-y: auto;
     }
 
-    /* Pinned assembly-status strip: the health/metrics glance stays at the top
+    /* Pinned assembly-status strip: the metrics glance stays at the top
        of the sidebar while everything below it scrolls. */
     .sidebar-status {
       position: sticky;
@@ -2681,20 +2681,6 @@
       border-radius: 4px; padding: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
     }
     .review-done-btn:hover { opacity: 0.9; }
-
-    /* Health score card */
-    .health-score-card {
-      display: flex; flex-direction: column; align-items: center;
-      padding: 8px; margin: 4px 0 8px; background: var(--bg-surface);
-      border: 1px solid var(--border); border-radius: 6px;
-    }
-    .health-score-value { font-size: 28px; font-weight: 700; line-height: 1; }
-    .health-score-label { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
-    .health-score-breakdown {
-      display: flex; gap: 8px; font-size: 9px;
-      color: var(--text-secondary); margin-top: 4px;
-    }
-    .health-sparkline { margin-top: 4px; }
 
     /* Comparison diff summary */
     #comparison-summary {

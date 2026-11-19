@@ -2,16 +2,14 @@
  * StatsPanel — assembly quality metrics display.
  *
  * Renders into the pinned status strip at the top of the Info sidebar: a compact
- * always-visible summary line (health + a few key numbers) plus a collapsible
+ * always-visible summary line (a few key numbers) plus a collapsible
  * detail block with the full metric list.
  */
 
 import type { AppContext } from './AppContext';
 import { state } from '../core/State';
 import { contigExclusion } from '../curation/ContigExclusion';
-import { getHealthScore } from './AnalysisPanel';
 
-const healthColor = (v: number) => (v >= 70 ? '#4caf50' : v >= 40 ? '#f39c12' : '#ff6b6b');
 
 const fmtBp = (bp: number) => {
   if (bp >= 1_000_000_000) return `${(bp / 1_000_000_000).toFixed(2)} Gb`;
@@ -39,7 +37,6 @@ export function updateStatsPanel(ctx: AppContext): void {
   }
   // Count only excluded contigs still present in the current order (orphan-safe).
   const excluded = contigExclusion.getExcludedCountIn(state.get().contigOrder);
-  const healthScore = getHealthScore(ctx);
 
   const delta = (val: number) => {
     if (val === 0) return '';
@@ -55,10 +52,6 @@ export function updateStatsPanel(ctx: AppContext): void {
   // Compact summary line (always visible, pinned at the top of the sidebar).
   if (summaryEl) {
     const parts: string[] = [];
-    const health = healthScore
-      ? `<span class="metric-num" style="color:${healthColor(healthScore.overall)}">${healthScore.overall}</span>`
-      : '<span class="metric-num" style="color:var(--text-secondary)">—</span>';
-    parts.push(`<span>Health ${health}</span>`);
     parts.push(`<span><span class="metric-num">${m.contigCount}</span> <span class="metric-unit">contigs</span></span>`);
     parts.push(`<span>N50 <span class="metric-num">${fmtBp(m.n50)}</span></span>`);
     if (m.assignedFraction > 0) {
@@ -73,9 +66,6 @@ export function updateStatsPanel(ctx: AppContext): void {
   if (!detail) return;
 
   let html = '';
-  if (healthScore) {
-    html += `<div class="stats-row"><span>Health Score</span><span style="color:${healthColor(healthScore.overall)};font-weight:600;">${healthScore.overall}</span></div>`;
-  }
   html += `<div class="stats-row"><span>Contigs</span><span>${m.contigCount}${delta(summary?.contigCountDelta ?? 0)}</span></div>`;
   if (excluded > 0) {
     html += `<div class="stats-row"><span>Excluded</span><span style="color:#f39c12;">${excluded}</span></div>`;

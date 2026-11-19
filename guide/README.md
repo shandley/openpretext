@@ -12,7 +12,7 @@ Two pages that share one stylesheet and one script. No build step.
 - `reading-the-analysis.html` the deeper page: what the 3D Analysis panel
   readouts mean, with interactive demos for contact decay, compartments, and
   the misassembly signatures. The app's analysis panel deep-links here, so keep
-  the readout ids (`analysis-decay`, `analysis-health`, and so on) stable.
+  the readout ids (`analysis-decay`, `analysis-fit`, and so on) stable.
 - `guide.css` shared styles for both pages.
 - `guide.js` shared behavior: reveal-on-scroll, scrollspy, header offset, and
   the interactive demos. Each demo guards on its own root element, so it is

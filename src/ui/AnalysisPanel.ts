@@ -48,7 +48,6 @@ import {
 } from '../analysis/MisassemblyDetector';
 import { misassemblyFlags } from '../curation/MisassemblyFlags';
 import { cut } from '../curation/CurationEngine';
-import { computeHealthScore, type HealthScoreResult } from '../analysis/HealthScore';
 import { qualityToTrack, computeHiCQuality, type HiCQualityResult } from '../analysis/HiCQualityMetrics';
 import { computeSaddlePlot, renderSaddleSVG, type SaddleResult } from '../analysis/SaddlePlot';
 import { computeVirtual4C, virtual4CToTrack, type Virtual4CResult } from '../analysis/Virtual4C';
@@ -229,7 +228,6 @@ let autoRecomputeTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingRecompute = false;
 let autoRecomputing = false;
 const AUTO_RECOMPUTE_DELAY_MS = 1000;
-const healthScoreHistory: number[] = [];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -517,7 +515,7 @@ async function runICENormalization(ctx: AppContext): Promise<void> {
   // Re-run P(s) decay on normalized matrix if already computed
   if (cachedDecay) {
     await runDecay(ctx);
-    ctx.showToast('P(s) recomputed on ICE-normalized map');
+    ctx.showToast('P(s) recomputed on the ICE-balanced map');
   }
 
   updateResultsDisplay(ctx);
@@ -551,7 +549,7 @@ async function runKRNormalization(ctx: AppContext): Promise<void> {
   // Re-run P(s) decay on normalized matrix if already computed
   if (cachedDecay) {
     await runDecay(ctx);
-    ctx.showToast('P(s) recomputed on Sinkhorn-Knopp-normalized map');
+    ctx.showToast('P(s) recomputed on the Sinkhorn-Knopp-balanced map');
   }
 
   updateResultsDisplay(ctx);
@@ -1104,17 +1102,6 @@ function renderDecayChart(
     svg += `<text x="${m.left - 5}" y="${y + 2.5}" text-anchor="end" font-size="7" fill="#a0a0b0">${tick.toFixed(1)}</text>`;
   }
 
-  // Reference slope guides at -1.0 and -1.5 (the healthy P(s) band), anchored at
-  // the curve's first point so the reader sees whether the decay is steeper or
-  // shallower than expected.
-  {
-    const rx0 = xData[0], ry0 = yData[0], rx1 = xData[n - 1];
-    for (const refSlope of [-1.0, -1.5]) {
-      const ry1 = ry0 + refSlope * (rx1 - rx0);
-      svg += `<line x1="${sx(rx0)}" y1="${sy(ry0)}" x2="${sx(rx1)}" y2="${sy(ry1)}" stroke="#6a9fd8" stroke-width="0.6" stroke-dasharray="1,2" opacity="0.7"/>`;
-    }
-  }
-
   // Axis labels
   svg += `<text x="${m.left + pw / 2}" y="${H - 2}" text-anchor="middle" font-size="8" fill="#a0a0b0">log\u2081\u2080(distance)</text>`;
   svg += `<text x="8" y="${m.top + ph / 2}" text-anchor="middle" font-size="8" fill="#a0a0b0" transform="rotate(-90, 8, ${m.top + ph / 2})">log\u2081\u2080(P(s))</text>`;
@@ -1214,8 +1201,10 @@ function renderDecayChart(
 /**
  * A companion panel plotting the local slope of the P(s) curve against
  * distance. The global exponent (dashed white) hides where the curve bends;
- * this shows the local log-derivative, with the healthy -1.5 to -0.8 band
- * shaded so a curator can see a short-range plateau or a long-range roll-off.
+ * this shows the local log-derivative, so a curator can see a short-range
+ * plateau or a long-range roll-off. No band of "healthy" slopes is drawn: the
+ * map's values are contrast-adjusted by PretextMap, and published exponents
+ * for contact counts do not apply to them (research/map-values-2026-11).
  */
 function renderSlopePanel(
   logD: Float64Array,
@@ -1243,8 +1232,6 @@ function renderSlopePanel(
   const sy = (v: number) => m.top + ph - ((clamp(v, yMin, yMax) - yMin) / (yMax - yMin)) * ph;
 
   let svg = `<div class="decay-chart" style="margin-top:4px;"><svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
-  // Healthy slope band (-1.5 to -0.8)
-  svg += `<rect x="${m.left}" y="${sy(-0.8)}" width="${pw}" height="${sy(-1.5) - sy(-0.8)}" fill="#4caf50" opacity="0.1"/>`;
   // Axes
   svg += `<line x1="${m.left}" y1="${m.top + ph}" x2="${m.left + pw}" y2="${m.top + ph}" stroke="#a0a0b0" stroke-width="0.5"/>`;
   svg += `<line x1="${m.left}" y1="${m.top}" x2="${m.left}" y2="${m.top + ph}" stroke="#a0a0b0" stroke-width="0.5"/>`;
@@ -1269,7 +1256,7 @@ function renderSlopePanel(
   svg += `<text x="${m.left + pw / 2}" y="${H - 2}" text-anchor="middle" font-size="8" fill="#a0a0b0">log₁₀(distance)</text>`;
   svg += `<text x="8" y="${m.top + ph / 2}" text-anchor="middle" font-size="8" fill="#a0a0b0" transform="rotate(-90, 8, ${m.top + ph / 2})">local slope</text>`;
   svg += '</svg>';
-  svg += '<div style="text-align:center;font-size:8px;color:var(--text-secondary);margin-top:1px;">Local slope vs distance (green band = healthy −1.5 to −0.8; dashed = global fit)</div>';
+  svg += '<div style="text-align:center;font-size:8px;color:var(--text-secondary);margin-top:1px;">Local slope vs distance (dashed = global fit)</div>';
   svg += '<div style="text-align:center;font-size:8px;color:var(--text-secondary);margin-top:1px;">Map values are contrast-adjusted, not counts: compare slopes before and after an edit, not against published exponents.</div>';
   svg += '</div>';
   return svg;
@@ -1299,65 +1286,6 @@ function niceTickValues(min: number, max: number, count: number): number[] {
 // Results display
 // ---------------------------------------------------------------------------
 
-function buildHealthScore(ctx: AppContext): HealthScoreResult | null {
-  const metrics = ctx.metricsTracker.getLatest?.();
-  if (!metrics) return null;
-  if (!cachedDecay && !cachedInsulation && !cachedCompartments) return null;
-
-  return computeHealthScore({
-    n50: metrics.n50,
-    totalLength: metrics.totalLength,
-    contigCount: metrics.contigCount,
-    decayExponent: Number.isFinite(cachedDecay?.decayExponent) ? cachedDecay!.decayExponent : null,
-    decayRSquared: Number.isFinite(cachedDecay?.rSquared) ? cachedDecay!.rSquared : null,
-    // Misassembly detection only runs after insulation or compartments; if
-    // neither was computed it never ran, so report null (neutral) rather than 0.
-    misassemblyCount:
-      cachedInsulation || cachedCompartments ? misassemblyFlags.getFlaggedCount() : null,
-    eigenvalue: Number.isFinite(cachedCompartments?.eigenvalue) ? cachedCompartments!.eigenvalue : null,
-    cisTransRatio: Number.isFinite(cachedQuality?.cisTransRatio) ? cachedQuality!.cisTransRatio : null,
-    checkerboardScore: Number.isFinite(cachedCheckerboard?.score) ? cachedCheckerboard!.score : null,
-  });
-}
-
-function renderSparkline(values: number[]): string {
-  if (values.length < 2) return '';
-  const w = 80, h = 24, pad = 2;
-  const min = Math.min(...values), max = Math.max(...values);
-  const range = max - min || 1;
-  const pts = values.map((v, i) => {
-    const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
-    const y = h - pad - ((v - min) / range) * (h - 2 * pad);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  const last = values[values.length - 1];
-  const color = last >= 70 ? '#4caf50' : last >= 40 ? '#f39c12' : '#ff6b6b';
-  return `<svg class="health-sparkline" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/>
-  </svg>`;
-}
-
-function renderHealthScoreCard(score: HealthScoreResult): string {
-  // Track score in history
-  healthScoreHistory.push(score.overall);
-  const color = score.overall >= 70 ? '#4caf50' :
-    score.overall >= 40 ? '#f39c12' : '#ff6b6b';
-  const c = score.components;
-  const sparkline = renderSparkline(healthScoreHistory);
-  return `<div class="health-score-card">
-    <div class="health-score-value" style="color:${color}">${score.overall}</div>
-    <div class="health-score-label">Health Score ${guideLink('analysis-health')}</div>
-    ${sparkline}
-    <div class="health-score-breakdown">
-      <span title="Contiguity (N50)">N50: ${Math.round(c.contiguity)}</span>
-      <span title="P(s) decay quality">P(s): ${Math.round(c.decayQuality)}</span>
-      <span title="Assembly integrity">Int: ${Math.round(c.integrity)}</span>
-      <span title="A/B compartments">A/B: ${Math.round(c.compartments)}</span>
-      <span title="Library quality (cis/trans)">Lib: ${Math.round(c.libraryQuality)}</span>
-    </div>
-  </div>`;
-}
-
 function updateResultsDisplay(ctx: AppContext): void {
   const el = document.getElementById('analysis-results');
   if (!el) return;
@@ -1369,12 +1297,6 @@ function updateResultsDisplay(ctx: AppContext): void {
 
   // Deep link to the field guide explanation of these metrics
   html += `<div class="results-help"><a href="${GUIDE_ANALYSIS_URL}" target="_blank" rel="noopener">Reading the analysis ↗</a></div>`;
-
-  // Health score card (top of results)
-  const healthScore = buildHealthScore(ctx);
-  if (healthScore) {
-    html += renderHealthScoreCard(healthScore);
-  }
 
   // Library quality stats
   if (cachedQuality) {
@@ -1388,13 +1310,13 @@ function updateResultsDisplay(ctx: AppContext): void {
 
   // ICE normalization status
   if (cachedICE) {
-    html += `<div class="stats-row"><span>ICE Normalization</span><span style="color:#6c5ce7;">${cachedICE.iterations} iters, ${cachedICE.maskedBins.length} masked</span></div>`;
+    html += `<div class="stats-row"><span>ICE row balancing</span><span style="color:#6c5ce7;">${cachedICE.iterations} iters, ${cachedICE.maskedBins.length} masked</span></div>`;
   }
 
   // Sinkhorn-Knopp normalization status (the internal 'kr' key/module name is
   // kept only for session-file back-compat; this is not Knight-Ruiz).
   if (cachedKR) {
-    html += `<div class="stats-row"><span>Sinkhorn-Knopp</span><span style="color:#ff7675;">${cachedKR.iterations} iters, ${cachedKR.maskedBins.length} masked</span></div>`;
+    html += `<div class="stats-row"><span>Sinkhorn-Knopp row balancing</span><span style="color:#ff7675;">${cachedKR.iterations} iters, ${cachedKR.maskedBins.length} masked</span></div>`;
   }
 
   // Telomere detection status
@@ -1410,9 +1332,8 @@ function updateResultsDisplay(ctx: AppContext): void {
     if (hasBaseline) {
       const delta = cachedDecay.decayExponent - baselineDecay!.decayExponent;
       const sign = delta >= 0 ? '+' : '';
-      const deltaColor = Math.abs(delta) < 0.05 ? '#4caf50' : '#f39c12';
       html += `<div class="stats-row"><span>Baseline exponent</span><span style="color:var(--text-secondary)">${baselineDecay!.decayExponent.toFixed(2)}</span></div>`;
-      html += `<div class="stats-row"><span>\u0394 exponent</span><span style="color:${deltaColor}">${sign}${delta.toFixed(2)}</span></div>`;
+      html += `<div class="stats-row"><span>\u0394 exponent</span><span>${sign}${delta.toFixed(2)}</span></div>`;
     }
 
     html += renderDecayChart(cachedDecay, baselineDecay, cachedScaffoldDecay);
@@ -1432,8 +1353,8 @@ function updateResultsDisplay(ctx: AppContext): void {
         const exp = sr.decay.decayExponent;
         const r2 = sr.decay.rSquared;
         const fitted = Number.isFinite(exp);
-        const inRange = fitted && exp <= -0.8 && exp >= -1.5;
-        const expColor = fitted ? (inRange ? '#4caf50' : '#f39c12') : 'var(--text-secondary)';
+        // One colour for every fitted slope: no range of values is "good".
+        const expColor = fitted ? 'var(--text-primary)' : 'var(--text-secondary)';
         const expStr = fitted ? exp.toFixed(2) : '\u2014';
         const r2Str = Number.isFinite(r2) ? r2.toFixed(2) : '\u2014';
         html += `<div class="scaffold-decay-row">`;
@@ -1559,8 +1480,8 @@ function updateResultsDisplay(ctx: AppContext): void {
       exportHtml += `<button class="analysis-btn" id="btn-export-decay"${!cachedDecay ? ' disabled title="Run analysis first"' : ''}>P(s) <span class="export-fmt">(TSV)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-compartments"${!cachedCompartments ? ' disabled title="Run analysis first"' : ''}>Compartments <span class="export-fmt">(BedGraph)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-di"${!cachedDI ? ' disabled title="Run analysis first"' : ''}>DI <span class="export-fmt">(BedGraph)</span></button>`;
-      exportHtml += `<button class="analysis-btn" id="btn-export-ice"${!cachedICE ? ' disabled title="Run analysis first"' : ''}>ICE Bias <span class="export-fmt">(BedGraph)</span></button>`;
-      exportHtml += `<button class="analysis-btn" id="btn-export-kr"${!cachedKR ? ' disabled title="Run analysis first"' : ''}>SK Bias <span class="export-fmt">(BedGraph)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-ice"${!cachedICE ? ' disabled title="Run analysis first"' : ''}>ICE row factors <span class="export-fmt">(BedGraph)</span></button>`;
+      exportHtml += `<button class="analysis-btn" id="btn-export-kr"${!cachedKR ? ' disabled title="Run analysis first"' : ''}>SK row factors <span class="export-fmt">(BedGraph)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-quality"${!cachedQuality ? ' disabled title="Run analysis first"' : ''}>Quality <span class="export-fmt">(TSV)</span></button>`;
       exportHtml += `<button class="analysis-btn" id="btn-export-saddle"${!cachedSaddle ? ' disabled title="Run analysis first"' : ''}>Saddle <span class="export-fmt">(TSV)</span></button>`;
       exportEl.innerHTML = exportHtml || '<div style="color: var(--text-secondary); font-size: 11px;">Run analyses first to enable export.</div>';
@@ -1607,13 +1528,13 @@ function updateResultsDisplay(ctx: AppContext): void {
   document.getElementById('btn-export-ice')?.addEventListener('click', () => {
     if (cachedICE) {
       downloadICEBiasBedGraph(cachedICE, s, overviewSize);
-      ctx.showToast('ICE Bias BedGraph exported');
+      ctx.showToast('ICE row factors BedGraph exported');
     }
   });
   document.getElementById('btn-export-kr')?.addEventListener('click', () => {
     if (cachedKR) {
       downloadKRBiasBedGraph(cachedKR, s, overviewSize);
-      ctx.showToast('SK Bias BedGraph exported');
+      ctx.showToast('SK row factors BedGraph exported');
     }
   });
   document.getElementById('btn-export-quality')?.addEventListener('click', () => {
@@ -1749,13 +1670,6 @@ function updateResultsDisplay(ctx: AppContext): void {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-/**
- * Get the current health score, or null if no analysis has been computed.
- */
-export function getHealthScore(ctx: AppContext): HealthScoreResult | null {
-  return buildHealthScore(ctx);
-}
 
 /**
  * Trigger Virtual 4C from a viewpoint bin (called by Alt+click handler).
@@ -1897,12 +1811,12 @@ export function exportAnalysisByKey(ctx: AppContext, key: string): boolean {
     case 'ice':
       if (!cachedICE) return false;
       downloadICEBiasBedGraph(cachedICE, s, overviewSize);
-      ctx.showToast('ICE Bias BedGraph exported');
+      ctx.showToast('ICE row factors BedGraph exported');
       return true;
     case 'kr':
       if (!cachedKR) return false;
       downloadKRBiasBedGraph(cachedKR, s, overviewSize);
-      ctx.showToast('SK Bias BedGraph exported');
+      ctx.showToast('SK row factors BedGraph exported');
       return true;
     case 'quality':
       if (!cachedQuality) return false;
@@ -2501,8 +2415,8 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
       <button class="analysis-btn" id="btn-run-all-analysis" style="margin-bottom:6px;width:100%;">Compute All</button>
       <button class="analysis-btn" id="btn-compute-directionality" style="margin-bottom:2px;width:100%;">Directionality</button>
       <button class="analysis-btn" id="btn-compute-quality" style="margin-bottom:2px;width:100%;">Library Quality</button>
-      <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:2px;width:100%;background:#6c5ce7;color:#fff;">Normalize (ICE)</button>
-      <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;">Normalize (Sinkhorn-Knopp)</button>
+      <button class="analysis-btn" id="btn-normalize-ice" style="margin-bottom:2px;width:100%;background:#6c5ce7;color:#fff;" title="Evens out the row sums of the map's stored values. PretextMap has already scaled and contrast-adjusted those values, so this does not correct sequencing bias in contact counts.">Balance rows (ICE)</button>
+      <button class="analysis-btn" id="btn-normalize-kr" style="margin-bottom:6px;width:100%;background:#ff7675;color:#fff;" title="Evens out the row sums of the map's stored values. PretextMap has already scaled and contrast-adjusted those values, so this does not correct sequencing bias in contact counts.">Balance rows (Sinkhorn-Knopp)</button>
       <div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;">
         <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
           <label for="ml-backend" style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">ML backend ${guideLink('analysis-evo2')}</label>
@@ -3011,15 +2925,14 @@ export function clearAnalysisTracks(ctx: AppContext): void {
     ctx.trackRenderer.removeTrack(`Virtual 4C (bin ${cachedV4C.viewpoint})`);
     cachedV4C = null;
   }
-  healthScoreHistory.length = 0;
   misassemblyFlags.clearAll();
   ctx.trackRenderer.removeTrack('Insulation Score');
   ctx.trackRenderer.removeTrack('TAD Boundaries');
   ctx.trackRenderer.removeTrack('A/B Compartments');
   ctx.trackRenderer.removeTrack('Misassembly Flags');
   ctx.trackRenderer.removeTrack('Weak joins');
-  ctx.trackRenderer.removeTrack('ICE Bias');
-  ctx.trackRenderer.removeTrack('SK Bias');
+  ctx.trackRenderer.removeTrack('ICE row factors');
+  ctx.trackRenderer.removeTrack('SK row factors');
   ctx.trackRenderer.removeTrack('Directionality Index');
   ctx.trackRenderer.removeTrack('DI Boundaries');
   ctx.trackRenderer.removeTrack('Per-Contig Cis Ratio');

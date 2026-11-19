@@ -210,7 +210,7 @@ export function exportICEBiasBedGraph(
   overviewSize: number,
 ): string {
   const pixelMap = buildPixelToContigMap(appState, overviewSize);
-  return formatAnalysisBedGraph('ICE Bias', result.biasVector, pixelMap);
+  return formatAnalysisBedGraph('ICE row factors', result.biasVector, pixelMap);
 }
 
 /**
@@ -222,7 +222,7 @@ export function exportKRBiasBedGraph(
   overviewSize: number,
 ): string {
   const pixelMap = buildPixelToContigMap(appState, overviewSize);
-  return formatAnalysisBedGraph('SK Bias', result.biasVector, pixelMap);
+  return formatAnalysisBedGraph('SK row factors', result.biasVector, pixelMap);
 }
 
 /**

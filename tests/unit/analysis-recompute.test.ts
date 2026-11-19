@@ -116,13 +116,6 @@ vi.mock('../../src/analysis/ContactDecay', () => ({
   computeLocalSlope: vi.fn(() => new Float64Array()),
 }));
 
-vi.mock('../../src/analysis/HealthScore', () => ({
-  computeHealthScore: vi.fn(() => ({
-    overall: 75,
-    components: { contiguity: 80, decayQuality: 70, integrity: 80, compartments: 70 },
-  })),
-}));
-
 vi.mock('../../src/export/AnalysisExport', () => ({
   downloadInsulationBedGraph: vi.fn(),
   downloadCompartmentBedGraph: vi.fn(),

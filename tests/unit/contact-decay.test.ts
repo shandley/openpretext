@@ -231,11 +231,13 @@ describe('formatDecayStats', () => {
     expect(html).toContain(result.decayExponent.toFixed(2));
   });
 
-  it('uses green color for typical Hi-C exponent range', () => {
-    const map = makePowerLawMap(128, -1.2);
-    const result = computeContactDecay(map, 128, singleContigRange(128));
-    const html = formatDecayStats(result);
-    expect(html).toContain('#4caf50');
+  it('does not colour a slope as good or bad', () => {
+    for (const exponent of [-0.4, -1.2, -2.2]) {
+      const map = makePowerLawMap(128, exponent);
+      const html = formatDecayStats(computeContactDecay(map, 128, singleContigRange(128)));
+      expect(html).not.toContain('#4caf50');
+      expect(html).not.toContain('#f39c12');
+    }
   });
 
   it('handles empty result gracefully', () => {

@@ -19,7 +19,7 @@
       "instruction": "Above the map, the tracks summarise assembly quality: insulation score, TAD boundaries, A/B compartments, misassembly flags (orange), and weak joins (red).\n\nImportant: the automated misassembly detector flags dozens of candidates on almost every assembly. Most are false positives. Treat the flags as places to look, not instructions to cut.",
       "expectedAction": { "type": "observe" },
       "showPatternGallery": true,
-      "hint": "The P(s) decay exponent near -1.6 and a clean diagonal both indicate healthy Hi-C signal. Use the flags to guide where you zoom, then judge each one with your own eyes."
+      "hint": "A clean, continuous diagonal indicates good Hi-C signal. The P(s) exponent is fitted to contrast-adjusted map values, so it does not grade the data. Use the flags to guide where you zoom, then judge each one with your own eyes."
     },
     {
       "id": "investigate",

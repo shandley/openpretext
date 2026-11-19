@@ -244,7 +244,7 @@ export function krToTrack(
   }
 
   return {
-    name: 'SK Bias',
+    name: 'SK row factors',
     type: 'line',
     data,
     color: '#ff7675',

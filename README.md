@@ -66,16 +66,15 @@ Vision-based analysis through the Anthropic Messages API. It captures the curren
 A suite of Hi-C metrics, all computed in a background Web Worker and exportable as BedGraph or TSV. They are computed from the values stored in the `.pretext` file, which PretextMap has contrast-adjusted for display. Those values rank cells by contact and are not contact counts, so slopes, ratios and scores here are for comparing one map before and after an edit, not for comparison with published Hi-C figures (see `docs/PRETEXT_FORMAT.md`).
 
 - **Insulation score and TAD boundaries** (Crane et al. 2015): a sliding off-diagonal window with boundaries detected as prominent local minima.
-- **P(s) contact decay**: intra-chromosomal contact frequency versus distance with power-law fitting, whole-genome and per-chromosome, with a comparative baseline overlay, reference-slope guides at -1.0 and -1.5, and a local-slope panel (the windowed log-derivative) that shows where the curve plateaus or rolls off.
+- **P(s) contact decay**: the map's mean value within chromosomes against distance, with a fitted slope, whole-genome and per-chromosome, a baseline overlay for comparing before and after an edit, and a local-slope panel (the windowed log-derivative) that shows where the curve plateaus or rolls off. The slope is fitted to contrast-adjusted values and is not the exponent reported for contact counts.
 - **A/B compartments**: observed/expected normalization and first-eigenvector calculation, rendered as a heatmap track. When a reference FASTA is loaded, A and B are oriented by GC content (the gene-rich, GC-rich side is A); without one the split is real but the labels stay unoriented.
-- **Matrix balancing**: two iterative bias-correction normalizations, ICE and KR, both Sinkhorn-Knopp variants, each producing a per-bin bias track and re-running downstream analysis on the balanced matrix.
+- **Row balancing**: ICE and a Sinkhorn-Knopp variant, each evening out the row sums of the map, producing a per-row factor track and re-running downstream analysis on the balanced matrix. PretextMap has already scaled and contrast-adjusted the stored values, so this is another view of the map, not a correction of sequencing bias.
 - **Directionality index** (Dixon et al. 2012): signed directionality with TAD boundaries at sign-change crossings.
 - **Hi-C library quality**: cis/trans ratio, short/long range ratio, contact density, and per-contig cis ratios.
 - **Saddle plot** and **virtual 4C** (Alt+click any bin for a locus contact profile).
 - **Telomere repeat detection** from a loaded reference FASTA (TTAGGG / CCCTAA motifs at contig ends).
 - **Checkerboard score** (Che et al., Cell 2026): an entropy-based measure of A/B compartment regularity, with a reference comparison against a large species panel.
 - **Centromere detection** (Che et al., Cell 2026): predicts centromere positions from inter-chromosomal contact hubs.
-- **Composite health score** (0 to 100): combines contiguity (N50), P(s) decay quality, assembly integrity, compartment strength, and library quality, shown as a card in the sidebar.
 
 ### ML-powered enhancement (optional)
 
@@ -224,7 +223,7 @@ src/
   scripting/                 DSL parser, executor, log-to-script replay
   analysis/                  insulation, P(s) decay, compartments, ICE and KR balancing,
                              directionality, library quality, saddle, virtual 4C, telomere,
-                             misassembly, checkerboard, centromere, health score, scaffold and
+                             misassembly, checkerboard, centromere, scaffold and
                              pattern detection, curation progress, background worker + client,
                              Evo2HiC client and enhancement utilities
   export/                    AGP, BED, FASTA, analysis (BedGraph/TSV), PNG, curation log

@@ -16,7 +16,7 @@
     {
       "id": "read-tracks",
       "title": "Read the analysis tracks",
-      "instruction": "Check the tracks above the map. A healthy assembly shows a strong, continuous diagonal, a P(s) decay near -1.5, and mostly empty space off the diagonal.\n\nThe misassembly detector will still flag candidates. As you saw in earlier lessons, most are false positives on a clean genome. Use them to decide where to look, not what to cut.",
+      "instruction": "Check the tracks above the map. A sound assembly shows a strong, continuous diagonal, a P(s) curve that falls steadily with distance, and mostly empty space off the diagonal.\n\nThe misassembly detector will still flag candidates. As you saw in earlier lessons, most are false positives on a clean genome. Use them to decide where to look, not what to cut.",
       "expectedAction": { "type": "observe" },
       "hint": "For a genome this well studied and this clean, expect the flags to be mostly noise. The point is learning to tell healthy signal from real problems."
     },

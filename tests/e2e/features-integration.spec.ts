@@ -69,7 +69,7 @@ test.describe('Stats panel', () => {
     await openSidebar(page);
 
     // The pinned status strip is always visible and carries the glanceable
-    // summary (health, contig count, N50). The full metric list lives in a
+    // summary (contig count, N50). The full metric list lives in a
     // collapsible detail (#stats-content) that is hidden until expanded.
     const statsSummary = page.locator('#stats-summary');
     await expect(statsSummary).toBeVisible();

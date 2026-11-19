@@ -48,9 +48,9 @@
     {
       "id": "enhanced-analysis",
       "title": "What the Enhanced View Changes",
-      "instruction": "The enhanced view is a visual overlay. The standard analyses (Compute All, insulation, P(s), compartments) always run on the **original** contact map, not the enhanced one, so toggling enhancement does not change the health score or the P(s) fit.\n\nThe one place the enhanced map is used is track prediction: **Predict Tracks** (the next step) can run on the enhanced map for cleaner predictions.\n\nNote: the enhanced map is cleared automatically when you perform curation operations (cut, join, invert, move) because the contig ordering changes.",
+      "instruction": "The enhanced view is a visual overlay. The standard analyses (Compute All, insulation, P(s), compartments) always run on the **original** contact map, not the enhanced one, so toggling enhancement does not change the P(s) fit or any other result.\n\nThe one place the enhanced map is used is track prediction: **Predict Tracks** (the next step) can run on the enhanced map for cleaner predictions.\n\nNote: the enhanced map is cleared automatically when you perform curation operations (cut, join, invert, move) because the contig ordering changes.",
       "expectedAction": { "type": "observe" },
-      "hint": "Compute All always uses the original map, so the health score is the same whether or not the enhanced view is on."
+      "hint": "Compute All always uses the original map, so the results are the same whether or not the enhanced view is on."
     },
     {
       "id": "predict-tracks",

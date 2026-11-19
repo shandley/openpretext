@@ -72,17 +72,17 @@
     {
       "id": "analysis-guided",
       "name": "Analysis-Guided Curation",
-      "description": "Uses computed analysis tracks (insulation, P(s), compartments, health score) to guide curation decisions. Best used after running the 3D analysis pipeline.",
+      "description": "Uses computed analysis tracks (insulation, P(s), compartments, misassembly flags) to guide curation decisions. Best used after running the 3D analysis pipeline.",
       "category": "workflow",
-      "supplement": "This assembly has been analyzed with the 3D genomics analysis pipeline. Use the analysis results to guide your curation suggestions:\n\n1. Check the health score components — low scores indicate specific problems:\n   - Low contiguity (N50): many small contigs, suggest autosort or joins\n   - Low P(s) quality: poor contact decay fit, suggest checking for misjoins\n   - Low assembly integrity: many misassembly flags, suggest cuts at flagged positions\n   - Low compartment strength: weak A/B signal, may indicate normalization needed\n   - Low library quality: high trans ratio, may indicate contamination\n\n2. If misassembly flags are present, prioritize cuts at flagged positions\n3. If pattern detection found inversions, suggest invert commands for the affected contigs\n4. If scaffold auto-detection has not been run, suggest it after basic corrections\n5. After curation, re-check the health score to verify improvement\n\nFocus on operations that will most improve the health score. Address integrity issues first (cuts), then ordering (sorts/moves), then scaffolding.",
+      "supplement": "This assembly has been analyzed with the 3D genomics analysis pipeline. Use the analysis results to decide where to look, and confirm every suggestion against the map itself:\n\n1. If misassembly flags are present, examine those positions first and suggest cuts where the map shows a break\n2. If pattern detection found inversions, suggest invert commands for the affected contigs\n3. If weak joins are marked, check whether the two sides contact each other on the map\n4. If scaffold auto-detection has not been run, suggest it after basic corrections\n\nThe analysis numbers are computed from contrast-adjusted map values, not contact counts. Do not treat a P(s) exponent, a compartment strength or a cis/trans ratio as a grade, and do not suggest edits in order to change one. Address breaks first (cuts), then ordering (sorts/moves), then scaffolding.",
       "examples": [
         {
-          "scenario": "Health score is 45/100 with low assembly integrity (misassembly flags on contigs #5, #12, #18)",
+          "scenario": "Misassembly flags on contigs #5, #12, #18, and the map shows a break at each flagged position",
           "commands": "# Address misassembly flags — cut at detected breakpoints\ncut #5 512\ncut #12 256\ncut #18 384"
         },
         {
-          "scenario": "After running ICE normalization, P(s) exponent improved from -0.8 to -1.1 but compartment strength is still low",
-          "commands": "# Reorder contigs to strengthen block-diagonal structure\nautosort\necho Re-run compartment analysis after sorting"
+          "scenario": "A weak-join marker sits between #7 and #8, the map shows no contact across that junction, and #8 contacts the end of #3 strongly",
+          "commands": "# Move the contig next to the one it contacts\nmove #8 after #3\necho Check the junctions at #3 and #8 on the map"
         }
       ]
     },

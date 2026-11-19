@@ -82,7 +82,7 @@ test.describe('Session persistence of analysis results', () => {
     await expect(
       page.locator('.toast').filter({ hasText: /ICE:/ }),
     ).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('#track-config-list')).toContainText('ICE Bias', {
+    await expect(page.locator('#track-config-list')).toContainText('ICE row factors', {
       timeout: 5_000,
     });
 
@@ -113,7 +113,7 @@ test.describe('Session persistence of analysis results', () => {
 
     // Phase C: Verify pre-save state
     const analysisResults = page.locator('#analysis-results');
-    await expect(analysisResults).toContainText('ICE Normalization');
+    await expect(analysisResults).toContainText('ICE row balancing');
     await expect(analysisResults).toContainText('P(s) exponent');
     await expect(analysisResults).toContainText('Cis contacts');
 
@@ -122,7 +122,7 @@ test.describe('Session persistence of analysis results', () => {
       'Insulation Score',
       'TAD Boundaries',
       'A/B Compartments',
-      'ICE Bias',
+      'ICE row factors',
       'Directionality Index',
       'DI Boundaries',
       'Per-Contig Cis Ratio',
@@ -157,7 +157,7 @@ test.describe('Session persistence of analysis results', () => {
       'Insulation Score',
       'TAD Boundaries',
       'A/B Compartments',
-      'ICE Bias',
+      'ICE row factors',
       'Directionality Index',
       'DI Boundaries',
       'Per-Contig Cis Ratio',
@@ -167,7 +167,7 @@ test.describe('Session persistence of analysis results', () => {
 
     // Phase H: Verify restored analysis stats
     const restoredResults = page.locator('#analysis-results');
-    await expect(restoredResults).toContainText('ICE Normalization');
+    await expect(restoredResults).toContainText('ICE row balancing');
     await expect(restoredResults).toContainText('P(s) exponent');
     await expect(restoredResults).toContainText('Cis contacts');
     await expect(restoredResults).toContainText('Mean contact (occupied)');

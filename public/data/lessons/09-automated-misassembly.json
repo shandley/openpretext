@@ -4,7 +4,7 @@
   "difficulty": "advanced",
   "estimatedMinutes": 25,
   "specimenId": "finch",
-  "introduction": "Manual curation requires expert pattern recognition, but OpenPretext's automated detection pipeline can identify many common misassemblies algorithmically. The system combines TAD boundary analysis, compartment switching detection, and pattern recognition to find chimeric contigs and structural errors.\n\nIn this lesson, you'll learn to:\n\u2022 Run the full analysis pipeline to detect misassemblies\n\u2022 Interpret misassembly flags and confidence scores\n\u2022 Use the guided cut review panel\n\u2022 Detect inversions and translocations automatically\n\u2022 Auto-detect and assign chromosome scaffolds\n\u2022 Verify improvements using the health score\n\nWe'll use the zebra finch genome, which has real misassemblies to detect and correct.",
+  "introduction": "Manual curation requires expert pattern recognition, but OpenPretext's automated detection pipeline can identify many common misassemblies algorithmically. The system combines TAD boundary analysis, compartment switching detection, and pattern recognition to find chimeric contigs and structural errors.\n\nIn this lesson, you'll learn to:\n\u2022 Run the full analysis pipeline to detect misassemblies\n\u2022 Interpret misassembly flags and confidence scores\n\u2022 Use the guided cut review panel\n\u2022 Detect inversions and translocations automatically\n\u2022 Auto-detect and assign chromosome scaffolds\n\u2022 Check what your edits changed\n\nWe'll use the zebra finch genome, which has real misassemblies to detect and correct.",
   "steps": [
     {
       "id": "run-analysis",
@@ -51,15 +51,15 @@
     },
     {
       "id": "verify-health",
-      "title": "Verify with Health Score",
-      "instruction": "Check the health score to see if your curation improved the assembly. Compare the current score with what it was before your edits.\n\nKey indicators of improvement:\n\u2022 Higher assembly integrity (fewer misassembly flags)\n\u2022 Better P(s) fit (higher R\u00b2)\n\u2022 Stronger compartment signal\n\u2022 Library quality now computable (with scaffolds assigned)\n\nA good curation session should raise the health score.",
+      "title": "Check What Changed",
+      "instruction": "Check what your edits changed. No single score says whether an assembly improved, so look at each of these:\n\n\u2022 Fewer misassembly flags, and none where you cut\n\u2022 The P(s) curve against the baseline you saved: flat stretches or bumps that are gone\n\u2022 The before/after map: blocks that now sit on the diagonal\n\u2022 Scaffold N50 and the share of sequence assigned to scaffolds in the stats strip\n\nThen look at the map where you edited. The map decides.",
       "expectedAction": { "type": "observe" },
       "hint": "Use the P(s) baseline snapshot to compare before/after decay curves."
     },
     {
       "id": "summary",
       "title": "Automated Detection Summary",
-      "instruction": "You've learned the automated misassembly detection workflow:\n\n1. **Compute All** runs the foundation analyses\n2. **MIS flags** identify potentially chimeric contigs\n3. **Suggest Cuts** converts flags to actionable cut recommendations with confidence scores\n4. **Review Cuts** provides a guided step-by-step review panel\n5. **Detect Patterns** finds inversions and translocations algorithmically\n6. **Auto-assign Scaffolds** groups corrected contigs into chromosomes\n7. **Health score** validates that your curation improved the assembly\n\nThis pipeline handles the bulk of common misassemblies. For subtle cases, manual review using the visual patterns you learned in earlier lessons remains essential.",
+      "instruction": "You've learned the automated misassembly detection workflow:\n\n1. **Compute All** runs the foundation analyses\n2. **MIS flags** identify potentially chimeric contigs\n3. **Suggest Cuts** converts flags to actionable cut recommendations with confidence scores\n4. **Review Cuts** provides a guided step-by-step review panel\n5. **Detect Patterns** finds inversions and translocations algorithmically\n6. **Auto-assign Scaffolds** groups corrected contigs into chromosomes\n7. The flags, the P(s) baseline and the before/after map show what your curation changed\n\nThis pipeline handles the bulk of common misassemblies. For subtle cases, manual review using the visual patterns you learned in earlier lessons remains essential.",
       "expectedAction": { "type": "observe" }
     }
   ],
