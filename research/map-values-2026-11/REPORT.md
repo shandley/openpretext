@@ -66,8 +66,11 @@ Added after the first version of this report, which left it out.
 The score follows a method published for contact matrices, and the app
 compared its entropy with the range that paper reports for 1,025 species
 (2.3 to 3.0): "nearest species", "similar group" and "stronger than N% of
-species". `checkerboard-by-level.ts` computes the entropy per chromosome the
-way the app does (`checkerboard-by-level.txt`).
+species". `checkerboard-by-level.ts` computes the entropy per chromosome with
+the app's function, taking each sequence at least 2% of the map wide as a
+chromosome (`checkerboard-by-level.txt`). The app itself uses painted
+scaffolds, or the whole map when there are none, which its own comment says
+gives lower values still.
 
 - On six real maps it is between 0.96 and 1.70. Every one is below the
   lowest value in the paper's range.
