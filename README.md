@@ -73,8 +73,8 @@ A suite of Hi-C metrics, all computed in a background Web Worker and exportable 
 - **Hi-C library quality**: cis/trans ratio, short/long range ratio, contact density, and per-contig cis ratios.
 - **Saddle plot** and **virtual 4C** (Alt+click any bin for a locus contact profile).
 - **Telomere repeat detection** from a loaded reference FASTA (TTAGGG / CCCTAA motifs at contig ends).
-- **Checkerboard score** (Che et al., Cell 2026): an entropy-based measure of A/B compartment regularity, with a reference comparison against a large species panel.
-- **Centromere detection** (Che et al., Cell 2026): predicts centromere positions from inter-chromosomal contact hubs.
+- **Checkerboard score** (method of Che et al., Cell 2026): an entropy-based measure of A/B compartment regularity. Computed from contrast-adjusted map values, so it is for comparing one map before and after an edit and is not comparable with the paper's values.
+- **Centromere candidates** (method of Che et al., Cell 2026): marks where each large sequence contacts other sequences most. Not validated on `.pretext` values; a position to check, not a call.
 
 ### ML-powered enhancement (optional)
 

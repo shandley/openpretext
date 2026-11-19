@@ -1,0 +1,9 @@
+# checkerboard-by-level.ts on six maps, 19 November 2026.
+# Per-chromosome checkerboard entropy as OpenPretext computes it, at the level the app uses (1024 px) and one finer.
+# The paper's range for 1,025 species, from contact matrices, is 2.3 to 3.0.
+Phascolarctos_cinereus.pretext            1024px: entropy 1.48 (9 chromosomes)   4096px: entropy 1.70 (9 chromosomes)
+Taeniopygia_guttata_post.pretext          1024px: entropy 1.70 (11 chromosomes)   4096px: entropy 1.94 (11 chromosomes)
+Coturnix_chinensis_post.pretext           1024px: entropy 1.62 (10 chromosomes)   4096px: entropy 1.76 (10 chromosomes)
+Anilios_waitii_post.pretext               1024px: entropy 0.96 (9 chromosomes)   4096px: entropy 1.77 (9 chromosomes)
+mBabCel1.HiC.combined.decontam.20240812   1024px: entropy 1.01 (22 chromosomes)   4096px: entropy 1.16 (22 chromosomes)
+fOphCon1.HiC.combined.decontam.multimap   1024px: entropy 1.45 (24 chromosomes)   4096px: entropy 1.50 (25 chromosomes)

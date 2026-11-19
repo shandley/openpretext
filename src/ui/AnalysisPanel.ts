@@ -124,35 +124,6 @@ let cachedTelomere: TelomereResult | null = null;
 let cachedCheckerboard: CheckerboardResult | null = null;
 let cachedCentromeres: CentromereResult | null = null;
 
-interface CheckerboardRefGroup {
-  name: string;
-  medianEntropy: number;
-  medianScore: number;
-  speciesCount: number;
-  description: string;
-}
-interface CheckerboardRefLandmark {
-  species: string;
-  entropy: number;
-  score: number;
-  group: string;
-}
-interface CheckerboardReference {
-  totalSpecies: number;
-  entropyRange: { min: number; max: number };
-  groups: CheckerboardRefGroup[];
-  landmarks: CheckerboardRefLandmark[];
-}
-let checkerboardReference: CheckerboardReference | null = null;
-
-// Load reference data once
-(async () => {
-  try {
-    const url = new URL('data/checkerboard-reference.json', document.baseURI).href;
-    const resp = await fetch(url);
-    if (resp.ok) checkerboardReference = await resp.json();
-  } catch { /* silent */ }
-})();
 // --- ML backend selection (Evo2HiC vs HiCFoundation) ----------------------
 type MLBackendId = 'evo2hic' | 'hicfoundation';
 const ML_BACKEND_KEY = 'openpretext-ml-backend';
@@ -1395,39 +1366,12 @@ function updateResultsDisplay(ctx: AppContext): void {
     html += `<button class="analysis-btn" id="btn-compute-checkerboard" style="width:100%;margin:4px 0;background:#6c5ce7;color:#fff;">Checkerboard Score</button>`;
   }
   if (cachedCheckerboard) {
-    const cbColor = cachedCheckerboard.score >= 50 ? '#00b894' : cachedCheckerboard.score >= 25 ? '#fdcb6e' : '#d63031';
-    html += `<div class="stats-row"><span>Checkerboard</span><span style="color:${cbColor};font-weight:bold;">${cachedCheckerboard.score.toFixed(1)}/100</span></div>`;
+    // No colour and no comparison with published values: the entropy is taken
+    // from contrast-adjusted map values and falls well outside the range
+    // reported for contact matrices (research/map-values-2026-11/REPORT.md).
+    html += `<div class="stats-row"><span>Checkerboard</span><span>${cachedCheckerboard.score.toFixed(1)}/100</span></div>`;
     html += `<div class="stats-row" style="font-size:10px;color:var(--text-secondary);"><span>Entropy</span><span>${cachedCheckerboard.entropy.toFixed(4)}</span></div>`;
-    // Species reference comparison (Che et al. 2025, 1,025 species)
-    if (checkerboardReference) {
-      const ref = checkerboardReference;
-      const ent = cachedCheckerboard.entropy;
-      // Find closest landmark and matching group
-      let closestLandmark = '';
-      let closestDist = Infinity;
-      for (const lm of ref.landmarks) {
-        const d = Math.abs(lm.entropy - ent);
-        if (d < closestDist) { closestDist = d; closestLandmark = lm.species; }
-      }
-      // Find which group this entropy falls closest to
-      let bestGroup = ref.groups[0];
-      let bestGroupDist = Infinity;
-      for (const g of ref.groups) {
-        const d = Math.abs(g.medianEntropy - ent);
-        if (d < bestGroupDist) { bestGroupDist = d; bestGroup = g; }
-      }
-      // Percentile: what fraction of 1,025 species have LOWER entropy (weaker pattern).
-      // Higher entropy = stronger compartmentalization, so higher entropy = higher percentile.
-      const pct = Math.max(0, Math.min(100,
-        ((ent - ref.entropyRange.min) / (ref.entropyRange.max - ref.entropyRange.min)) * 100
-      ));
-      html += `<div style="font-size:10px;color:var(--text-secondary);margin:2px 0;padding:4px 6px;background:rgba(108,92,231,0.1);border-radius:4px;">`;
-      html += `<div style="margin-bottom:2px;"><strong>vs 1,025 species</strong> <span style="font-style:italic;">(Che et al. 2025)</span></div>`;
-      html += `<div>Nearest: <em>${closestLandmark}</em></div>`;
-      html += `<div>Similar to: ${escapeHtml(bestGroup.name)} (median)</div>`;
-      html += `<div>Stronger than ~${pct.toFixed(0)}% of species</div>`;
-      html += `</div>`;
-    }
+    html += `<div style="font-size:9px;color:var(--text-secondary);margin:2px 0;">For comparing one map before and after an edit. Not comparable with published checkerboard scores.</div>`;
   }
 
   // Auto-assign scaffolds button (when P(s) computed but no scaffolds)
@@ -2438,7 +2382,7 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
         <div id="evo2hic-fasta-hint" style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;"></div>
       </div>
       <button class="analysis-btn" id="btn-detect-patterns" style="margin-bottom:6px;width:100%;background:#8e44ad;color:#fff;">Detect Patterns</button>
-      <button class="analysis-btn" id="btn-detect-centromeres" style="margin-bottom:6px;width:100%;background:#e056a0;color:#fff;">Detect Centromeres</button>
+      <button class="analysis-btn" id="btn-detect-centromeres" style="margin-bottom:6px;width:100%;background:#e056a0;color:#fff;" title="Marks where each large sequence contacts other sequences most. A candidate to check against the map and the repeat track, not a confirmed centromere.">Find Centromere Candidates</button>
       <div id="fasta-hint" style="color:var(--text-secondary);font-size:10px;margin:4px 0;"></div>
     </div>
     <div class="analysis-tab-content" id="tab-results" style="display:none;">
@@ -2844,11 +2788,11 @@ export async function runAllAnalyses(ctx: AppContext): Promise<void> {
     const textureSize = s.map.textureSize ?? overviewSize;
     const { signalTrack, markerTrack } = centromereToTracks(cachedCentromeres, overviewSize, textureSize);
     ctx.trackRenderer.removeTrack('Centromere Signal');
-    ctx.trackRenderer.removeTrack('Centromeres');
+    ctx.trackRenderer.removeTrack('Centromere candidates');
     ctx.trackRenderer.addTrack(signalTrack);
     ctx.trackRenderer.addTrack(markerTrack);
     updateResultsDisplay(ctx);
-    ctx.showToast(`Detected ${cachedCentromeres.positions.length} centromere(s)`);
+    ctx.showToast(`Marked ${cachedCentromeres.positions.length} centromere candidate(s)`);
   });
 
   // Auto-compute all analyses (async, in worker)

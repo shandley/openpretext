@@ -22,6 +22,14 @@
  *
  * Reference: https://github.com/xjtu-omics/HiArch
  *
+ * Not comparable with the paper's values. HiArch works on contact matrices.
+ * OpenPretext passes in the overview of a `.pretext` file, whose values
+ * PretextMap has row-scaled, compressed and contrast-equalised. On six real
+ * maps the entropy came out between 0.96 and 1.70, below the whole range the
+ * paper reports for 1,025 species (2.3 to 3.0), and it changed with the zoom
+ * level read (research/map-values-2026-11/REPORT.md). Use it to compare one
+ * map before and after an edit.
+ *
  * Pure algorithm — no side effects or state mutations.
  */
 
@@ -164,9 +172,9 @@ function shannonEntropy(probabilities: Float64Array): number {
  *
  * When chromosomeRanges are provided (recommended), computes per-chromosome
  * by restricting both row and column sampling to within each chromosome's
- * pixel range, then averages the per-chromosome entropies. This matches the
- * HiArch algorithm (Che et al., Cell 2026) and produces entropy values on the same
- * scale as the 1,025-species reference (2.3–3.0).
+ * pixel range, then averages the per-chromosome entropies. This follows the
+ * HiArch algorithm (Che et al., Cell 2026). The values are not on the scale
+ * of that paper's results; see the module comment.
  *
  * Without chromosomeRanges, operates on the whole-genome overview. This mixes
  * intra- and inter-chromosomal contacts and produces artificially low entropy

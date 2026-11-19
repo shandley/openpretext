@@ -240,7 +240,7 @@ describe('CentromereDetector', () => {
       expect(signalTrack.type).toBe('line');
       expect(signalTrack.color).toBe('#e056a0');
 
-      expect(markerTrack.name).toBe('Centromeres');
+      expect(markerTrack.name).toBe('Centromere candidates');
       expect(markerTrack.data.length).toBe(textureSize);
       expect(markerTrack.type).toBe('marker');
     });

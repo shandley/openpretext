@@ -178,6 +178,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   specimen catalog scored 12 out of 100 on the decay part. The card, the
   number in the stats strip and the module are gone. See
   `research/map-values-2026-11/REPORT.md`.
+- **The comparison of the checkerboard score with 1,025 species**, with its
+  reference file and its green/amber/red colouring. The entropy computed
+  from a `.pretext` file's values was between 0.96 and 1.70 on six real
+  maps, below the whole range the paper reports (2.3 to 3.0), so every map
+  got the same "nearest species" and "stronger than 0%". The entropy is
+  still shown, uncoloured.
 - **The "healthy" band on the P(s) chart** (the dotted guides at -1.0 and
   -1.5 and the shaded band on the local-slope panel). Published exponents
   are for contact counts. On nine real maps the slope fitted here ran from
@@ -190,6 +196,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   same. The stored values are already scaled and contrast-adjusted, so
   balancing them gives another view of the map and does not correct
   sequencing bias.
+- **Centromere detection is labelled as finding candidates.** The button is
+  "Find Centromere Candidates" and the marker track "Centromere candidates".
+  The method has not been checked here against known centromeres.
 - **Lesson 7 is rewritten** to teach what the analysis numbers are computed
   from and what they can be used for. Lessons 9, 10, 11 and 13, the
   analysis-guided AI prompt, the README and the field guide no longer refer

@@ -19,6 +19,12 @@
  *
  * Reference: https://github.com/xjtu-omics/HiArch
  *
+ * Not validated here. The method was described for contact matrices. The
+ * matrix OpenPretext passes in holds PretextMap's row-scaled, compressed and
+ * contrast-equalised values (docs/PRETEXT_FORMAT.md), and no map with known
+ * centromere positions has been used to check the calls. The output is a
+ * candidate position for a curator to look at.
+ *
  * Pure algorithm — no side effects or state mutations.
  */
 
@@ -386,7 +392,7 @@ export function centromereToTracks(
       height: 25,
     },
     markerTrack: {
-      name: 'Centromeres',
+      name: 'Centromere candidates',
       data: markerData,
       color: '#e056a0',
       type: 'marker',
